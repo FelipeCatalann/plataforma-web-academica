@@ -57,7 +57,7 @@ class ChatbotController extends Controller
             $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key='.$apiKey;
 
             // 5. Enviamos la petición forzando el formato JSON
-            $response = Http::withoutVerifying()
+            $response = Http::timeout(30)
                 ->withHeaders(['Content-Type' => 'application/json'])
                 ->post($url, [
                     'systemInstruction' => [

@@ -55,7 +55,7 @@ export default function ChatbotPedagogico({ cursoContexto, tipoProfesor }) {
     };
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[600px]">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[calc(100vh-12rem)] min-h-[600px]">
             {/* Cabecera del Chat */}
             <div className="p-4 border-b border-gray-200 bg-gray-50 rounded-t-xl flex items-center gap-3">
                 <div className="w-10 h-10 bg-[#002855] rounded-full flex items-center justify-center">
