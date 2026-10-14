@@ -20,6 +20,19 @@ class ImportController extends Controller
 
     public function importar(Request $request)
     {
+
+
+        // 1. AUMENTAR EL TIEMPO LÍMITE A 5 MINUTOS (300 segundos)
+        set_time_limit(300);
+
+        $request->validate([
+            'archivo_excel' => 'required|mimes:xlsx,xls,csv',
+        ]);
+
+        $archivo = $request->file('archivo_excel');
+        $hash = hash_file('sha256', $archivo->getRealPath());
+
+        
         $request->validate([
             'archivo_excel' => 'required|mimes:xlsx,xls,csv',
         ]);

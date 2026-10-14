@@ -11,7 +11,7 @@ export default function AuthenticatedLayout({ header, children }) {
     return (
         <div className="min-h-screen bg-gray-100">
             {/* Barra superior con color institucional */}
-            <nav className="border-b border-[#001f44] bg-[#002855]">
+            <nav className="bg-sape-burdeo border-b border-sape-burdeo-hover shadow-md">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div className="flex h-16 justify-between">
                         <div className="flex">
@@ -49,7 +49,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                         <span className="inline-flex rounded-md">
                                             <button
                                                 type="button"
-                                                className="inline-flex items-center rounded-md border border-transparent bg-[#002855] px-3 py-2 text-sm font-medium leading-4 text-white hover:text-gray-200 focus:outline-none transition ease-in-out duration-150"
+                                                className="inline-flex items-center rounded-md border border-transparent bg-sape-burdeo px-3 py-2 text-sm font-medium leading-4 text-white hover:text-sape-amarillo focus:outline-none transition ease-in-out duration-150"
                                             >
                                                 {user.name}
 
