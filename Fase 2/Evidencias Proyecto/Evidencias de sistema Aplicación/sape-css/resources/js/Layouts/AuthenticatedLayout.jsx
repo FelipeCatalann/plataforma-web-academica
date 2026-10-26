@@ -17,7 +17,7 @@ export default function AuthenticatedLayout({ header, children }) {
                         <div className="flex">
                             {/* LOGO DEL COLEGIO */}
                             <div className="flex shrink-0 items-center gap-3">
-                                <Link href="/" className="flex items-center gap-2">
+                                <Link href={route('dashboard')} className="flex items-center gap-2">
                                     <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-[#002855] font-bold shadow-inner">
                                         CSS
                                     </div>
