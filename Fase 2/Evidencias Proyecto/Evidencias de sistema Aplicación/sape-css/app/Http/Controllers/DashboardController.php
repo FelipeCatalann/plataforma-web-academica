@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\User;
-use App\Models\Curso; // Importamos el modelo Asignatura
-use Inertia\Inertia;
-use Illuminate\Support\Str;
 use App\Models\Asignatura;
+use App\Models\Curso;
+use App\Models\User; // Importamos el modelo Asignatura
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
@@ -64,30 +64,30 @@ class DashboardController extends Controller
             'curso_id' => 'required|exists:cursos,id',
             'tipo_rol' => 'required|in:jefe,asignatura',
             // Validamos que la asignatura sea obligatoria si es profesor de asignatura
-            'asignatura_id' => 'required_if:tipo_rol,asignatura', 
+            'asignatura_id' => 'required_if:tipo_rol,asignatura',
         ]);
 
         $profesor = User::findOrFail($request->profesor_id);
         $curso = Curso::findOrFail($request->curso_id);
 
         if ($request->tipo_rol === 'jefe') {
-            
+
             // 1. Profesor Jefe: Guardamos su ID directamente en la tabla cursos
             $curso->profesor_jefe_id = $profesor->id;
             $curso->save();
-            
+
             $profesor->assignRole('Profesor Jefe');
 
         } else {
-            
+
             // 2. Profesor de Asignatura: Le pasamos un ID (UUID) generado manualmente y la asignatura
             $profesor->cursos()->syncWithoutDetaching([
                 $curso->id => [
                     'id' => Str::uuid()->toString(), // Generamos el código único aquí
-                    'asignatura_id' => $request->asignatura_id // Guardamos la asignatura seleccionada
-                ]
+                    'asignatura_id' => $request->asignatura_id, // Guardamos la asignatura seleccionada
+                ],
             ]);
-            
+
             $profesor->assignRole('Profesor de Asignatura');
         }
 
