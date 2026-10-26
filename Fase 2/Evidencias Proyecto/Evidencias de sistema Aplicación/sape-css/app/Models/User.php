@@ -52,7 +52,7 @@ class User extends Authenticatable
     {
         // Si tienes una tabla pivote específica (como asignatura_curso), la definiremos luego.
         // Por ahora, usamos el estándar de Laravel.
-        return $this->belongsToMany(Curso::class, 'asignatura_curso', 'profesor_id', 'curso_id'); 
+        return $this->belongsToMany(Curso::class, 'asignatura_curso', 'profesor_id', 'curso_id');
     }
 
     // Relación para Profesor Jefe (uno a muchos)

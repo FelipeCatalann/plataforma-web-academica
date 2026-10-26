@@ -63,14 +63,14 @@ class ChatbotController extends Controller
             $response = Http::withoutVerifying()
                 ->timeout(30)
                 ->withHeaders([
-                    'Authorization' => 'Bearer ' . $apiKey,
+                    'Authorization' => 'Bearer '.$apiKey,
                     'Content-Type' => 'application/json',
                 ])
                 ->post($url, [
                     'model' => 'openai/gpt-oss-120b', // Modelo avanzado súper rápido
                     'messages' => [
                         ['role' => 'system', 'content' => $promptSistema],
-                        ['role' => 'user', 'content' => $mensajeSeguro]
+                        ['role' => 'user', 'content' => $mensajeSeguro],
                     ],
                     'temperature' => 0.5,
                 ]);
@@ -78,17 +78,17 @@ class ChatbotController extends Controller
             // 6. Procesar respuesta
             if ($response->successful()) {
                 $respuestaAPI = $response->json('choices.0.message.content') ?? '';
-                
+
                 $textoIA = $privacidad->restaurar($respuestaAPI, $mapa);
 
                 return response()->json(['respuesta' => $textoIA]);
             }
 
             $detalleGroq = $response->json('error.message') ?? $response->body();
-            Log::error('Error Groq: ' . $detalleGroq);
+            Log::error('Error Groq: '.$detalleGroq);
 
             return response()->json([
-                'respuesta' => "🚨 Error de Formato Groq (400):\n\n" . $detalleGroq
+                'respuesta' => "🚨 Error de Formato Groq (400):\n\n".$detalleGroq,
             ], 400);
 
         } catch (\Exception $e) {

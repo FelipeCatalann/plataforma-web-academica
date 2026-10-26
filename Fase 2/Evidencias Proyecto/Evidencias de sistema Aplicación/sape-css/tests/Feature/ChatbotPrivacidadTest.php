@@ -11,7 +11,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use Tests\TestCase;
 
 /**
- * INDG-27 / HUNF-02 — 0 nombres de alumnos viajan a Gemini.
+ * INDG-27 / HUNF-02 — 0 nombres de alumnos viajan a Groq.
  * Sin llamadas reales (Http::fake), sin costo, datos sintéticos.
  */
 class ChatbotPrivacidadTest extends TestCase
@@ -28,10 +28,10 @@ class ChatbotPrivacidadTest extends TestCase
     {
         parent::setUp();
         // El controlador lee env() directo; con Http::fake la key nunca sale.
-        // $_SERVER primero: el .env del CI trae GEMINI_API_KEY vacía y Laravel
+        // $_SERVER primero: el .env del CI trae GROQ_API_KEY vacía y Laravel
         // prioriza $_SERVER/$_ENV por sobre putenv().
-        $_SERVER['GEMINI_API_KEY'] = 'test-fake-key';
-        putenv('GEMINI_API_KEY=test-fake-key');
+        $_SERVER['GROQ_API_KEY'] = 'test-fake-key';
+        putenv('GROQ_API_KEY=test-fake-key');
         $this->archivo = tempnam(sys_get_temp_dir(), 'sape_chat').'.xlsx';
         $this->artisan('sape:generar-sinteticos', [
             'grado' => '1', 'letra' => 'B', 'ano' => '2026',
@@ -49,8 +49,8 @@ class ChatbotPrivacidadTest extends TestCase
     protected function tearDown(): void
     {
         @unlink($this->archivo);
-        unset($_SERVER['GEMINI_API_KEY']);
-        putenv('GEMINI_API_KEY');
+        unset($_SERVER['GROQ_API_KEY']);
+        putenv('GROQ_API_KEY');
         parent::tearDown();
     }
 
@@ -62,14 +62,14 @@ class ChatbotPrivacidadTest extends TestCase
         return "¿Cómo ayudo a {$n1} {$a1} y a {$n2}? Van mal en matemática.";
     }
 
-    public function test_nombres_no_llegan_a_gemini_y_respuesta_restaurada(): void
+    public function test_nombres_no_llegan_a_groq_y_respuesta_restaurada(): void
     {
         Http::fake([
-            'generativelanguage.googleapis.com*' => Http::response([
-                'candidates' => [[
-                    'content' => ['parts' => [[
-                        'text' => 'Sugerencia para [ALUMNO_1]: plan lector. Y para [ALUMNO_2]: tutorías.',
-                    ]]],
+            'api.groq.com*' => Http::response([
+                'choices' => [[
+                    'message' => [
+                        'content' => 'Sugerencia para [ALUMNO_1]: plan lector. Y para [ALUMNO_2]: tutorías.',
+                    ],
                 ]],
             ], 200),
         ]);
@@ -92,12 +92,9 @@ class ChatbotPrivacidadTest extends TestCase
             }
         }
 
-        // CA-1: al payload enviado a Gemini no va ningún nombre real.
+        // CA-1: al payload enviado a Groq no va ningún nombre real.
         Http::assertSent(function ($request) {
-            $enviado = json_encode([
-                $request['systemInstruction'] ?? null,
-                $request['contents'] ?? null,
-            ]);
+            $enviado = json_encode($request['messages'] ?? null);
             foreach ($this->nombresReales as $nombre) {
                 foreach (preg_split('/\s+/u', $nombre) as $parte) {
                     if (mb_strlen($parte) >= 4 && str_contains($enviado, $parte)) {
@@ -113,9 +110,9 @@ class ChatbotPrivacidadTest extends TestCase
     public function test_mensaje_sin_nombres_pasa_intacto(): void
     {
         Http::fake([
-            'generativelanguage.googleapis.com*' => Http::response([
-                'candidates' => [[
-                    'content' => ['parts' => [['text' => 'OK']]],
+            'api.groq.com*' => Http::response([
+                'choices' => [[
+                    'message' => ['content' => 'OK'],
                 ]],
             ], 200),
         ]);

@@ -18,7 +18,7 @@ class InformeIAController extends Controller
         $request->validate([
             'estudiante_id' => 'required', // Le quitamos el 'integer' para que acepte cualquier formato de ID
             'destinatario' => 'required|string',
-            'palabras_clave' => 'nullable|string'
+            'palabras_clave' => 'nullable|string',
         ]);
 
         try {
@@ -26,7 +26,7 @@ class InformeIAController extends Controller
             $cursoTexto = $request->curso_nombre ?? 'su curso';
 
             // 2. ENMASCARAMIENTO (Ley 19.628)
-            $nombreReal = trim($estudiante->nombres . ' ' . $estudiante->apellidos);
+            $nombreReal = trim($estudiante->nombres.' '.$estudiante->apellidos);
             $runReal = $estudiante->run ?? 'Sin Registro';
 
             $notas = $estudiante->calificaciones->pluck('valor')->toArray();
@@ -36,9 +36,9 @@ class InformeIAController extends Controller
 
             // 3. Configuración del contexto adicional
             $destinatario = $request->destinatario;
-            $textoPalabrasClave = $request->palabras_clave 
-                ? "Considera además estos puntos clave observados por el profesor: {$request->palabras_clave}." 
-                : "";
+            $textoPalabrasClave = $request->palabras_clave
+                ? "Considera además estos puntos clave observados por el profesor: {$request->palabras_clave}."
+                : '';
 
             // 4. Prompt de usuario ocultando la identidad
             $prompt = "Redacta un informe pedagógico formal y respetuoso dirigido a: {$destinatario}.
@@ -60,20 +60,20 @@ class InformeIAController extends Controller
             $response = Http::withoutVerifying()
                 ->timeout(30)
                 ->withHeaders([
-                    'Authorization' => 'Bearer ' . $apiKey,
+                    'Authorization' => 'Bearer '.$apiKey,
                     'Content-Type' => 'application/json',
                 ])
                 ->post('https://api.groq.com/openai/v1/chat/completions', [
                     'model' => 'qwen/qwen3.8-27b', // Si te da error de límite, cámbialo a 'openai/gpt-oss-120b'
                     'messages' => [
                         [
-                            'role' => 'system', 
-                            'content' => 'Eres un profesor jefe y orientador experto en redacción de informes pedagógicos formales.'
+                            'role' => 'system',
+                            'content' => 'Eres un profesor jefe y orientador experto en redacción de informes pedagógicos formales.',
                         ],
                         [
-                            'role' => 'user', 
-                            'content' => $prompt
-                        ]
+                            'role' => 'user',
+                            'content' => $prompt,
+                        ],
                     ],
                     'temperature' => 0.4,
                     'max_tokens' => 800,
@@ -91,19 +91,21 @@ class InformeIAController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'informe' => $informeFinal
+                    'informe' => $informeFinal,
                 ]);
             }
 
-            Log::error('Error IA Informe: ' . $response->body());
+            Log::error('Error IA Informe: '.$response->body());
+
             return response()->json([
-                'error' => "Error al conectar con la IA. Detalle: " . $response->status()
+                'error' => 'Error al conectar con la IA. Detalle: '.$response->status(),
             ], 503);
 
         } catch (\Exception $e) {
-            Log::error('Error Excepción Informe: ' . $e->getMessage());
+            Log::error('Error Excepción Informe: '.$e->getMessage());
+
             return response()->json([
-                'error' => 'Error interno: ' . $e->getMessage()
+                'error' => 'Error interno: '.$e->getMessage(),
             ], 500);
         }
     }
