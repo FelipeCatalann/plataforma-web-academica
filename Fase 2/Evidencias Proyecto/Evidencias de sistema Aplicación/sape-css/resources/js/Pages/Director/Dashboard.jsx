@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import SearchableSelect from '@/Components/SearchableSelect';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -52,6 +53,36 @@ export default function PanelDirector({ auth, profesores = [], cursos = [], asig
             onSuccess: () => resetAsig()
         });
     };
+
+    const cursosOpciones = useMemo(() => {
+        return (cursos || []).map((curso) => ({
+            id: curso.id,
+            nombre: `${curso.nivel}° ${curso.letra}`,
+            detalle: curso.anioEscolar ? `Año ${curso.anioEscolar}` : '',
+        }));
+    }, [cursos]);
+
+    // Filtrar asignaturas: si hay curso seleccionado, trae las de ese curso (sin repetidas).
+    // Si no hay curso, deduplica por nombre único para evitar nombres repetidos en la lista.
+    const asignaturasDisponibles = useMemo(() => {
+        if (dataAsig.curso_id) {
+            const cursoSeleccionado = (cursos || []).find((c) => String(c.id) === String(dataAsig.curso_id));
+            if (cursoSeleccionado && Array.isArray(cursoSeleccionado.asignaturas) && cursoSeleccionado.asignaturas.length > 0) {
+                return cursoSeleccionado.asignaturas;
+            }
+        }
+
+        const unicas = [];
+        const nombresVistos = new Set();
+        (asignaturas || []).forEach((asig) => {
+            const nom = (asig.nombre || '').trim();
+            if (nom && !nombresVistos.has(nom.toLowerCase())) {
+                nombresVistos.add(nom.toLowerCase());
+                unicas.push(asig);
+            }
+        });
+        return unicas;
+    }, [dataAsig.curso_id, cursos, asignaturas]);
 
     return (
         <AuthenticatedLayout user={auth.user}>
@@ -132,32 +163,41 @@ export default function PanelDirector({ auth, profesores = [], cursos = [], asig
                                         
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 mb-1">1. Seleccionar Profesor</label>
-                                            <select
+                                            <SearchableSelect
+                                                options={profesores}
                                                 value={dataAsig.profesor_id}
-                                                onChange={(e) => setDataAsig('profesor_id', e.target.value)}
-                                                className="w-full border-sape-gris rounded-lg shadow-sm focus:border-sape-burdeo focus:ring-sape-burdeo"
+                                                onChange={(val) => setDataAsig('profesor_id', val)}
+                                                placeholder="-- Selecciona o busca un profesor --"
+                                                searchPlaceholder="Buscar profesor por nombre o correo..."
+                                                name="profesor_id"
                                                 required
-                                            >
-                                                <option value="">-- Selecciona un Profesor --</option>
-                                                {profesores.map((prof) => (
-                                                    <option key={prof.id} value={prof.id}>{prof.name} ({prof.email})</option>
-                                                ))}
-                                            </select>
+                                                error={errorsAsig.profesor_id}
+                                            />
                                         </div>
 
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 mb-1">2. Seleccionar Curso</label>
-                                            <select
+                                            <SearchableSelect
+                                                options={cursosOpciones}
                                                 value={dataAsig.curso_id}
-                                                onChange={(e) => setDataAsig('curso_id', e.target.value)}
-                                                className="w-full border-sape-gris rounded-lg shadow-sm focus:border-sape-burdeo focus:ring-sape-burdeo"
+                                                onChange={(val) => {
+                                                    setDataAsig((prev) => ({
+                                                        ...prev,
+                                                        curso_id: val,
+                                                        asignatura_id: '',
+                                                    }));
+                                                }}
+                                                labelKey="nombre"
+                                                subLabelKey="detalle"
+                                                placeholder="-- Selecciona o busca un curso --"
+                                                searchPlaceholder="Buscar curso por nivel o letra (ej. 1° B)..."
+                                                name="curso_id"
                                                 required
-                                            >
-                                                <option value="">-- Selecciona un Curso --</option>
-                                                {cursos.map((curso) => (
-                                                    <option key={curso.id} value={curso.id}>{curso.nivel}° {curso.letra}</option>
-                                                ))}
-                                            </select>
+                                                error={errorsAsig.curso_id}
+                                                emptyTitle="No se encontraron cursos"
+                                                itemSingular="curso disponible"
+                                                itemPlural="cursos disponibles"
+                                            />
                                         </div>
 
                                         <div>
@@ -190,21 +230,24 @@ export default function PanelDirector({ auth, profesores = [], cursos = [], asig
                                         {/* 3. MOSTRAMOS LAS ASIGNATURAS SOLO SI ELIGIÓ "Profesor de Asignatura" */}
                                         <AnimatePresence>
                                             {dataAsig.tipo_rol === 'asignatura' && (
-                                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                                                    <div className="pt-2">
+                                                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="pt-2">
+                                                    <div>
                                                         <label className="block text-sm font-semibold text-gray-700 mb-1">4. Seleccionar Asignatura</label>
-                                                        <select
+                                                        <SearchableSelect
+                                                            options={asignaturasDisponibles}
                                                             value={dataAsig.asignatura_id}
-                                                            onChange={(e) => setDataAsig('asignatura_id', e.target.value)}
-                                                            className="w-full border-sape-gris rounded-lg shadow-sm focus:border-sape-burdeo focus:ring-sape-burdeo"
+                                                            onChange={(val) => setDataAsig('asignatura_id', val)}
+                                                            labelKey="nombre"
+                                                            subLabelKey=""
+                                                            placeholder="-- Selecciona o busca la Asignatura --"
+                                                            searchPlaceholder="Buscar asignatura por nombre..."
+                                                            name="asignatura_id"
                                                             required={dataAsig.tipo_rol === 'asignatura'}
-                                                        >
-                                                            <option value="">-- Selecciona la Asignatura --</option>
-                                                            {asignaturas.map((asig) => (
-                                                                <option key={asig.id} value={asig.id}>{asig.nombre}</option>
-                                                            ))}
-                                                        </select>
-                                                        {errorsAsig.asignatura_id && <p className="text-red-500 text-xs mt-1">{errorsAsig.asignatura_id}</p>}
+                                                            error={errorsAsig.asignatura_id}
+                                                            emptyTitle="No se encontraron asignaturas"
+                                                            itemSingular="asignatura disponible"
+                                                            itemPlural="asignaturas disponibles"
+                                                        />
                                                     </div>
                                                 </motion.div>
                                             )}

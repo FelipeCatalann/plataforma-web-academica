@@ -19,7 +19,7 @@ class DashboardController extends Controller
         if ($user->hasRole('Administrador')) {
             return Inertia::render('Director/Dashboard', [
                 'profesores' => $this->obtenerProfesores(),
-                'cursos' => Curso::all(),
+                'cursos' => Curso::with('asignaturas')->get(),
                 'asignaturas' => Asignatura::all(), // Enviamos las asignaturas
             ]);
         }
@@ -35,7 +35,7 @@ class DashboardController extends Controller
     {
         return Inertia::render('Admin/Dashboard', [
             'profesores' => $this->obtenerProfesores(),
-            'cursos' => Curso::all(),
+            'cursos' => Curso::with('asignaturas')->get(),
             'asignaturas' => Asignatura::all(), // Enviamos las asignaturas
         ]);
     }
