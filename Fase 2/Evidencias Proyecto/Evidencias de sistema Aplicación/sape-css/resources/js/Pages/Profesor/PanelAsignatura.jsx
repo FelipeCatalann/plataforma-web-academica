@@ -28,7 +28,7 @@ export default function PanelAsignatura({ auth, cursos }) {
                     const notas = est.calificaciones?.filter(c => c.asignatura_id === asig.id) || [];
                     notas.forEach(n => {
                         const valor = parseFloat(n.valor || n.evaluacion || n.evaluación);
-                        if (!isNaN(valor)) {
+                        if (!isNaN(valor) && valor > 0) {
                             totalNotas += valor;
                             cantidadNotas++;
                         }
@@ -44,7 +44,7 @@ export default function PanelAsignatura({ auth, cursos }) {
     }, [cursos]);
 
     const calcularPromedio = (notas) => {
-        const valores = notas.map(n => parseFloat(n.valor || n.evaluacion || n.evaluación)).filter(v => !isNaN(v));
+        const valores = notas.map(n => parseFloat(n.valor || n.evaluacion || n.evaluación)).filter(v => !isNaN(v) && v > 0);
         if (valores.length === 0) return '-';
         const suma = valores.reduce((a, b) => a + b, 0);
         return (suma / valores.length).toFixed(1);
@@ -279,8 +279,10 @@ export default function PanelAsignatura({ auth, cursos }) {
                                                             <td className="px-4 py-4 border-l border-gray-100">
                                                                 <div className="flex flex-wrap gap-1 justify-center">
                                                                     {notasS1.length > 0 ? notasS1.map((n, i) => {
-                                                                        const valor = n.valor || n.evaluacion || n.evaluación;
-                                                                        return <span key={i} className={`inline-block px-2 py-1 rounded text-xs font-semibold border ${parseFloat(valor) < 4.0 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-white text-gray-700 border-gray-200'}`}>{valor}</span>;
+                                                                        const num = parseFloat(n.valor);
+                                                                        const esNumerica = !isNaN(num) && num > 0;
+                                                                        const etiqueta = esNumerica ? num.toFixed(1) : (n.evaluacion || n.evaluación || '-');
+                                                                        return <span key={i} className={`inline-block px-2 py-1 rounded text-xs font-semibold border ${esNumerica && num < 4.0 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-white text-gray-700 border-gray-200'}`}>{etiqueta}</span>;
                                                                     }) : <span className="text-gray-300">-</span>}
                                                                 </div>
                                                             </td>
@@ -290,8 +292,10 @@ export default function PanelAsignatura({ auth, cursos }) {
                                                             <td className="px-4 py-4 border-l border-gray-100">
                                                                 <div className="flex flex-wrap gap-1 justify-center">
                                                                     {notasS2.length > 0 ? notasS2.map((n, i) => {
-                                                                        const valor = n.valor || n.evaluacion || n.evaluación;
-                                                                        return <span key={i} className={`inline-block px-2 py-1 rounded text-xs font-semibold border ${parseFloat(valor) < 4.0 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-white text-gray-700 border-gray-200'}`}>{valor}</span>;
+                                                                        const num = parseFloat(n.valor);
+                                                                        const esNumerica = !isNaN(num) && num > 0;
+                                                                        const etiqueta = esNumerica ? num.toFixed(1) : (n.evaluacion || n.evaluación || '-');
+                                                                        return <span key={i} className={`inline-block px-2 py-1 rounded text-xs font-semibold border ${esNumerica && num < 4.0 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-white text-gray-700 border-gray-200'}`}>{etiqueta}</span>;
                                                                     }) : <span className="text-gray-300">-</span>}
                                                                 </div>
                                                             </td>
