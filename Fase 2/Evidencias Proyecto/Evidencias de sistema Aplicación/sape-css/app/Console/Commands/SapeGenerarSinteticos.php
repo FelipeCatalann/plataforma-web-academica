@@ -100,6 +100,45 @@ class SapeGenerarSinteticos extends Command
         ['AAV', 'Artes Visuales, Audiovisuales y Multimediales', 'S', 'C'],
     ];
 
+    /**
+     * Media base por código de subsector para reflejar diferencias reales
+     * entre asignaturas (STEM más exigentes, humanidades intermedias,
+     * artístico-deportivas más altas).
+     */
+    private const MEDIA_BASE_SUBSECTOR = [
+        // STEM / mayor exigencia (promedios ~4.2 - 4.7)
+        'LDI' => 4.1,
+        'MAT' => 4.2,
+        'FIS' => 4.3,
+        'QUI' => 4.5,
+        'GEO' => 4.6,
+        'CIE' => 4.7,
+        'PES' => 4.8,
+        // Científico-humanistas intermedios (promedios ~5.0 - 5.8)
+        'BIO' => 5.0,
+        'FIL' => 5.1,
+        'SFI' => 5.1,
+        'FPO' => 5.2,
+        'LEN' => 5.2,
+        'ING' => 5.4,
+        'HIS' => 5.5,
+        'CHP' => 5.5,
+        'GTE' => 5.6,
+        'CCI' => 5.6,
+        'CSA' => 5.7,
+        'ECI' => 5.8,
+        'PAD' => 5.8,
+        // Artístico-deportivos / prácticos (promedios ~6.1 - 6.5)
+        'DAR' => 6.1,
+        'ART' => 6.2,
+        'AAV' => 6.2,
+        'IMU' => 6.3,
+        'CCM' => 6.3,
+        'CEF' => 6.3,
+        'PEV' => 6.4,
+        'EFI' => 6.5,
+    ];
+
     public function handle(): int
     {
         $grado = min(4, max(1, (int) $this->argument('grado')));
@@ -135,13 +174,24 @@ class SapeGenerarSinteticos extends Command
                 '04-03-'.$ano, $esRetirado ? '30-06-'.$ano : '', $asistencia, $telefono,
             ];
 
+            $perfilAlumno = $this->perfilRendimientoAlumno($i, $grado, $letra);
+
             foreach ($this->subsectoresAlumno($grado, $suf, $i) as [$cod, $nombre, $incide]) {
                 foreach ([1, 2] as $semestre) {
                     // Generar entre 5 y 6 notas para el 1° Semestre y 2 a 3 para el 2° Semestre
                     $cantidadNotas = $semestre === 1 ? mt_rand(5, 6) : mt_rand(2, 3);
 
                     for ($nNota = 0; $nNota < $cantidadNotas; $nNota++) {
-                        [$nota, $conceptual, $eximido] = $this->notaPara($cod, $suf, $i, $semestre, $faker);
+                        [$nota, $conceptual, $eximido] = $this->notaPara(
+                            $cod,
+                            $suf,
+                            $i,
+                            $semestre,
+                            $grado,
+                            $letra,
+                            $perfilAlumno,
+                            $faker
+                        );
 
                         $calificaciones[] = [
                             $ano, $ensenanza, $grado, $letra, $run,
@@ -232,8 +282,89 @@ class SapeGenerarSinteticos extends Command
         return $lista;
     }
 
-    private function notaPara(string $cod, string $suf, int $indiceAlumno, int $semestre, $faker): array
+    /**
+     * Genera un perfil de rendimiento consistente por estudiante (arquetipo general +
+     * afinidades por área STEM / Humanidades / Artístico-Deportivo) para evitar que
+     * todos los alumnos converjan al mismo promedio.
+     *
+     * @return array{base: float, stem: float, hum: float, prac: float}
+     */
+    private function perfilRendimientoAlumno(int $indiceAlumno, int $grado, string $letra): array
     {
+        if ($indiceAlumno === 0) {
+            // Alumno retirado con bajo rendimiento previo
+            return ['base' => -0.9, 'stem' => -0.3, 'hum' => -0.2, 'prac' => 0.0];
+        }
+        if ($indiceAlumno === 1) {
+            // Alumno con dificultad marcada en área científica/matemática
+            return ['base' => -0.6, 'stem' => -0.5, 'hum' => 0.1, 'prac' => 0.2];
+        }
+
+        // Distribución realista de arquetipos dentro del curso:
+        // ~15% destacados, ~35% sobre promedio, ~30% regulares, ~20% bajo rendimiento/riesgo
+        $roll = mt_rand(1, 100);
+        if ($roll <= 15) {
+            $base = mt_rand(7, 12) / 10; // +0.7 a +1.2
+        } elseif ($roll <= 50) {
+            $base = mt_rand(2, 6) / 10;  // +0.2 a +0.6
+        } elseif ($roll <= 80) {
+            $base = mt_rand(-4, 1) / 10; // -0.4 a +0.1
+        } else {
+            $base = mt_rand(-12, -5) / 10; // -1.2 a -0.5
+        }
+
+        // Afinidad personal por área para dar variabilidad creíble entre asignaturas de un mismo alumno
+        $stem = mt_rand(-4, 4) / 10;
+        $hum = mt_rand(-3, 4) / 10;
+        $prac = mt_rand(-2, 3) / 10;
+
+        return [
+            'base' => $base,
+            'stem' => $stem,
+            'hum' => $hum,
+            'prac' => $prac,
+        ];
+    }
+
+    /**
+     * Calcula el sesgo propio del curso (grado + letra) y de la dupla curso-asignatura
+     * para que los gráficos comparativos entre cursos y por asignatura muestren curvas
+     * diferenciadas y realistas.
+     */
+    private function sesgoCursoSubsector(int $grado, string $letra, string $prefijo): float
+    {
+        $sesgoLetra = match ($letra) {
+            'A' => 0.35,
+            'B' => -0.35,
+            'C' => 0.05,
+            default => 0.0,
+        };
+
+        $sesgoGrado = match ($grado) {
+            1 => -0.15,
+            2 => 0.10,
+            3 => -0.05,
+            4 => 0.25,
+            default => 0.0,
+        };
+
+        // Variación determinista específica de cada asignatura en cada curso (-0.30 a +0.30)
+        $hash = abs(crc32("{$grado}-{$letra}-{$prefijo}")) % 61;
+        $sesgoAsignaturaCurso = ($hash - 30) / 100.0;
+
+        return $sesgoLetra + $sesgoGrado + $sesgoAsignaturaCurso;
+    }
+
+    private function notaPara(
+        string $cod,
+        string $suf,
+        int $indiceAlumno,
+        int $semestre,
+        int $grado,
+        string $letra,
+        array $perfilAlumno,
+        $faker
+    ): array {
         if ($cod === 'MAT-'.$suf && $indiceAlumno === 1) {
             return [$semestre === 1 ? '3,9' : '3,5', '', ''];
         }
@@ -244,12 +375,28 @@ class SapeGenerarSinteticos extends Command
             return ['', '', 'EX'];
         }
         if (str_starts_with($cod, 'REL-')) {
-            return ['', $faker->randomElement(['S', 'S', 'MB', 'B']), ''];
+            return ['', $faker->randomElement(['S', 'B', 'MB', 'MB']), ''];
         }
 
-        $nota = $faker->boolean(15)
-            ? $faker->randomFloat(1, 3.0, 3.9)
-            : $faker->randomFloat(1, 4.0, 7.0);
+        $prefijo = explode('-', $cod)[0];
+        $mediaBase = self::MEDIA_BASE_SUBSECTOR[$prefijo] ?? 5.2;
+
+        $afinidadArea = match (true) {
+            in_array($prefijo, ['MAT', 'FIS', 'QUI', 'CIE', 'LDI', 'GEO', 'PES', 'BIO'], true) => $perfilAlumno['stem'],
+            in_array($prefijo, ['EFI', 'ART', 'DAR', 'AAV', 'IMU', 'CCM', 'CEF', 'PEV'], true) => $perfilAlumno['prac'],
+            default => $perfilAlumno['hum'],
+        };
+
+        $sesgoCurso = $this->sesgoCursoSubsector($grado, $letra, $prefijo);
+        $ajusteSemestre = $semestre === 2 ? 0.15 : 0.0;
+
+        $centroEsperado = $mediaBase + $sesgoCurso + $perfilAlumno['base'] + $afinidadArea + $ajusteSemestre;
+
+        // Dispersión por evaluación parcial (más amplia en STEM y menor en ramos prácticos)
+        $amplitud = in_array($prefijo, ['EFI', 'ART', 'DAR', 'AAV', 'IMU', 'CCM', 'CEF', 'PEV'], true) ? 0.45 : 0.75;
+        $variacionParcial = $faker->randomFloat(2, -$amplitud, $amplitud);
+
+        $nota = max(2.0, min(7.0, round($centroEsperado + $variacionParcial, 1)));
 
         return [self::decimalComa($nota), '', ''];
     }

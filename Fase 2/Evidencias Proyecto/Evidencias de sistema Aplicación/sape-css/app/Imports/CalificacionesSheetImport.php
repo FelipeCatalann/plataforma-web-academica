@@ -16,6 +16,7 @@ class CalificacionesSheetImport implements ToCollection, WithHeadingRow
     {
         $now = now();
         $anoActual = $now->year;
+        $paresLimpiados = [];
 
         foreach ($rows as $row) {
             // Validar regla de negocio de eximición
@@ -65,6 +66,17 @@ class CalificacionesSheetImport implements ToCollection, WithHeadingRow
                     'ponderacion' => 1.00,
                     'created_at' => $now, 'updated_at' => $now,
                 ]);
+            }
+
+            // 3.5. Si ya existían calificaciones previas para este alumno y asignatura en una carga anterior,
+            // se reemplazan una sola vez al inicio de la importación del archivo para no mezclar notas antiguas con nuevas.
+            $clavePar = "{$matricula->id}:{$asigCursoId}";
+            if (! isset($paresLimpiados[$clavePar])) {
+                DB::table('calificaciones')
+                    ->where('matricula_id', $matricula->id)
+                    ->where('asignatura_curso_id', $asigCursoId)
+                    ->delete();
+                $paresLimpiados[$clavePar] = true;
             }
 
             // 4. Transformar la Calificación
