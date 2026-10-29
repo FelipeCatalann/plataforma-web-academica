@@ -38,6 +38,9 @@ Route::middleware('auth')->group(function () {
     // 2. Procesar el archivo enviado (POST) - Nombre actualizado para coincidir con tu React
     Route::post('/admin/importar', [ImportController::class, 'importar'])->name('admin.importar.store');
 
+    // 3. Eliminar los datos Excel cargados de un curso específico (DELETE)
+    Route::delete('/admin/cursos/{curso}/excel', [ImportController::class, 'eliminarDatosCurso'])->name('admin.cursos.eliminarExcel');
+
     Route::get('/panel-jefe', [ProfesorController::class, 'panelJefe'])->name('profesor.jefe');
     Route::get('/panel-asignatura', [ProfesorController::class, 'panelAsignatura'])->name('profesor.asignatura');
     Route::get('/panel-director', [DashboardController::class, 'panelDirector'])->name('admin.director');
