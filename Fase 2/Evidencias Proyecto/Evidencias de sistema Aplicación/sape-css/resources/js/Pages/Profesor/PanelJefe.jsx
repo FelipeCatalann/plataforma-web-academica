@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ChatbotPedagogico from '@/Components/ChatbotPedagogico';
 import ModalInformeIA from '@/Components/ModalInformeIA';
+import ModalWhatsAppApoderado from '@/Components/ModalWhatsAppApoderado';
 
 export default function PanelJefe({ auth, curso }) {
     const [vistaActiva, setVistaActiva] = useState('resumen');
@@ -12,6 +13,10 @@ export default function PanelJefe({ auth, curso }) {
 
     const [modalInformeOpen, setModalInformeOpen] = useState(false);
     const [estudianteParaInforme, setEstudianteParaInforme] = useState(null);
+
+    const [modalWhatsAppOpen, setModalWhatsAppOpen] = useState(false);
+    const [estudianteParaWhatsApp, setEstudianteParaWhatsApp] = useState(null);
+    const [seguimientoLocal, setSeguimientoLocal] = useState({});
 
     const { asignaturas, datosGrafico } = useMemo(() => {
         if (!curso || !curso.estudiantes) return { asignaturas: [], datosGrafico: [] };
@@ -57,9 +62,53 @@ export default function PanelJefe({ auth, curso }) {
         return (suma / valores.length).toFixed(1);
     };
 
+    const contarAsignaturasBajo40 = (estudiante) => {
+        if (!estudiante?.calificaciones) return 0;
+        const porAsig = new Map();
+        estudiante.calificaciones.forEach((cal) => {
+            const valor = parseFloat(cal.valor || cal.evaluacion || cal.evaluación);
+            if (!isNaN(valor) && valor > 0 && cal.asignatura_nombre) {
+                if (!porAsig.has(cal.asignatura_nombre)) {
+                    porAsig.set(cal.asignatura_nombre, { suma: 0, count: 0 });
+                }
+                const item = porAsig.get(cal.asignatura_nombre);
+                item.suma += valor;
+                item.count += 1;
+            }
+        });
+        let criticas = 0;
+        porAsig.forEach((datos) => {
+            if (datos.count > 0 && datos.suma / datos.count < 4.0) {
+                criticas += 1;
+            }
+        });
+        return criticas;
+    };
+
     const abrirModalInforme = (estudiante) => {
         setEstudianteParaInforme(estudiante);
         setModalInformeOpen(true);
+    };
+
+    const abrirModalWhatsApp = (estudiante) => {
+        const extra = seguimientoLocal[estudiante.id];
+        setEstudianteParaWhatsApp(
+            extra
+                ? { ...estudiante, apoderado_telefono: extra.telefono || estudiante.apoderado_telefono }
+                : estudiante
+        );
+        setModalWhatsAppOpen(true);
+    };
+
+    const registrarEnlaceGenerado = (estudianteId, enlace, telefonoActualizado) => {
+        setSeguimientoLocal((prev) => ({
+            ...prev,
+            [estudianteId]: {
+                total: (prev[estudianteId]?.total ?? 0) + 1,
+                ultimo: enlace,
+                telefono: telefonoActualizado,
+            },
+        }));
     };
 
     if (!curso) {
@@ -166,7 +215,7 @@ export default function PanelJefe({ auth, curso }) {
                             <motion.div key="lista-estudiantes" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }} className="space-y-6">
                                 <div className="bg-white p-6 rounded-xl shadow-sm border border-sape-gris border-l-4 border-l-sape-burdeo">
                                     <h1 className="text-2xl font-bold text-sape-burdeo">Nómina de Estudiantes</h1>
-                                    <p className="text-gray-500 text-sm mt-1">Selecciona un estudiante para revisar sus calificaciones detalladas.</p>
+                                    <p className="text-gray-500 text-sm mt-1">Selecciona un estudiante para revisar sus calificaciones detalladas o contactar a su apoderado vía WhatsApp.</p>
                                 </div>
 
                                 <div className="bg-white rounded-xl shadow-sm border border-sape-gris overflow-hidden">
@@ -175,41 +224,84 @@ export default function PanelJefe({ auth, curso }) {
                                             <tr>
                                                 <th className="px-6 py-4 font-semibold tracking-wider">Estudiante</th>
                                                 <th className="px-6 py-4 font-semibold tracking-wider text-center">RUT</th>
+                                                <th className="px-6 py-4 font-semibold tracking-wider text-center">Seguimiento Apoderado</th>
                                                 <th className="px-6 py-4 font-semibold tracking-wider text-right">Acción</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-sape-gris">
-                                            {curso.estudiantes.map((estudiante) => (
-                                                <tr key={estudiante.id} className="hover:bg-gray-50 transition-colors">
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-10 h-10 rounded-full bg-sape-burdeo/10 flex items-center justify-center text-sape-burdeo font-bold text-sm">
-                                                                {estudiante.nombres.charAt(0)}{estudiante.apellidos.charAt(0)}
+                                            {curso.estudiantes.map((estudiante) => {
+                                                const asigRojas = contarAsignaturasBajo40(estudiante);
+                                                const totalContactos =
+                                                    (estudiante.total_whatsapps || 0) +
+                                                    (seguimientoLocal[estudiante.id]?.total || 0);
+                                                const telefonoApoderado =
+                                                    seguimientoLocal[estudiante.id]?.telefono ||
+                                                    estudiante.apoderado_telefono;
+
+                                                return (
+                                                    <tr key={estudiante.id} className="hover:bg-gray-50 transition-colors">
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 rounded-full bg-sape-burdeo/10 flex items-center justify-center text-sape-burdeo font-bold text-sm">
+                                                                    {estudiante.nombres.charAt(0)}{estudiante.apellidos.charAt(0)}
+                                                                </div>
+                                                                <div>
+                                                                    <span className="font-semibold text-gray-900 text-base block">
+                                                                        {estudiante.nombres} {estudiante.apellidos}
+                                                                    </span>
+                                                                    {asigRojas > 0 && (
+                                                                        <span className="inline-block mt-0.5 text-[11px] font-semibold px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
+                                                                            ⚠️ {asigRojas} asig. bajo 4.0 (Sugiere seguimiento)
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            <span className="font-semibold text-gray-900 text-base">
-                                                                {estudiante.nombres} {estudiante.apellidos}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center text-gray-500 font-mono">
-                                                        {estudiante.run || 'Sin Registro'}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right flex justify-end gap-2">
-                                                        <button 
-                                                            onClick={() => abrirModalInforme(estudiante)}
-                                                            className="inline-flex items-center gap-2 bg-sape-burdeo text-sape-amarillo px-3 py-2 rounded-lg text-sm font-bold hover:bg-sape-burdeo-hover transition-colors"
-                                                        >
-                                                            ✨ Informe IA
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => setEstudianteActivo(estudiante)}
-                                                            className="inline-flex items-center gap-2 bg-white border border-sape-burdeo text-sape-burdeo px-3 py-2 rounded-lg text-sm font-bold hover:bg-sape-burdeo hover:text-sape-amarillo transition-colors"
-                                                        >
-                                                            Ver Calificaciones →
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center text-gray-500 font-mono">
+                                                            {estudiante.run || estudiante.identificadorInterno || 'Sin Registro'}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            <div className="flex flex-col items-center gap-1">
+                                                                <span className="text-xs font-mono text-gray-600">
+                                                                    {telefonoApoderado || 'Sin teléfono'}
+                                                                </span>
+                                                                {totalContactos > 0 ? (
+                                                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                        ✓ Contactado ({totalContactos})
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-[11px] text-gray-400">
+                                                                        Sin mensajes previos
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-right">
+                                                            <div className="flex flex-wrap justify-end gap-2">
+                                                                <button
+                                                                    onClick={() => abrirModalWhatsApp(estudiante)}
+                                                                    className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm"
+                                                                    title="Preparar mensaje de WhatsApp para el apoderado"
+                                                                >
+                                                                    💬 WhatsApp Apoderado
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => abrirModalInforme(estudiante)}
+                                                                    className="inline-flex items-center gap-2 bg-sape-burdeo text-sape-amarillo px-3 py-2 rounded-lg text-sm font-bold hover:bg-sape-burdeo-hover transition-colors"
+                                                                >
+                                                                    ✨ Informe IA
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => setEstudianteActivo(estudiante)}
+                                                                    className="inline-flex items-center gap-2 bg-white border border-sape-burdeo text-sape-burdeo px-3 py-2 rounded-lg text-sm font-bold hover:bg-sape-burdeo hover:text-sape-amarillo transition-colors"
+                                                                >
+                                                                    Ver Calificaciones →
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
@@ -223,7 +315,7 @@ export default function PanelJefe({ auth, curso }) {
                                     ← Volver a la nómina del curso
                                 </button>
 
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-sape-gris border-t-4 border-t-sape-burdeo">
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-sape-gris border-t-4 border-t-sape-burdeo flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                     <div className="flex items-center gap-4">
                                         <div className="w-16 h-16 rounded-full bg-sape-burdeo/10 flex items-center justify-center text-sape-burdeo font-bold text-2xl">
                                             {estudianteActivo.nombres.charAt(0)}{estudianteActivo.apellidos.charAt(0)}
@@ -232,6 +324,20 @@ export default function PanelJefe({ auth, curso }) {
                                             <h1 className="text-2xl font-bold text-gray-900">{estudianteActivo.nombres} {estudianteActivo.apellidos}</h1>
                                             <p className="text-gray-500 text-sm">Registro de Calificaciones Anual - {curso.nivel}° {curso.letra}</p>
                                         </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            onClick={() => abrirModalWhatsApp(estudianteActivo)}
+                                            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm"
+                                        >
+                                            💬 Contactar Apoderado (WhatsApp)
+                                        </button>
+                                        <button
+                                            onClick={() => abrirModalInforme(estudianteActivo)}
+                                            className="inline-flex items-center gap-2 bg-sape-burdeo text-sape-amarillo px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-sape-burdeo-hover transition-colors shadow-sm"
+                                        >
+                                            ✨ Informe IA
+                                        </button>
                                     </div>
                                 </div>
 
@@ -313,6 +419,15 @@ export default function PanelJefe({ auth, curso }) {
                 onClose={() => setModalInformeOpen(false)} 
                 estudiante={estudianteParaInforme}
                 cursoNombre={`${curso.nivel}° Medio ${curso.letra}`} 
+            />
+
+            <ModalWhatsAppApoderado
+                isOpen={modalWhatsAppOpen}
+                onClose={() => setModalWhatsAppOpen(false)}
+                estudiante={estudianteParaWhatsApp}
+                curso={curso}
+                profesorNombre={auth?.user?.name}
+                onEnlaceGenerado={registrarEnlaceGenerado}
             />
 
         </AuthenticatedLayout>
