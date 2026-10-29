@@ -99,8 +99,8 @@ export default function UpdateProfileInformation({
                         leave="transition ease-in-out"
                         leaveTo="opacity-0"
                     >
-                        <p className="text-sm text-gray-600">
-                            Guardardo.
+                        <p className="text-sm font-semibold text-emerald-600">
+                            Cambios guardados correctamente.
                         </p>
                     </Transition>
                 </div>
