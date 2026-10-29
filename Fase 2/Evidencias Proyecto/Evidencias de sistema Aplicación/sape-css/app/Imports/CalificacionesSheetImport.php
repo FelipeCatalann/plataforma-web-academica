@@ -40,13 +40,23 @@ class CalificacionesSheetImport implements ToCollection, WithHeadingRow
                 ]);
             }
 
-            // 2. Buscar al estudiante
+            // 2. Buscar al estudiante y su matrícula en el curso correspondiente a la fila
             $estudiante = DB::table('estudiantes')->where('identificadorInterno', $row['run_token'])->first();
             if (! $estudiante) {
                 continue;
             }
 
-            $matricula = DB::table('matriculas')->where('estudiante_id', $estudiante->id)->first();
+            $grado = trim((string) ($row['grado'] ?? ''));
+            $cursoLetra = trim((string) ($row['curso'] ?? ''));
+            $cursoRow = ($grado !== '' && $cursoLetra !== '')
+                ? DB::table('cursos')->where('nivel', $grado)->where('letra', $cursoLetra)->first()
+                : null;
+
+            $matriculaQuery = DB::table('matriculas')->where('estudiante_id', $estudiante->id);
+            if ($cursoRow) {
+                $matriculaQuery->where('curso_id', $cursoRow->id);
+            }
+            $matricula = $matriculaQuery->first();
             if (! $matricula) {
                 continue;
             }
@@ -84,15 +94,9 @@ class CalificacionesSheetImport implements ToCollection, WithHeadingRow
             $valorDecimal = is_numeric($notaCruda) ? (float) $notaCruda : 0.0;
             $evaluacion = $esEximido ? 'EXIMIDO' : ($row['nota_conceptual'] ?? 'REGULAR');
 
-            // --- LA MAGIA: ASIGNAR FECHA SEGÚN SEMESTRE ---
             $semestreExcel = (int) ($row['semestre'] ?? 1);
-
-            // Si es 1° Semestre le damos un mes entre Marzo(3) y Julio(7)
-            // Si es 2° Semestre le damos un mes entre Agosto(8) y Diciembre(12)
             $mesFalso = $semestreExcel === 1 ? mt_rand(3, 7) : mt_rand(8, 12);
             $diaFalso = mt_rand(1, 28);
-
-            // Creamos una fecha específica para esta nota
             $fechaNota = Carbon::create($anoActual, $mesFalso, $diaFalso);
 
             // 5. Insertar en la base de datos
