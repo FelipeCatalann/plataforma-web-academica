@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EnlaceWhatsAppController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\InformeIAController;
 use App\Http\Controllers\ProfesorController;
@@ -40,6 +41,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/panel-jefe', [ProfesorController::class, 'panelJefe'])->name('profesor.jefe');
     Route::get('/panel-asignatura', [ProfesorController::class, 'panelAsignatura'])->name('profesor.asignatura');
     Route::get('/panel-director', [DashboardController::class, 'panelDirector'])->name('admin.director');
+    Route::post('/enlaces-whatsapp', [EnlaceWhatsAppController::class, 'prepararEnlace'])->name('whatsapp.preparar');
 
     Route::get('/ver-modelos-groq', function () {
         $apiKey = env('GROQ_API_KEY');
