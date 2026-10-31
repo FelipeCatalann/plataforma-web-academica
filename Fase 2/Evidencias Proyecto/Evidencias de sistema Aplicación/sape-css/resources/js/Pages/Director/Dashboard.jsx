@@ -12,6 +12,10 @@ import {
     Tooltip,
     ResponsiveContainer,
     ReferenceLine,
+    PieChart,
+    Pie,
+    Cell,
+    Legend
 } from 'recharts';
 
 const staggerContainer = {
@@ -105,7 +109,6 @@ export default function PanelDirector({
         });
     };
 
-    // Si el curso seleccionado en el formulario de asignación fue eliminado, limpiamos la selección
     useEffect(() => {
         if (dataAsig.curso_id && !cursos.some((c) => String(c.id) === String(dataAsig.curso_id))) {
             setDataAsig((prev) => ({ ...prev, curso_id: '', asignatura_id: '' }));
@@ -140,8 +143,7 @@ export default function PanelDirector({
         return unicas;
     }, [dataAsig.curso_id, cursos, asignaturas]);
 
-    // Separar catálogo en cursos subidos actualmente vs cursos disponibles (sin Excel)
-    const { cursosSubidos, cursosDisponibles, metricasGlobales, datosGraficoCursos } = useMemo(() => {
+    const { cursosSubidos, cursosDisponibles, metricasGlobales, datosGraficoCursos, datosDistribucion } = useMemo(() => {
         const listaCatalogo = Array.isArray(catalogoCursos) && catalogoCursos.length > 0
             ? catalogoCursos
             : (cursos || []).map((c) => ({
@@ -151,12 +153,13 @@ export default function PanelDirector({
                 subido: true,
                 curso_id: c.id,
                 anioEscolar: c.anioEscolar,
-                estudiantes_count: c.estudiantes_count || 0,
+                estudiantes_count: c.estudiantes?.length || c.estudiantes_count || 0,
                 calificaciones_count: c.calificaciones_count || 0,
                 asignaturas_count: c.asignaturas?.length || 0,
                 promedio_curso: c.promedio_curso ?? null,
                 profesor_jefe_nombre: c.profesor_jefe_nombre ?? null,
                 archivo_excel: c.archivo_excel ?? null,
+                estudiantes: c.estudiantes || [] 
             }));
 
         const subidos = listaCatalogo.filter((item) => item.subido && item.curso_id);
@@ -166,12 +169,16 @@ export default function PanelDirector({
         let totalCalificaciones = 0;
         let sumaPromedios = 0;
         let cursosConPromedio = 0;
+        let alumnosEnRiesgoGlobal = 0;
+        
+        let dist = { critico: 0, suficiente: 0, bueno: 0, excelencia: 0 };
 
         const grafico = [];
 
         subidos.forEach((c) => {
             totalEstudiantes += Number(c.estudiantes_count || 0);
             totalCalificaciones += Number(c.calificaciones_count || 0);
+            
             const prom = parseFloat(c.promedio_curso);
             if (!isNaN(prom) && prom > 0) {
                 sumaPromedios += prom;
@@ -183,10 +190,88 @@ export default function PanelDirector({
                     estudiantes: Number(c.estudiantes_count || 0),
                 });
             }
+
+// CÁLCULO DE RIESGO Y DISTRIBUCIÓN (HUF-06 y HUF-08)
+            const listaEstudiantes = Array.isArray(c.estudiantes) ? c.estudiantes : Object.values(c.estudiantes || {});
+            
+            listaEstudiantes.forEach((est) => {
+                const porAsig = new Map();
+                const notas = Array.isArray(est.calificaciones) ? est.calificaciones : Object.values(est.calificaciones || {});
+                
+                notas.forEach((cal) => {
+                    const valor = parseFloat(cal.valor || cal.evaluacion || cal.evaluación);
+                    
+                    // Escáner dinámico de asignatura
+                    let agrupador = cal.asignatura_nombre || cal.asignatura_id || cal.id_asignatura;
+                    if (!agrupador && cal.asignatura) {
+                        agrupador = typeof cal.asignatura === 'string' ? cal.asignatura : (cal.asignatura.nombre || cal.asignatura.id);
+                    }
+                    if (!agrupador) {
+                        const keys = Object.keys(cal);
+                        const posibleClave = keys.find(k => k.toLowerCase().includes('asig') || k.toLowerCase().includes('materia'));
+                        if (posibleClave) agrupador = cal[posibleClave];
+                    }
+                    
+                    if (!isNaN(valor) && valor > 0 && agrupador) {
+                        if (!porAsig.has(agrupador)) {
+                            porAsig.set(agrupador, { suma: 0, count: 0 });
+                        }
+                        const item = porAsig.get(agrupador);
+                        item.suma += valor;
+                        item.count += 1;
+                    }
+                });
+                
+                let asignaturasRojas = 0;
+                let sumaPromediosAsig = 0;
+                let countAsig = 0;
+
+                // 1. Calculamos promedios por asignatura y contamos cuántas rojas tiene
+                porAsig.forEach((datos) => {
+                    if (datos.count > 0) {
+                        const promAsig = datos.suma / datos.count;
+                        sumaPromediosAsig += promAsig;
+                        countAsig++;
+                        
+                        if (promAsig < 4.0) {
+                            asignaturasRojas++;
+                        }
+                    }
+                });
+                
+                // 2. Motor de Reglas de Evaluación (Colegio San Sebastián) y Gráfico de Torta
+                if (countAsig > 0) {
+                    const promFinal = parseFloat((sumaPromediosAsig / countAsig).toFixed(1));
+                    let enRiesgo = false;
+
+                    // Evaluamos las condiciones exactas de repitencia
+                    if (asignaturasRojas >= 3) {
+                        enRiesgo = true; // 3 o más rojas: Repitencia directa
+                    } else if (asignaturasRojas === 2 && promFinal < 5.0) {
+                        enRiesgo = true; // 2 rojas: Exige promedio 5.0 o más
+                    } else if (asignaturasRojas === 1 && promFinal < 4.5) {
+                        enRiesgo = true; // 1 roja: Exige promedio 4.5 o más
+                    } else if (promFinal < 4.0) {
+                        enRiesgo = true; // Falla de seguridad: Promedio general rojo
+                    }
+
+                    // Asignamos al alumno según su estado
+                    if (enRiesgo) {
+                        alumnosEnRiesgoGlobal++; // Suma a la Tarjeta de Riesgo
+                        dist.critico++;          // Suma a la Torta en estado Crítico
+                    } else if (promFinal < 5.0) {
+                        dist.suficiente++;
+                    } else if (promFinal < 6.0) {
+                        dist.bueno++;
+                    } else {
+                        dist.excelencia++;
+                    }
+                }
+            });
         });
 
-        const promedioInstitucional =
-            cursosConPromedio > 0 ? (sumaPromedios / cursosConPromedio).toFixed(1) : '-';
+        const promedioInstitucional = cursosConPromedio > 0 ? (sumaPromedios / cursosConPromedio).toFixed(1) : '-';
+        const porcentajeRiesgo = totalEstudiantes > 0 ? ((alumnosEnRiesgoGlobal / totalEstudiantes) * 100).toFixed(1) : 0;
 
         return {
             cursosSubidos: subidos,
@@ -196,8 +281,16 @@ export default function PanelDirector({
                 totalCalificaciones,
                 promedioInstitucional,
                 totalCatalogo: listaCatalogo.length,
+                alumnosEnRiesgoGlobal, 
+                porcentajeRiesgo 
             },
             datosGraficoCursos: grafico,
+            datosDistribucion: [
+                { name: 'Crítico (< 4.0)', value: dist.critico, color: '#DC2626' },
+                { name: 'Suficiente (4.0 - 4.9)', value: dist.suficiente, color: '#D97706' },
+                { name: 'Bueno (5.0 - 5.9)', value: dist.bueno, color: '#059669' },
+                { name: 'Excelencia (6.0 - 7.0)', value: dist.excelencia, color: '#2563EB' }
+            ].filter(d => d.value > 0),
         };
     }, [catalogoCursos, cursos]);
 
@@ -293,7 +386,6 @@ export default function PanelDirector({
             </AnimatePresence>
 
             <div className="max-w-screen-2xl mx-auto flex flex-col md:flex-row min-h-[calc(100vh-4rem)]">
-                {/* MENÚ LATERAL CON INDICADOR DESLIZANTE (layoutId) */}
                 <aside className="w-full md:w-72 bg-white border-r border-slate-200/80 shadow-sm flex-shrink-0 relative z-10">
                     <div className="p-6 space-y-6">
                         {['Centro de Mando', 'Administración'].map((seccionNombre) => (
@@ -347,10 +439,8 @@ export default function PanelDirector({
                     </div>
                 </aside>
 
-                {/* CONTENIDO PRINCIPAL */}
                 <main className="flex-1 p-6 md:p-8 bg-slate-50/70 overflow-y-auto">
                     <AnimatePresence mode="wait">
-                        {/* 1. ESTADÍSTICAS GLOBALES */}
                         {vistaActiva === 'estadisticas' && (
                             <motion.div
                                 key="stats"
@@ -443,21 +533,26 @@ export default function PanelDirector({
                                     <motion.div
                                         variants={fadeInUp}
                                         whileHover={{ y: -3 }}
-                                        className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4 transition-shadow hover:shadow-md"
+                                        className="bg-white p-6 rounded-2xl border border-red-200 shadow-sm flex items-center gap-4 transition-shadow hover:shadow-md cursor-help"
+                                        title="Estudiantes del colegio con al menos una asignatura bajo 4.0"
                                     >
-                                        <div className="p-3.5 bg-amber-50 text-amber-700 rounded-xl">
+                                        <div className="p-3.5 bg-red-50 text-red-600 rounded-xl">
                                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
                                             </svg>
                                         </div>
                                         <div>
-                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Profesores Registrados</p>
-                                            <p className="text-2xl font-extrabold text-slate-900">{profesores.length || 0}</p>
+                                            <p className="text-xs text-red-700 font-bold uppercase tracking-wider">Riesgo Repitencia</p>
+                                            <p className="text-2xl font-extrabold text-slate-900">
+                                                {metricasGlobales.alumnosEnRiesgoGlobal}
+                                                <span className="text-sm font-medium text-red-500 ml-2">
+                                                    ({metricasGlobales.porcentajeRiesgo}%)
+                                                </span>
+                                            </p>
                                         </div>
                                     </motion.div>
                                 </motion.div>
 
-                                {/* GRÁFICO INSTITUCIONAL DE PROMEDIOS POR CURSO SUBIDO */}
                                 <motion.div
                                     variants={fadeInUp}
                                     className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80"
@@ -551,10 +646,85 @@ export default function PanelDirector({
                                         </div>
                                     )}
                                 </motion.div>
+
+                                <motion.div variants={fadeInUp} className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
+                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-200">
+                                        <h3 className="text-lg font-extrabold text-emerald-800 mb-4 flex items-center gap-2">
+                                            🏆 Top 3 Cursos Destacados
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {[...datosGraficoCursos]
+                                                .sort((a, b) => b.promedio - a.promedio)
+                                                .slice(0, 3)
+                                                .map((curso, idx) => (
+                                                <div key={idx} className="flex justify-between items-center p-3.5 bg-emerald-50 rounded-xl border border-emerald-100">
+                                                    <span className="font-bold text-emerald-900">{curso.cursoCompleto}</span>
+                                                    <span className="font-extrabold text-emerald-700 bg-white px-3 py-1 rounded-lg shadow-sm border border-emerald-100">
+                                                        {curso.promedio.toFixed(1)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                            {datosGraficoCursos.length === 0 && (
+                                                <p className="text-sm text-emerald-600/70 text-center py-2">Sin datos suficientes</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-red-200">
+                                        <h3 className="text-lg font-extrabold text-red-800 mb-4 flex items-center gap-2">
+                                            ⚠️ Foco de Atención (Más Bajos)
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {[...datosGraficoCursos]
+                                                .sort((a, b) => a.promedio - b.promedio)
+                                                .slice(0, 3)
+                                                .map((curso, idx) => (
+                                                <div key={idx} className="flex justify-between items-center p-3.5 bg-red-50 rounded-xl border border-red-100">
+                                                    <span className="font-bold text-red-900">{curso.cursoCompleto}</span>
+                                                    <span className={`font-extrabold bg-white px-3 py-1 rounded-lg shadow-sm border ${curso.promedio < 4.0 ? 'text-red-700 border-red-200' : 'text-amber-700 border-amber-200'}`}>
+                                                        {curso.promedio.toFixed(1)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                            {datosGraficoCursos.length === 0 && (
+                                                <p className="text-sm text-red-600/70 text-center py-2">Sin datos suficientes</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </motion.div>
+
+                                <motion.div variants={fadeInUp} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 mt-6">
+                                    <h3 className="text-lg font-extrabold text-slate-900 mb-4 text-center">
+                                        Distribución de Rendimiento Estudiantil (Matrícula Total)
+                                    </h3>
+                                    <div className="h-72 w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={datosDistribucion}
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    innerRadius={70}
+                                                    outerRadius={100}
+                                                    paddingAngle={3}
+                                                    dataKey="value"
+                                                >
+                                                    {datosDistribucion.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip 
+                                                    formatter={(value) => [`${value} alumnos`, 'Cantidad']}
+                                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                                                />
+                                                <Legend verticalAlign="bottom" height={36} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </motion.div>
                             </motion.div>
                         )}
 
-                        {/* 2. ASIGNACIÓN DE PROFESORES (CENTRADO) */}
                         {vistaActiva === 'profesores' && (
                             <motion.div
                                 key="profesores"
@@ -717,7 +887,6 @@ export default function PanelDirector({
                             </motion.div>
                         )}
 
-                        {/* 3. DATOS DE CURSO */}
                         {vistaActiva === 'cursos' && (
                             <motion.div
                                 key="datos-cursos"
@@ -727,7 +896,6 @@ export default function PanelDirector({
                                 exit={{ opacity: 0, y: -15 }}
                                 className="space-y-8"
                             >
-                                {/* CABECERA */}
                                 <motion.div
                                     variants={fadeInUp}
                                     className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 border-l-4 border-l-sape-burdeo flex flex-col sm:flex-row sm:items-center justify-between gap-4"
@@ -751,7 +919,6 @@ export default function PanelDirector({
                                     </button>
                                 </motion.div>
 
-                                {/* BARRA DE ESTADO RÁPIDO */}
                                 <motion.div
                                     variants={staggerContainer}
                                     className="grid grid-cols-1 md:grid-cols-3 gap-4"
@@ -824,7 +991,6 @@ export default function PanelDirector({
                                     </motion.div>
                                 </motion.div>
 
-                                {/* SECCIÓN 1: CURSOS SUBIDOS ACTUALMENTE */}
                                 <motion.div variants={fadeInUp} className="space-y-4">
                                     <div className="flex items-center justify-between">
                                         <h2 className="text-lg font-extrabold text-slate-800">
@@ -936,7 +1102,6 @@ export default function PanelDirector({
                                     )}
                                 </motion.div>
 
-                                {/* SECCIÓN 2: CURSOS DISPONIBLES (SIN EXCEL CARGADO) */}
                                 <motion.div variants={fadeInUp} className="space-y-4 pt-2">
                                     <div className="flex items-center justify-between">
                                         <h2 className="text-lg font-extrabold text-slate-800">
@@ -995,7 +1160,6 @@ export default function PanelDirector({
                             </motion.div>
                         )}
 
-                        {/* 4. IMPORTAR DATOS */}
                         {vistaActiva === 'importar' && (
                             <motion.div
                                 key="importar"
@@ -1104,7 +1268,6 @@ export default function PanelDirector({
                 </main>
             </div>
 
-            {/* MODAL DE CONFIRMACIÓN PARA BORRAR DATOS EXCEL DE UN CURSO */}
             <AnimatePresence>
                 {cursoPorBorrar && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">

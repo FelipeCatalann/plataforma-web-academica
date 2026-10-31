@@ -39,7 +39,7 @@ class DashboardController extends Controller
      */
     private function armarPropsDirector(): array
     {
-        $cursosModel = Curso::with(['asignaturas', 'profesorJefe'])
+        $cursosModel = Curso::with(['asignaturas', 'profesorJefe', 'estudiantes.calificaciones.asignatura' ])
             ->orderBy('nivel')
             ->orderBy('letra')
             ->get();
@@ -123,6 +123,7 @@ class DashboardController extends Controller
                     'profesor_jefe_nombre' => $cursoSubido?->profesor_jefe_nombre,
                     'archivo_excel' => $cursoSubido?->archivo_excel,
                     'fecha_importacion' => $cursoSubido?->fecha_importacion,
+                    'estudiantes' => $cursoSubido?->estudiantes,
                 ];
             }
         }
