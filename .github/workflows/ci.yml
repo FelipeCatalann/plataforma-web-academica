@@ -1,10 +1,10 @@
 name: CI S.A.P.E
 
 # INDG-26 — Integración Continua: estilo (Pint) + tests (PHPUnit contra
-# Postgres real) + compilación frontend, en cada push/PR a dev.
+# Postgres real) + compilación frontend, en cada push/PR a dev y main.
 on:
   push:
-    branches: [dev]
+    branches: [dev, main]
     paths:
       - 'Fase 2/Evidencias Proyecto/Evidencias de sistema Aplicación/sape-css/**'
       - '.github/workflows/**'
