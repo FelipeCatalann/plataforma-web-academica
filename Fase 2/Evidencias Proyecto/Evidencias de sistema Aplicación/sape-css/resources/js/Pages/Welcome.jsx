@@ -44,11 +44,7 @@ export default function Welcome({ auth }) {
                 </header>
 
                 {/* HERO PRINCIPAL CON ANIMACIONES */}
-                <main className="flex-grow flex flex-col justify-center bg-gradient-to-br from-[#3A0A06] via-[#6E1710] to-[#240604] px-4 sm:px-6 py-16 relative overflow-hidden">
-                    {/* Luces de fondo */}
-                    <div className="absolute -top-32 -left-32 w-[32rem] h-[32rem] bg-sape-amarillo/10 rounded-full blur-3xl pointer-events-none" />
-                    <div className="absolute bottom-0 right-0 w-[32rem] h-[32rem] bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
-
+                <main className="flex-grow flex flex-col justify-center bg-[radial-gradient(ellipse_at_top_left,_rgba(229,230,50,0.12),_transparent_50%),radial-gradient(ellipse_at_bottom_right,_rgba(244,63,94,0.10),_transparent_50%)] bg-gradient-to-br from-[#3A0A06] via-[#6E1710] to-[#240604] px-4 sm:px-6 py-16 relative overflow-hidden">
                     <div className="max-w-6xl mx-auto w-full relative z-10 space-y-14">
                         <motion.div
                             initial={{ opacity: 0, y: 24 }}
@@ -56,19 +52,15 @@ export default function Welcome({ auth }) {
                             transition={{ duration: 0.55, ease: 'easeOut' }}
                             className="text-center max-w-3xl mx-auto space-y-6"
                         >
-                            <div className="inline-flex items-center gap-2 bg-white/10 border border-white/15 backdrop-blur-md text-sape-amarillo px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase shadow-sm">
-                                Plataforma de Alerta Pedagógica
-                            </div>
-
                             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight leading-tight">
                                 Gestión Académica y{' '}
-                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-sape-amarillo via-amber-200 to-white">
+                                <span className="text-sape-amarillo">
                                     Acompañamiento Escolar
                                 </span>
                             </h1>
 
-                            <p className="text-base sm:text-lg text-white/80 max-w-2xl mx-auto leading-relaxed">
-                                Monitoreo temprano de calificaciones, detección de riesgo académico por cuartiles, asistente pedagógico con IA y comunicación formal con apoderados.
+                            <p className="text-base sm:text-lg text-white/85 max-w-2xl mx-auto leading-relaxed">
+                                Plataforma de Alerta Pedagógica Escolar para el monitoreo temprano de calificaciones, detección de riesgo académico (Decreto 67), asistente pedagógico con IA y comunicación formal con apoderados.
                             </p>
 
                             <div className="pt-4 flex flex-col sm:flex-row justify-center gap-4">
@@ -123,13 +115,13 @@ export default function Welcome({ auth }) {
                                     whileHover={{ y: -4 }}
                                     className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-6 shadow-xl transition-all"
                                 >
-                                    <span className="text-[11px] font-bold uppercase tracking-wider text-sape-amarillo">
-                                        {item.badge}
-                                    </span>
-                                    <h3 className="text-lg font-extrabold text-white mt-1.5">
+                                    <h2 className="text-lg font-extrabold text-white">
                                         {item.title}
-                                    </h3>
-                                    <p className="text-sm text-white/75 mt-2 leading-relaxed">
+                                    </h2>
+                                    <p className="text-xs font-bold text-sape-amarillo mt-1">
+                                        {item.badge}
+                                    </p>
+                                    <p className="text-sm text-white/80 mt-2 leading-relaxed">
                                         {item.desc}
                                     </p>
                                 </motion.div>

@@ -12,3 +12,8 @@ node_modules/
 
 # Herramientas locales (no versionar)
 /.agents/
+
+.impeccable/
+/.github/skills/
+/.github/hooks/
+sape-css-vistas.fig
