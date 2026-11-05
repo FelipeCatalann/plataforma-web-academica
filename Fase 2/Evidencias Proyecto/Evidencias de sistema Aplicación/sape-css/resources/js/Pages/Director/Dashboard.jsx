@@ -598,7 +598,7 @@ export default function PanelDirector({
                     </div>
                 </aside>
 
-                <main className="flex-1 p-6 md:p-8 bg-slate-50/70 overflow-y-auto">
+                <section aria-label="Área de trabajo de Dirección" className="flex-1 p-4 sm:p-6 md:p-8 bg-slate-50/70 overflow-y-auto">
                     <AnimatePresence mode="wait">
                         {vistaActiva === 'estadisticas' && (
                             <motion.div
@@ -1273,28 +1273,30 @@ export default function PanelDirector({
                                     </button>
                                 </motion.div>
 
-                                <motion.div
-                                    variants={staggerContainer}
-                                    className="grid grid-cols-1 md:grid-cols-3 gap-4"
-                                >
-                                    <motion.div
-                                        variants={fadeInUp}
-                                        whileHover={{ y: -2 }}
-                                        className="bg-white p-5 rounded-2xl border border-emerald-200 shadow-sm flex items-center justify-between"
-                                    >
-                                        <div>
-                                            <span className="text-xs font-bold uppercase text-emerald-700 tracking-wider">
-                                                Cursos Subidos Actualmente
-                                            </span>
-                                            <p className="text-3xl font-extrabold text-slate-900 mt-1">
-                                                {cursosSubidos.length}
-                                            </p>
-                                            <p className="text-xs text-slate-500 mt-0.5">
-                                                Con nómina y calificaciones activas
-                                            </p>
-                                        </div>
-                                        <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xl">
-                                            ✓
+                                {/* BARRA DE ESTADO RÁPIDO */}
+                                <motion.div variants={fadeInUp} className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                                    <div className="lg:col-span-7 rounded-2xl p-6 shadow-sm flex flex-col justify-between gap-4 bg-gradient-to-br from-sape-burdeo to-[#581023] text-white">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div>
+                                                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-sape-amarillo bg-white/10 px-2.5 py-1 rounded-lg">
+                                                    Estado de Sincronización Anual
+                                                </span>
+                                                <div className="flex items-baseline gap-3 mt-2">
+                                                    <span className="text-4xl font-extrabold tabular-nums tracking-tight">
+                                                        {cursosSubidos.length} / {cursosSubidos.length + cursosDisponibles.length}
+                                                    </span>
+                                                    <span className="text-sm text-white/80 font-medium">
+                                                        cursos con Excel cargado
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setVistaActiva('importar')}
+                                                className="bg-sape-amarillo hover:bg-amber-300 text-slate-950 font-extrabold text-xs px-3.5 py-2 rounded-xl transition-colors shrink-0"
+                                            >
+                                                Importar Planilla
+                                            </button>
                                         </div>
 
                                         <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5 pt-2 border-t border-white/15">

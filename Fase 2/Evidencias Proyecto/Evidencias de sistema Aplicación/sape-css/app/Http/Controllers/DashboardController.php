@@ -39,7 +39,7 @@ class DashboardController extends Controller
      */
     private function armarPropsDirector(): array
     {
-        $cursosModel = Curso::with(['asignaturas', 'profesorJefe', 'estudiantes.calificaciones.asignatura' ])
+        $cursosModel = Curso::with(['asignaturas', 'profesorJefe', 'estudiantes.calificaciones.asignatura'])
             ->orderBy('nivel')
             ->orderBy('letra')
             ->get();
