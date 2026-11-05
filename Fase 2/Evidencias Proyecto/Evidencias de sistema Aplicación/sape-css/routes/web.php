@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ChatbotController;
+use App\Http\Controllers\ConfiguracionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EnlaceWhatsAppController;
 use App\Http\Controllers\ImportController;
@@ -45,6 +46,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/panel-asignatura', [ProfesorController::class, 'panelAsignatura'])->name('profesor.asignatura');
     Route::get('/panel-director', [DashboardController::class, 'panelDirector'])->name('admin.director');
     Route::post('/enlaces-whatsapp', [EnlaceWhatsAppController::class, 'prepararEnlace'])->name('whatsapp.preparar');
+
+    Route::get('/configuracion', [ConfiguracionController::class, 'index'])->name('configuracion.index');
+    Route::post('/configuracion/probar-ia', [ConfiguracionController::class, 'probarConexionIA'])->name('configuracion.probar-ia');
 
     Route::get('/ver-modelos-groq', function () {
         $apiKey = env('GROQ_API_KEY');

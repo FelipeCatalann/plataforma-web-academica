@@ -29,9 +29,10 @@ class SapeGenerarSinteticos extends Command
         {--ensenanza=310 : Código enseñanza (110 básica, 310 media HC)}
         {--alumnos=35 : Cantidad de alumnos (mínimo 4 por los casos borde)}
         {--seed=1601 : Semilla para generación reproducible}
-        {--salida= : Ruta de salida (defecto: storage/app/sinteticos/...)}';
+        {--salida= : Ruta de salida (defecto: storage/app/sinteticos/...)}
+        {--todos : Genera los 12 cursos oficiales de 1° a 4° medio (A, B, C)}';
 
-    protected $description = 'Genera el Excel sintético réplica SIGE (NOMINA + CALIFICACIONES) para un curso y año';
+    protected $description = 'Genera el Excel sintético réplica SIGE (NOMINA + CALIFICACIONES) para un curso y año o todo el catálogo';
 
     /** Lista base §4 Formato_Datos_SIGE.md v1.0 (rotar, sin repetir RUN). */
     private const NOMBRES = [
@@ -141,12 +142,66 @@ class SapeGenerarSinteticos extends Command
 
     public function handle(): int
     {
-        $grado = min(4, max(1, (int) $this->argument('grado')));
-        $letra = strtoupper((string) $this->argument('letra'));
         $ano = (int) $this->argument('ano');
         $ensenanza = (string) $this->option('ensenanza');
         $n = max(4, (int) $this->option('alumnos'));
+
+        if ($this->option('todos')) {
+            ini_set('memory_limit', '1024M');
+            $this->info('Iniciando generación de los 12 cursos (1° a 4° Medio, secciones A, B, C)...');
+
+            $cursos = [
+                ['grado' => 1, 'letra' => 'A', 'seed' => 101],
+                ['grado' => 1, 'letra' => 'B', 'seed' => 102],
+                ['grado' => 1, 'letra' => 'C', 'seed' => 103],
+                ['grado' => 2, 'letra' => 'A', 'seed' => 201],
+                ['grado' => 2, 'letra' => 'B', 'seed' => 202],
+                ['grado' => 2, 'letra' => 'C', 'seed' => 203],
+                ['grado' => 3, 'letra' => 'A', 'seed' => 301],
+                ['grado' => 3, 'letra' => 'B', 'seed' => 302],
+                ['grado' => 3, 'letra' => 'C', 'seed' => 303],
+                ['grado' => 4, 'letra' => 'A', 'seed' => 401],
+                ['grado' => 4, 'letra' => 'B', 'seed' => 402],
+                ['grado' => 4, 'letra' => 'C', 'seed' => 403],
+            ];
+
+            foreach ($cursos as $c) {
+                $this->generarCurso(
+                    $c['grado'],
+                    $c['letra'],
+                    $ano,
+                    $ensenanza,
+                    $n,
+                    $c['seed'],
+                    null
+                );
+                gc_collect_cycles();
+            }
+
+            $this->info('¡Los 12 archivos Excel de 1° a 4° Medio fueron generados exitosamente!');
+
+            return self::SUCCESS;
+        }
+
+        $grado = min(4, max(1, (int) $this->argument('grado')));
+        $letra = strtoupper((string) $this->argument('letra'));
         $seed = (int) $this->option('seed');
+        $salida = $this->option('salida');
+
+        $this->generarCurso($grado, $letra, $ano, $ensenanza, $n, $seed, $salida);
+
+        return self::SUCCESS;
+    }
+
+    private function generarCurso(
+        int $grado,
+        string $letra,
+        int $ano,
+        string $ensenanza,
+        int $n,
+        int $seed,
+        ?string $salidaPersonalizada
+    ): string {
         $suf = '0'.$grado;
 
         mt_srand($seed);
@@ -210,8 +265,8 @@ class SapeGenerarSinteticos extends Command
         $sufijoNivel = $ensenanza === '310' ? 'M' : '';
         $nombreArchivo = "nomina_calificaciones_{$ano}_{$grado}{$sufijoNivel}{$letra}.xlsx";
 
-        // CORRECCIÓN DE RUTA: Forzamos la ubicación exacta en storage/app/sinteticos/
-        $ruta = $this->option('salida')
+        // Forzamos la ubicación exacta en storage/app/sinteticos/
+        $ruta = $salidaPersonalizada
             ?: storage_path("app/sinteticos/{$nombreArchivo}");
 
         @mkdir(dirname($ruta), 0777, true);
@@ -253,7 +308,7 @@ class SapeGenerarSinteticos extends Command
         $this->info('Alumnos: '.$n.' | Filas NOMINA: '.count($nomina).' | Filas CALIFICACIONES: '.count($calificaciones));
         $this->info('SHA-256 contenido: '.$huella);
 
-        return self::SUCCESS;
+        return $ruta;
     }
 
     private function subsectoresAlumno(int $grado, string $suf, int $indiceAlumno): array

@@ -212,69 +212,71 @@ export default function PanelJefe({ auth, curso }) {
             <Head title={`Jefatura ${curso.nivel}° ${curso.letra}`} />
 
             <div className="max-w-screen-2xl mx-auto flex flex-col md:flex-row min-h-[calc(100vh-4rem)]">
-                <aside className="w-full md:w-72 bg-white border-r border-sape-gris shadow-sm flex-shrink-0 relative z-10">
-                    <div className="p-6">
-                        <div className="mb-6 pb-4 border-b border-gray-100">
-                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-                                Jefatura Asignada
-                            </span>
-                            <h2 className="text-lg font-extrabold text-sape-burdeo mt-0.5">
+                <aside className="w-full md:w-72 bg-white border-b md:border-b-0 md:border-r border-slate-200/80 shadow-sm flex-shrink-0 relative z-10">
+                    <div className="p-3 md:p-6 flex md:block items-center gap-3 overflow-x-auto md:overflow-visible">
+                        <div className="hidden md:block mb-6 pb-4 border-b border-slate-100">
+                            <h2 className="text-lg font-extrabold text-sape-burdeo">
                                 {curso.nivel}° Medio {curso.letra}
                             </h2>
+                            <p className="text-xs font-semibold text-slate-500 mt-0.5">
+                                Jefatura Asignada
+                            </p>
                         </div>
 
-                        <nav className="space-y-2 mb-6">
+                        <nav aria-label="Vistas de Jefatura" className="flex md:flex-col gap-1.5 md:space-y-1.5 md:mb-6 shrink-0">
                             <button
+                                type="button"
                                 onClick={() => {
                                     setVistaActiva('resumen');
                                     setEstudianteActivo(null);
                                 }}
-                                className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-200 flex items-center justify-between group ${
+                                className={`whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3.5 md:px-4 py-2.5 md:py-3 rounded-xl transition-all duration-200 flex items-center justify-between gap-2.5 group ${
                                     vistaActiva === 'resumen'
-                                        ? 'bg-sape-burdeo text-sape-amarillo shadow-md'
-                                        : 'text-gray-600 hover:bg-gray-50 hover:text-sape-burdeo'
+                                        ? 'bg-sape-burdeo text-sape-amarillo shadow-md font-bold'
+                                        : 'text-slate-600 hover:bg-slate-50 hover:text-sape-burdeo font-semibold'
                                 }`}
                             >
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2.5 md:gap-3">
                                     <svg
-                                        className={`w-5 h-5 ${vistaActiva === 'resumen' ? 'text-sape-amarillo' : 'text-gray-400'}`}
+                                        className={`w-5 h-5 ${vistaActiva === 'resumen' ? 'text-sape-amarillo' : 'text-slate-400'}`}
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
                                     >
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                                     </svg>
-                                    <span className="font-semibold text-sm">Resumen General</span>
+                                    <span className="text-xs sm:text-sm">Resumen General</span>
                                 </div>
                             </button>
 
                             <button
+                                type="button"
                                 onClick={() => {
                                     setVistaActiva('tabla');
                                     setEstudianteActivo(null);
                                 }}
-                                className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-200 flex items-center justify-between group ${
+                                className={`whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3.5 md:px-4 py-2.5 md:py-3 rounded-xl transition-all duration-200 flex items-center justify-between gap-2.5 group ${
                                     vistaActiva === 'tabla'
-                                        ? 'bg-sape-burdeo text-sape-amarillo shadow-md'
-                                        : 'text-gray-600 hover:bg-gray-50 hover:text-sape-burdeo'
+                                        ? 'bg-sape-burdeo text-sape-amarillo shadow-md font-bold'
+                                        : 'text-slate-600 hover:bg-slate-50 hover:text-sape-burdeo font-semibold'
                                 }`}
                             >
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2.5 md:gap-3">
                                     <svg
-                                        className={`w-5 h-5 ${vistaActiva === 'tabla' ? 'text-sape-amarillo' : 'text-gray-400'}`}
+                                        className={`w-5 h-5 ${vistaActiva === 'tabla' ? 'text-sape-amarillo' : 'text-slate-400'}`}
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
                                     >
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                                     </svg>
-                                    <span className="font-semibold text-sm">Libro de Clases</span>
+                                    <span className="text-xs sm:text-sm">Libro de Clases</span>
                                 </div>
                                 <span
-                                    className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                    className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full tabular-nums ${
                                         vistaActiva === 'tabla'
                                             ? 'bg-sape-amarillo text-sape-burdeo'
-                                            : 'bg-gray-100 text-gray-600'
+                                            : 'bg-slate-100 text-slate-600'
                                     }`}
                                 >
                                     {curso.estudiantes.length}
@@ -282,38 +284,39 @@ export default function PanelJefe({ auth, curso }) {
                             </button>
                         </nav>
 
-                        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 mt-8">
+                        <h2 className="hidden md:block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-3 mt-6 px-3">
                             Herramientas IA
                         </h2>
-                        <nav className="space-y-2">
+                        <nav aria-label="Herramientas IA" className="flex md:flex-col gap-1.5 shrink-0">
                             <button
+                                type="button"
                                 onClick={() => {
                                     setVistaActiva('chatbot');
                                     setEstudianteActivo(null);
                                 }}
-                                className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-200 flex items-center justify-between group ${
+                                className={`whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3.5 md:px-4 py-2.5 md:py-3 rounded-xl transition-all duration-200 flex items-center justify-between gap-2.5 group ${
                                     vistaActiva === 'chatbot'
-                                        ? 'bg-sape-burdeo text-sape-amarillo shadow-md'
-                                        : 'text-gray-600 hover:bg-gray-50 hover:text-sape-burdeo'
+                                        ? 'bg-sape-burdeo text-sape-amarillo shadow-md font-bold'
+                                        : 'text-slate-600 hover:bg-slate-50 hover:text-sape-burdeo font-semibold'
                                 }`}
                             >
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2.5 md:gap-3">
                                     <svg
-                                        className={`w-5 h-5 ${vistaActiva === 'chatbot' ? 'text-sape-amarillo' : 'text-gray-400'}`}
+                                        className={`w-5 h-5 ${vistaActiva === 'chatbot' ? 'text-sape-amarillo' : 'text-slate-400'}`}
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
                                     >
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
                                     </svg>
-                                    <span className="font-semibold text-sm">Asistente Inteligente</span>
+                                    <span className="text-xs sm:text-sm">Asistente Inteligente</span>
                                 </div>
                             </button>
                         </nav>
                     </div>
                 </aside>
 
-                <main className="flex-1 p-6 md:p-8 bg-gray-50 overflow-y-auto">
+                <section aria-label="Área de trabajo de Jefatura" className="flex-1 p-4 sm:p-6 md:p-8 bg-slate-50/70 overflow-y-auto">
                     <AnimatePresence mode="wait">
                         {vistaActiva === 'resumen' && (
                             <motion.div
@@ -324,61 +327,63 @@ export default function PanelJefe({ auth, curso }) {
                                 transition={{ duration: 0.25 }}
                                 className="space-y-6"
                             >
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-sape-gris border-l-4 border-l-sape-burdeo flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                     <div>
-                                        <h1 className="text-2xl font-bold text-sape-burdeo">
+                                        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
                                             Radiografía del Curso — {curso.nivel}° Medio {curso.letra}
                                         </h1>
-                                        <p className="text-gray-500 text-sm mt-1">
-                                            Indicadores clave y rendimiento académico segmentado por asignatura.
+                                        <p className="text-slate-600 text-sm mt-1">
+                                            Indicadores clave, alertas tempranas (Decreto 67) y rendimiento segmentado por asignatura.
                                         </p>
                                     </div>
                                     <button
+                                        type="button"
                                         onClick={() => setVistaActiva('tabla')}
-                                        className="bg-sape-burdeo text-sape-amarillo px-4 py-2 rounded-lg text-sm font-bold hover:bg-sape-burdeo-hover transition-colors self-start sm:self-auto"
+                                        className="bg-sape-burdeo text-sape-amarillo px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-sape-burdeo-hover transition-colors self-start sm:self-auto"
                                     >
-                                        Ir al Libro de Clases ({curso.estudiantes.length}) →
+                                        Abrir Libro de Clases ({curso.estudiantes.length})
                                     </button>
                                 </div>
 
                                 {/* 4 TARJETAS KPI DEL CURSO */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    <div className="bg-white p-5 rounded-xl border border-sape-gris shadow-sm">
-                                        <span className="text-xs font-bold uppercase text-gray-400 tracking-wider">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 tabular-nums">
+                                    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                                        <span className="text-xs font-bold uppercase text-slate-500 tracking-wider">
                                             Promedio del Curso
                                         </span>
                                         <p className="text-3xl font-extrabold text-sape-burdeo mt-1">
                                             {kpisCurso.promedioGeneral}
                                         </p>
-                                        <p className="text-xs text-gray-500 mt-1">
+                                        <p className="text-xs text-slate-500 mt-1">
                                             Escala 1.0 a 7.0 (Mínimo 4.0)
                                         </p>
                                     </div>
 
-                                    <div
+                                    <button
+                                        type="button"
                                         onClick={() => {
                                             setFiltroNomina('riesgo');
                                             setVistaActiva('tabla');
                                         }}
-                                        className="bg-white p-5 rounded-xl border border-red-200 shadow-sm cursor-pointer hover:border-red-400 transition-colors"
+                                        className="text-left bg-white p-5 rounded-2xl border border-red-200 shadow-sm cursor-pointer hover:border-red-400 hover:bg-red-50/20 transition-colors"
                                     >
                                         <span className="text-xs font-bold uppercase text-red-700 tracking-wider">
                                             Alerta Decreto 67
                                         </span>
                                         <p className="text-3xl font-extrabold text-red-600 mt-1">
                                             {kpisCurso.enAlerta}{' '}
-                                            <span className="text-sm font-semibold text-gray-500">alumnos</span>
+                                            <span className="text-sm font-semibold text-slate-500">alumnos</span>
                                         </p>
-                                        <p className="text-xs text-red-600/80 font-medium mt-1">
-                                            Con 1+ asignatura bajo 4.0 →
+                                        <p className="text-xs text-red-700 font-bold mt-1">
+                                            Ver alumnos con 1+ asig. bajo 4.0 →
                                         </p>
-                                    </div>
+                                    </button>
 
-                                    <div className="bg-white p-5 rounded-xl border border-emerald-200 shadow-sm">
+                                    <div className="bg-white p-5 rounded-2xl border border-emerald-200 shadow-sm">
                                         <span className="text-xs font-bold uppercase text-emerald-700 tracking-wider">
                                             Mayor Rendimiento
                                         </span>
-                                        <p className="text-xl font-extrabold text-gray-900 mt-1 truncate">
+                                        <p className="text-xl font-extrabold text-slate-900 mt-1 truncate">
                                             {kpisCurso.mejorAsig ? kpisCurso.mejorAsig.nombre : '-'}
                                         </p>
                                         <p className="text-xs text-emerald-700 font-bold mt-1">
@@ -386,11 +391,11 @@ export default function PanelJefe({ auth, curso }) {
                                         </p>
                                     </div>
 
-                                    <div className="bg-white p-5 rounded-xl border border-amber-200 shadow-sm">
+                                    <div className="bg-white p-5 rounded-2xl border border-amber-200 shadow-sm">
                                         <span className="text-xs font-bold uppercase text-amber-700 tracking-wider">
                                             Foco de Refuerzo
                                         </span>
-                                        <p className="text-xl font-extrabold text-gray-900 mt-1 truncate">
+                                        <p className="text-xl font-extrabold text-slate-900 mt-1 truncate">
                                             {kpisCurso.criticaAsig ? kpisCurso.criticaAsig.nombre : '-'}
                                         </p>
                                         <p className="text-xs text-amber-700 font-bold mt-1">
@@ -399,22 +404,22 @@ export default function PanelJefe({ auth, curso }) {
                                     </div>
                                 </div>
 
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-sape-gris">
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-2">
-                                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                        <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
                                             <svg className="w-5 h-5 text-sape-burdeo" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                                             </svg>
-                                            Rendimiento Académico Global por Asignatura
+                                            Promedio del Curso por Asignatura
                                         </h3>
-                                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                                        <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 font-medium">
                                             <span className="flex items-center gap-1.5">
                                                 <span className="w-3 h-3 rounded-sm bg-sape-burdeo inline-block"></span>
                                                 Adecuado (≥ 4.8)
                                             </span>
                                             <span className="flex items-center gap-1.5">
                                                 <span className="w-3 h-3 rounded-sm bg-amber-600 inline-block"></span>
-                                                Alerta (4.0–4.7)
+                                                Atención (4.0–4.7)
                                             </span>
                                             <span className="flex items-center gap-1.5">
                                                 <span className="w-3 h-3 rounded-sm bg-red-600 inline-block"></span>
@@ -425,12 +430,12 @@ export default function PanelJefe({ auth, curso }) {
                                     <div className="h-80 w-full">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={datosGrafico} margin={{ top: 10, right: 30, left: -20, bottom: 40 }}>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#CFD2D7" />
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                                                 <XAxis
                                                     dataKey="nombre"
                                                     axisLine={false}
                                                     tickLine={false}
-                                                    tick={{ fill: '#4b5563', fontSize: 11, fontWeight: 600 }}
+                                                    tick={{ fill: '#334155', fontSize: 11, fontWeight: 600 }}
                                                     angle={-35}
                                                     textAnchor="end"
                                                 />
@@ -438,14 +443,15 @@ export default function PanelJefe({ auth, curso }) {
                                                     domain={[1, 7]}
                                                     axisLine={false}
                                                     tickLine={false}
-                                                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                                                    tick={{ fill: '#64748B', fontSize: 12 }}
                                                 />
                                                 <Tooltip
-                                                    cursor={{ fill: '#F3F4F6' }}
+                                                    cursor={{ fill: '#F8FAFC' }}
                                                     contentStyle={{
-                                                        borderRadius: '8px',
-                                                        border: '1px solid #CFD2D7',
-                                                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                                                        borderRadius: '12px',
+                                                        border: '1px solid #E2E8F0',
+                                                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)',
+                                                        fontWeight: 600,
                                                     }}
                                                 />
                                                 <ReferenceLine
@@ -461,7 +467,7 @@ export default function PanelJefe({ auth, curso }) {
                                                         fontWeight: 700,
                                                     }}
                                                 />
-                                                <Bar dataKey="promedio" radius={[5, 5, 0, 0]} barSize={32} name="Promedio">
+                                                <Bar dataKey="promedio" radius={[6, 6, 0, 0]} barSize={32} name="Promedio Asignatura">
                                                     {datosGrafico.map((entry, idx) => (
                                                         <Cell
                                                             key={`cell-${idx}`}
@@ -491,12 +497,14 @@ export default function PanelJefe({ auth, curso }) {
                                 transition={{ duration: 0.25 }}
                                 className="space-y-6"
                             >
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-sape-gris border-l-4 border-l-sape-burdeo space-y-4">
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4">
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                         <div>
-                                            <h1 className="text-2xl font-bold text-sape-burdeo">Nómina de Estudiantes</h1>
-                                            <p className="text-gray-500 text-sm mt-1">
-                                                Filtra por situación académica, busca por nombre o RUT y contacta al apoderado.
+                                            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                                                Nómina de Estudiantes — {curso.nivel}° Medio {curso.letra}
+                                            </h1>
+                                            <p className="text-slate-600 text-sm mt-1">
+                                                Filtra por situación académica (Decreto 67), busca por nombre o RUT y registra el seguimiento con apoderados.
                                             </p>
                                         </div>
 
@@ -507,28 +515,41 @@ export default function PanelJefe({ auth, curso }) {
                                                 value={busqueda}
                                                 onChange={(e) => setBusqueda(e.target.value)}
                                                 placeholder="Buscar por nombre o RUT..."
-                                                className="w-full pl-9 pr-4 py-2 text-sm border border-sape-gris rounded-lg focus:ring-sape-burdeo focus:border-sape-burdeo"
+                                                aria-label="Buscar estudiante por nombre o RUT"
+                                                className="w-full pl-9 pr-8 py-2.5 text-sm border border-slate-300 rounded-xl focus:ring-sape-burdeo focus:border-sape-burdeo"
                                             />
                                             <svg
-                                                className="w-4 h-4 text-gray-400 absolute left-3 top-2.5"
+                                                className="w-4 h-4 text-slate-400 absolute left-3 top-3"
                                                 fill="none"
                                                 stroke="currentColor"
                                                 viewBox="0 0 24 24"
                                             >
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                             </svg>
+                                            {busqueda && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setBusqueda('')}
+                                                    aria-label="Limpiar búsqueda"
+                                                    className="absolute right-1.5 top-1.5 w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
 
                                     {/* PÍLDORAS DE FILTRO RÁPIDO */}
-                                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                                    <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100 tabular-nums">
                                         <button
                                             type="button"
                                             onClick={() => setFiltroNomina('todos')}
-                                            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors ${
                                                 filtroNomina === 'todos'
                                                     ? 'bg-sape-burdeo text-sape-amarillo shadow-sm'
-                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                             }`}
                                         >
                                             Todos ({curso.estudiantes.length})
@@ -536,7 +557,7 @@ export default function PanelJefe({ auth, curso }) {
                                         <button
                                             type="button"
                                             onClick={() => setFiltroNomina('riesgo')}
-                                            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors ${
                                                 filtroNomina === 'riesgo'
                                                     ? 'bg-red-600 text-white shadow-sm'
                                                     : 'bg-red-50 text-red-700 hover:bg-red-100'
@@ -547,30 +568,39 @@ export default function PanelJefe({ auth, curso }) {
                                         <button
                                             type="button"
                                             onClick={() => setFiltroNomina('contactados')}
-                                            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors ${
                                                 filtroNomina === 'contactados'
                                                     ? 'bg-emerald-600 text-white shadow-sm'
                                                     : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                                             }`}
                                         >
-                                            Apoderados Contactados
+                                            Apoderados Contactados (
+                                            {
+                                                curso.estudiantes.filter(
+                                                    (est) =>
+                                                        (est.total_whatsapps || 0) +
+                                                            (seguimientoLocal[est.id]?.total || 0) >
+                                                        0
+                                                ).length
+                                            }
+                                            )
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="bg-white rounded-xl shadow-sm border border-sape-gris overflow-hidden">
+                                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
                                     <div className="overflow-x-auto">
-                                        <table className="min-w-full text-sm text-left">
-                                            <thead className="text-xs text-gray-500 uppercase bg-sape-gris-claro border-b border-sape-gris">
+                                        <table className="min-w-full text-sm text-left tabular-nums">
+                                            <thead className="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
                                                 <tr>
-                                                    <th className="px-6 py-4 font-semibold tracking-wider">Estudiante</th>
-                                                    <th className="px-4 py-4 font-semibold tracking-wider text-center">RUT</th>
-                                                    <th className="px-4 py-4 font-semibold tracking-wider text-center">Prom. Gral.</th>
-                                                    <th className="px-4 py-4 font-semibold tracking-wider text-center">Seguimiento Apoderado</th>
-                                                    <th className="px-6 py-4 font-semibold tracking-wider text-right">Acciones</th>
+                                                    <th className="px-6 py-4 font-bold tracking-wider">Estudiante</th>
+                                                    <th className="px-4 py-4 font-bold tracking-wider text-center">RUT</th>
+                                                    <th className="px-4 py-4 font-bold tracking-wider text-center">Prom. General</th>
+                                                    <th className="px-4 py-4 font-bold tracking-wider text-center">Contacto Apoderado</th>
+                                                    <th className="px-6 py-4 font-bold tracking-wider text-right">Acciones</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-sape-gris">
+                                            <tbody className="divide-y divide-slate-200/70">
                                                 {estudiantesFiltrados.map((estudiante) => {
                                                     const asigRojas = contarAsignaturasBajo40(estudiante);
                                                     const promEst = calcularPromedio(estudiante.calificaciones);
@@ -583,7 +613,7 @@ export default function PanelJefe({ auth, curso }) {
                                                         estudiante.apoderado_telefono;
 
                                                     return (
-                                                        <tr key={estudiante.id} className="hover:bg-gray-50 transition-colors">
+                                                        <tr key={estudiante.id} className="hover:bg-slate-50/80 transition-colors">
                                                             <td className="px-6 py-4">
                                                                 <div className="flex items-center gap-3">
                                                                     <div className="w-10 h-10 rounded-full bg-sape-burdeo/10 flex items-center justify-center text-sape-burdeo font-bold text-sm flex-shrink-0">
@@ -591,25 +621,25 @@ export default function PanelJefe({ auth, curso }) {
                                                                         {estudiante.apellidos.charAt(0)}
                                                                     </div>
                                                                     <div>
-                                                                        <span className="font-semibold text-gray-900 text-base block">
+                                                                        <span className="font-bold text-slate-900 text-sm sm:text-base block">
                                                                             {estudiante.nombres} {estudiante.apellidos}
                                                                         </span>
                                                                         {asigRojas > 0 && (
-                                                                            <span className="inline-flex items-center gap-1 mt-0.5 text-[11px] font-semibold px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
-                                                                                {asigRojas} asig. bajo 4.0 (Seguimiento)
+                                                                            <span className="inline-flex items-center gap-1 mt-0.5 text-[11px] font-bold px-2 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-200">
+                                                                                {asigRojas} {asigRojas === 1 ? 'asignatura' : 'asignaturas'} bajo 4.0
                                                                             </span>
                                                                         )}
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-4 py-4 text-center text-gray-500 font-mono text-xs">
+                                                            <td className="px-4 py-4 text-center text-slate-600 font-mono text-xs">
                                                                 {estudiante.run || estudiante.identificadorInterno || 'Sin Registro'}
                                                             </td>
                                                             <td className="px-4 py-4 text-center">
                                                                 <span
                                                                     className={`inline-block px-2.5 py-1 rounded-lg font-extrabold text-xs border ${
                                                                         isNaN(promNum)
-                                                                            ? 'bg-gray-100 text-gray-500 border-gray-200'
+                                                                            ? 'bg-slate-100 text-slate-500 border-slate-200'
                                                                             : promNum < 4.0
                                                                               ? 'bg-red-50 text-red-700 border-red-200'
                                                                               : promNum < 5.0
@@ -622,15 +652,15 @@ export default function PanelJefe({ auth, curso }) {
                                                             </td>
                                                             <td className="px-4 py-4 text-center">
                                                                 <div className="flex flex-col items-center gap-1">
-                                                                    <span className="text-xs font-mono text-gray-600">
+                                                                    <span className="text-xs font-mono text-slate-600">
                                                                         {telefonoApoderado || 'Sin teléfono'}
                                                                     </span>
                                                                     {totalContactos > 0 ? (
-                                                                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                                                                             Contactado ({totalContactos})
                                                                         </span>
                                                                     ) : (
-                                                                        <span className="text-[11px] text-gray-400">
+                                                                        <span className="text-[11px] text-slate-400">
                                                                             Sin mensajes previos
                                                                         </span>
                                                                     )}
@@ -639,8 +669,9 @@ export default function PanelJefe({ auth, curso }) {
                                                             <td className="px-6 py-4 text-right">
                                                                 <div className="flex flex-wrap justify-end gap-2">
                                                                     <button
+                                                                        type="button"
                                                                         onClick={() => abrirModalWhatsApp(estudiante)}
-                                                                        className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
+                                                                        className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
                                                                         title="Preparar mensaje de WhatsApp para el apoderado"
                                                                     >
                                                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -649,8 +680,9 @@ export default function PanelJefe({ auth, curso }) {
                                                                         WhatsApp
                                                                     </button>
                                                                     <button
+                                                                        type="button"
                                                                         onClick={() => abrirModalInforme(estudiante)}
-                                                                        className="inline-flex items-center gap-1.5 bg-sape-burdeo text-sape-amarillo px-3 py-2 rounded-lg text-xs font-bold hover:bg-sape-burdeo-hover transition-colors shadow-sm"
+                                                                        className="inline-flex items-center gap-1.5 bg-sape-burdeo text-sape-amarillo px-3 py-2 rounded-xl text-xs font-bold hover:bg-sape-burdeo-hover transition-colors shadow-sm"
                                                                     >
                                                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -658,10 +690,11 @@ export default function PanelJefe({ auth, curso }) {
                                                                         Informe IA
                                                                     </button>
                                                                     <button
+                                                                        type="button"
                                                                         onClick={() => setEstudianteActivo(estudiante)}
-                                                                        className="inline-flex items-center gap-1.5 bg-white border border-sape-burdeo text-sape-burdeo px-3 py-2 rounded-lg text-xs font-bold hover:bg-sape-burdeo hover:text-sape-amarillo transition-colors"
+                                                                        className="inline-flex items-center gap-1.5 bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold hover:border-sape-burdeo hover:text-sape-burdeo transition-colors"
                                                                     >
-                                                                        Calificaciones →
+                                                                        Ver Notas
                                                                     </button>
                                                                 </div>
                                                             </td>
@@ -670,8 +703,22 @@ export default function PanelJefe({ auth, curso }) {
                                                 })}
                                                 {estudiantesFiltrados.length === 0 && (
                                                     <tr>
-                                                        <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
-                                                            No se encontraron estudiantes con el filtro o búsqueda aplicada.
+                                                        <td colSpan={5} className="px-6 py-12 text-center text-slate-500 space-y-2">
+                                                            <p className="font-bold text-slate-700">
+                                                                No se encontraron estudiantes con el filtro o búsqueda aplicada.
+                                                            </p>
+                                                            {(busqueda || filtroNomina !== 'todos') && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setBusqueda('');
+                                                                        setFiltroNomina('todos');
+                                                                    }}
+                                                                    className="text-xs font-bold text-sape-burdeo hover:underline"
+                                                                >
+                                                                    Restablecer filtros y ver toda la nómina
+                                                                </button>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 )}
@@ -692,24 +739,28 @@ export default function PanelJefe({ auth, curso }) {
                                 className="space-y-6"
                             >
                                 <button
+                                    type="button"
                                     onClick={() => setEstudianteActivo(null)}
-                                    className="text-gray-500 hover:text-sape-burdeo font-semibold flex items-center gap-2 transition-colors text-sm"
+                                    className="text-slate-600 hover:text-sape-burdeo font-bold flex items-center gap-2 transition-colors text-sm"
                                 >
-                                    ← Volver a la nómina del curso
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                    </svg>
+                                    Volver a la nómina de {curso.nivel}° Medio {curso.letra}
                                 </button>
 
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-sape-gris border-t-4 border-t-sape-burdeo flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-16 h-16 rounded-full bg-sape-burdeo/10 flex items-center justify-center text-sape-burdeo font-bold text-2xl">
+                                        <div className="w-14 h-14 rounded-full bg-sape-burdeo/10 flex items-center justify-center text-sape-burdeo font-extrabold text-xl shrink-0">
                                             {estudianteActivo.nombres.charAt(0)}
                                             {estudianteActivo.apellidos.charAt(0)}
                                         </div>
                                         <div>
-                                            <h1 className="text-2xl font-bold text-gray-900">
+                                            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
                                                 {estudianteActivo.nombres} {estudianteActivo.apellidos}
                                             </h1>
-                                            <p className="text-gray-500 text-sm">
-                                                Registro de Calificaciones Anual — {curso.nivel}° Medio {curso.letra} • Promedio Gral.:{' '}
+                                            <p className="text-slate-600 text-sm tabular-nums">
+                                                Ficha Académica Anual — {curso.nivel}° Medio {curso.letra} • Promedio General:{' '}
                                                 <strong className="text-sape-burdeo">
                                                     {calcularPromedio(estudianteActivo.calificaciones)}
                                                 </strong>
@@ -718,8 +769,9 @@ export default function PanelJefe({ auth, curso }) {
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         <button
+                                            type="button"
                                             onClick={() => abrirModalWhatsApp(estudianteActivo)}
-                                            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm"
+                                            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
                                         >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -727,8 +779,9 @@ export default function PanelJefe({ auth, curso }) {
                                             Contactar Apoderado (WhatsApp)
                                         </button>
                                         <button
+                                            type="button"
                                             onClick={() => abrirModalInforme(estudianteActivo)}
-                                            className="inline-flex items-center gap-2 bg-sape-burdeo text-sape-amarillo px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-sape-burdeo-hover transition-colors shadow-sm"
+                                            className="inline-flex items-center gap-2 bg-sape-burdeo text-sape-amarillo px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-sape-burdeo-hover transition-colors shadow-sm"
                                         >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -738,19 +791,20 @@ export default function PanelJefe({ auth, curso }) {
                                     </div>
                                 </div>
 
-                                <div className="bg-white rounded-xl shadow-sm border border-sape-gris overflow-hidden">
+                                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
                                     <div className="overflow-x-auto">
-                                        <table className="min-w-full text-sm text-left">
-                                            <thead className="text-xs text-gray-600 uppercase bg-sape-gris-claro border-b border-sape-gris">
+                                        <table className="min-w-full text-sm text-left tabular-nums">
+                                            <thead className="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
                                                 <tr>
-                                                    <th className="px-6 py-4 font-bold bg-gray-100 w-1/3">Asignatura</th>
-                                                    <th className="px-4 py-4 font-bold text-center border-l border-sape-gris">1° Semestre</th>
-                                                    <th className="px-4 py-4 font-bold text-center bg-gray-100">Prom. 1S</th>
-                                                    <th className="px-4 py-4 font-bold text-center border-l border-sape-gris">2° Semestre</th>
-                                                    <th className="px-4 py-4 font-bold text-center bg-gray-100">Prom. 2S</th>
+                                                    <th className="px-6 py-4 font-bold w-1/4">Asignatura</th>
+                                                    <th className="px-4 py-4 font-bold text-center border-l border-slate-200">Notas 1° Semestre</th>
+                                                    <th className="px-4 py-4 font-bold text-center bg-slate-100/80">Prom. 1S</th>
+                                                    <th className="px-4 py-4 font-bold text-center border-l border-slate-200">Notas 2° Semestre</th>
+                                                    <th className="px-4 py-4 font-bold text-center bg-slate-100/80">Prom. 2S</th>
+                                                    <th className="px-4 py-4 font-bold text-center bg-slate-100 border-l border-slate-200">Prom. Anual</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-gray-100">
+                                            <tbody className="divide-y divide-slate-200/70">
                                                 {asignaturas.map((asig) => {
                                                     const notas =
                                                         estudianteActivo.calificaciones?.filter(
@@ -760,14 +814,15 @@ export default function PanelJefe({ auth, curso }) {
                                                     const notasS2 = notas.filter((c) => Number(c.semestre) === 2);
                                                     const promS1 = calcularPromedio(notasS1);
                                                     const promS2 = calcularPromedio(notasS2);
+                                                    const promAnual = calcularPromedio(notas);
 
                                                     return (
-                                                        <tr key={asig} className="hover:bg-gray-50">
-                                                            <td className="px-6 py-4 font-semibold text-gray-800 bg-gray-50/50">
+                                                        <tr key={asig} className="hover:bg-slate-50/70">
+                                                            <td className="px-6 py-4 font-bold text-slate-800 bg-slate-50/40">
                                                                 {asig}
                                                             </td>
-                                                            <td className="px-4 py-4 border-l border-gray-100">
-                                                                <div className="flex flex-wrap gap-1 justify-center">
+                                                            <td className="px-4 py-4 border-l border-slate-100">
+                                                                <div className="flex flex-wrap gap-1.5 justify-center">
                                                                     {notasS1.length > 0 ? (
                                                                         notasS1.map((n, i) => {
                                                                             const num = parseFloat(n.valor);
@@ -778,10 +833,10 @@ export default function PanelJefe({ auth, curso }) {
                                                                             return (
                                                                                 <span
                                                                                     key={i}
-                                                                                    className={`inline-block px-2 py-1 rounded text-xs font-semibold border ${
+                                                                                    className={`inline-block px-2 py-1 rounded-md text-xs font-bold border ${
                                                                                         esNumerica && num < 4.0
                                                                                             ? 'bg-red-50 text-red-700 border-red-200'
-                                                                                            : 'bg-white text-gray-700 border-gray-200'
+                                                                                            : 'bg-white text-slate-700 border-slate-200'
                                                                                     }`}
                                                                                 >
                                                                                     {etiqueta}
@@ -789,17 +844,17 @@ export default function PanelJefe({ auth, curso }) {
                                                                             );
                                                                         })
                                                                     ) : (
-                                                                        <span className="text-gray-300">-</span>
+                                                                        <span className="text-slate-400 text-xs">Sin notas</span>
                                                                     )}
                                                                 </div>
                                                             </td>
-                                                            <td className="px-4 py-4 text-center font-bold text-gray-700 bg-gray-50">
+                                                            <td className="px-4 py-4 text-center font-extrabold text-slate-800 bg-slate-50/80">
                                                                 <span className={parseFloat(promS1) < 4.0 ? 'text-red-600' : ''}>
                                                                     {promS1}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-4 py-4 border-l border-gray-100">
-                                                                <div className="flex flex-wrap gap-1 justify-center">
+                                                            <td className="px-4 py-4 border-l border-slate-100">
+                                                                <div className="flex flex-wrap gap-1.5 justify-center">
                                                                     {notasS2.length > 0 ? (
                                                                         notasS2.map((n, i) => {
                                                                             const num = parseFloat(n.valor);
@@ -810,10 +865,10 @@ export default function PanelJefe({ auth, curso }) {
                                                                             return (
                                                                                 <span
                                                                                     key={i}
-                                                                                    className={`inline-block px-2 py-1 rounded text-xs font-semibold border ${
+                                                                                    className={`inline-block px-2 py-1 rounded-md text-xs font-bold border ${
                                                                                         esNumerica && num < 4.0
                                                                                             ? 'bg-red-50 text-red-700 border-red-200'
-                                                                                            : 'bg-white text-gray-700 border-gray-200'
+                                                                                            : 'bg-white text-slate-700 border-slate-200'
                                                                                     }`}
                                                                                 >
                                                                                     {etiqueta}
@@ -821,13 +876,26 @@ export default function PanelJefe({ auth, curso }) {
                                                                             );
                                                                         })
                                                                     ) : (
-                                                                        <span className="text-gray-300">-</span>
+                                                                        <span className="text-slate-400 text-xs">Sin notas</span>
                                                                     )}
                                                                 </div>
                                                             </td>
-                                                            <td className="px-4 py-4 text-center font-bold text-gray-700 bg-gray-50">
+                                                            <td className="px-4 py-4 text-center font-extrabold text-slate-800 bg-slate-50/80">
                                                                 <span className={parseFloat(promS2) < 4.0 ? 'text-red-600' : ''}>
                                                                     {promS2}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-4 text-center font-extrabold bg-slate-100/70 border-l border-slate-200">
+                                                                <span
+                                                                    className={`inline-block px-2.5 py-1 rounded-lg text-xs border ${
+                                                                        isNaN(parseFloat(promAnual))
+                                                                            ? 'text-slate-500 border-transparent'
+                                                                            : parseFloat(promAnual) < 4.0
+                                                                              ? 'bg-red-50 text-red-700 border-red-200'
+                                                                              : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                                                    }`}
+                                                                >
+                                                                    {promAnual}
                                                                 </span>
                                                             </td>
                                                         </tr>
@@ -852,7 +920,7 @@ export default function PanelJefe({ auth, curso }) {
                             </motion.div>
                         )}
                     </AnimatePresence>
-                </main>
+                </section>
             </div>
 
             <ModalInformeIA

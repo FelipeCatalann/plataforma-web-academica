@@ -1,11 +1,35 @@
 import Dropdown from '@/Components/Dropdown';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
 import { Link, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import {
+    inicializarPreferenciasSape,
+    leerPreferenciasSape,
+    guardarPreferenciasSape,
+} from '@/utils/preferenciasSape';
 
 export default function AuthenticatedLayout({ header, children }) {
     const user = usePage().props.auth.user;
     const [showingNavigationDropdown, setShowingNavigationDropdown] = useState(false);
+    const [paletaActiva, setPaletaActiva] = useState(() => leerPreferenciasSape().paleta);
+
+    useEffect(() => {
+        const prefs = inicializarPreferenciasSape();
+        setPaletaActiva(prefs.paleta);
+
+        const handleSync = (e) => {
+            const nueva = e?.detail?.paleta || leerPreferenciasSape().paleta;
+            setPaletaActiva(nueva);
+        };
+        window.addEventListener('sape-preferences-changed', handleSync);
+        return () => window.removeEventListener('sape-preferences-changed', handleSync);
+    }, []);
+
+    const alternarPaletaRapida = () => {
+        const siguiente = paletaActiva === 'dark' ? 'css' : 'dark';
+        const prefs = guardarPreferenciasSape({ paleta: siguiente });
+        setPaletaActiva(prefs.paleta);
+    };
 
     const iniciales = (user?.name || 'U')
         .split(' ')
@@ -16,11 +40,13 @@ export default function AuthenticatedLayout({ header, children }) {
 
     const enRutaDocente =
         route().current('profesor.jefe') || route().current('profesor.asignatura');
+    const enRutaConfiguracion =
+        typeof window !== 'undefined' && window.location.pathname.startsWith('/configuracion');
 
     return (
-        <div className="min-h-screen bg-gray-100">
+        <div className="min-h-screen bg-slate-50/70 flex flex-col">
             {/* Barra superior institucional unificada */}
-            <nav className="bg-sape-burdeo border-b border-sape-burdeo-hover shadow-md">
+            <nav className="bg-sape-burdeo border-b border-sape-burdeo-hover shadow-md sticky top-0 z-30">
                 <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8">
                     <div className="flex h-16 justify-between">
                         <div className="flex items-center">
@@ -91,8 +117,40 @@ export default function AuthenticatedLayout({ header, children }) {
                             </div>
                         </div>
 
-                        <div className="hidden sm:ms-6 sm:flex sm:items-center">
-                            <div className="relative ms-3">
+                        <div className="hidden sm:ms-6 sm:flex sm:items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={alternarPaletaRapida}
+                                aria-label={
+                                    paletaActiva === 'dark'
+                                        ? 'Cambiar a paleta institucional CSS (claro)'
+                                        : 'Cambiar a paleta Modo Oscuro'
+                                }
+                                title={
+                                    paletaActiva === 'dark'
+                                        ? 'Tema activo: Modo Oscuro (clic para cambiar a CSS)'
+                                        : 'Tema activo: Paleta CSS (clic para cambiar a Modo Oscuro)'
+                                }
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-sape-burdeo-hover/70 px-2.5 py-1.5 text-xs font-bold text-white/90 hover:text-sape-amarillo hover:border-sape-amarillo/40 transition-colors"
+                            >
+                                {paletaActiva === 'dark' ? (
+                                    <>
+                                        <svg className="w-4 h-4 text-sape-amarillo" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                                        </svg>
+                                        <span>Oscuro</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-4 h-4 text-sape-amarillo" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                                        </svg>
+                                        <span>CSS</span>
+                                    </>
+                                )}
+                            </button>
+
+                            <div className="relative ms-1">
                                 <Dropdown>
                                     <Dropdown.Trigger>
                                         <span className="inline-flex rounded-md">
@@ -113,6 +171,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                     </Dropdown.Trigger>
 
                                     <Dropdown.Content>
+                                        <Dropdown.Link href="/configuracion">Configuración</Dropdown.Link>
                                         <Dropdown.Link href={route('profile.edit')}>Mi Perfil</Dropdown.Link>
                                         <Dropdown.Link href={route('logout')} method="post" as="button">Cerrar Sesión</Dropdown.Link>
                                     </Dropdown.Content>
@@ -123,8 +182,11 @@ export default function AuthenticatedLayout({ header, children }) {
                         {/* Menú Móvil */}
                         <div className="-me-2 flex items-center sm:hidden">
                             <button
+                                type="button"
+                                aria-label={showingNavigationDropdown ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'}
+                                aria-expanded={showingNavigationDropdown}
                                 onClick={() => setShowingNavigationDropdown((previousState) => !previousState)}
-                                className="inline-flex items-center justify-center rounded-md p-2 text-gray-200 hover:bg-sape-burdeo-hover hover:text-white focus:outline-none transition duration-150 ease-in-out"
+                                className="inline-flex items-center justify-center rounded-xl p-2 text-white/90 hover:bg-sape-burdeo-hover hover:text-white focus:outline-none focus:ring-2 focus:ring-sape-amarillo transition duration-150 ease-in-out"
                             >
                                 <svg className="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
                                     <path className={!showingNavigationDropdown ? 'inline-flex' : 'hidden'} strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -136,8 +198,8 @@ export default function AuthenticatedLayout({ header, children }) {
                 </div>
 
                 {/* Desplegable en Móvil */}
-                <div className={(showingNavigationDropdown ? 'block' : 'hidden') + ' sm:hidden bg-white'}>
-                    <div className="space-y-1 pb-3 pt-2">
+                <div className={(showingNavigationDropdown ? 'block' : 'hidden') + ' sm:hidden bg-white border-t border-slate-200/80'}>
+                    <div className="space-y-1 px-2 pb-3 pt-2">
                         <ResponsiveNavLink href={route('dashboard')} active={route().current('dashboard')}>Inicio</ResponsiveNavLink>
                         {enRutaDocente && (
                             <>
@@ -146,12 +208,13 @@ export default function AuthenticatedLayout({ header, children }) {
                             </>
                         )}
                     </div>
-                    <div className="border-t border-gray-200 pb-1 pt-4">
+                    <div className="border-t border-slate-200 pb-2 pt-4">
                         <div className="px-4">
-                            <div className="text-base font-medium text-gray-800">{user.name}</div>
-                            <div className="text-sm font-medium text-gray-500">{user.email}</div>
+                            <div className="text-base font-bold text-slate-900">{user.name}</div>
+                            <div className="text-sm font-medium text-slate-600">{user.email}</div>
                         </div>
-                        <div className="mt-3 space-y-1">
+                        <div className="mt-3 space-y-1 px-2">
+                            <ResponsiveNavLink href="/configuracion" active={enRutaConfiguracion}>Configuración</ResponsiveNavLink>
                             <ResponsiveNavLink href={route('profile.edit')}>Mi Perfil</ResponsiveNavLink>
                             <ResponsiveNavLink method="post" href={route('logout')} as="button">Cerrar Sesión</ResponsiveNavLink>
                         </div>
@@ -160,11 +223,11 @@ export default function AuthenticatedLayout({ header, children }) {
             </nav>
 
             {header && (
-                <header className="bg-white shadow-sm border-b border-sape-gris">
-                    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{header}</div>
+                <header className="bg-white shadow-sm border-b border-slate-200/80">
+                    <div className="mx-auto max-w-screen-2xl px-4 py-5 sm:px-6 lg:px-8">{header}</div>
                 </header>
             )}
-            <main>{children}</main>
+            <main className="flex-1">{children}</main>
         </div>
     );
 }

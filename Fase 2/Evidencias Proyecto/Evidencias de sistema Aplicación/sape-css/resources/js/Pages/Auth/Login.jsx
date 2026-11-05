@@ -27,13 +27,10 @@ export default function Login({ status, canResetPassword }) {
             <Head title="Iniciar Sesión - S.A.P.E CSS" />
 
             <div className="mb-8">
-                <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-sape-burdeo/10 text-sape-burdeo mb-3">
-                    Acceso Institucional
-                </span>
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-                    Bienvenido al Portal
+                    Bienvenido al Portal Institucional
                 </h2>
-                <p className="text-sm text-slate-500 mt-1">
+                <p className="text-sm text-slate-600 mt-1">
                     Ingresa con tus credenciales docentes o directivas para continuar.
                 </p>
             </div>
@@ -119,9 +116,10 @@ export default function Login({ status, canResetPassword }) {
                         />
                         <button
                             type="button"
+                            aria-label={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                            aria-pressed={mostrarPassword}
                             onClick={() => setMostrarPassword((prev) => !prev)}
-                            className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-slate-600 transition-colors"
-                            tabIndex={-1}
+                            className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-500 hover:text-slate-800 focus:outline-none focus:text-sape-burdeo transition-colors"
                         >
                             {mostrarPassword ? (
                                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

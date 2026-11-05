@@ -1,3 +1,219 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@media (prefers-reduced-motion: reduce) {
+    html:focus-within {
+        scroll-behavior: auto;
+    }
+}
+
+/* ==========================================================================
+   PALETA "MODO OSCURO" (html[data-theme="dark"]) — S.A.P.E CSS
+   Jerarquía de superficies nocturnas de alto contraste (WCAG AA/AAA),
+   textos nítidos en blanco y bordes semánticos limpios.
+   ========================================================================== */
+html[data-theme="dark"] {
+    color-scheme: dark;
+    background-color: #0b1120;
+    color: #f8fafc;
+}
+
+html[data-theme="dark"] body {
+    background-color: #0b1120;
+    color: #f8fafc;
+}
+
+/* 1. Lienzo base y contenedores principales */
+html[data-theme="dark"] .bg-slate-50\/70,
+html[data-theme="dark"] .bg-slate-50\/80,
+html[data-theme="dark"] .bg-slate-50 {
+    background-color: #0b1120 !important;
+}
+
+/* 2. Tarjetas principales */
+html[data-theme="dark"] .bg-white {
+    background-color: #151f32 !important;
+}
+
+/* 3. Sub-bloques dentro de tarjetas (elevados para evitar efecto hundido) */
+html[data-theme="dark"] .bg-white .bg-slate-50,
+html[data-theme="dark"] .bg-white .bg-slate-50\/80,
+html[data-theme="dark"] .bg-white .bg-slate-50\/70,
+html[data-theme="dark"] .bg-white .bg-slate-50\/50 {
+    background-color: #1e293b !important;
+}
+
+html[data-theme="dark"] .bg-slate-100 {
+    background-color: #263449 !important;
+    color: #f8fafc !important;
+}
+
+/* 4. Tipografía de alto contraste */
+html[data-theme="dark"] .text-slate-900,
+html[data-theme="dark"] .text-slate-800 {
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"] .text-slate-700 {
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .text-slate-600 {
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .text-slate-500,
+html[data-theme="dark"] .text-slate-400 {
+    color: #94a3b8 !important;
+}
+
+/* 5. Bordes y divisores definidos */
+html[data-theme="dark"] .border-slate-200\/90,
+html[data-theme="dark"] .border-slate-200\/80,
+html[data-theme="dark"] .border-slate-200\/70,
+html[data-theme="dark"] .border-slate-200,
+html[data-theme="dark"] .border-slate-300,
+html[data-theme="dark"] .border-slate-100 {
+    border-color: #29384e !important;
+}
+
+html[data-theme="dark"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html[data-theme="dark"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
+html[data-theme="dark"] .divide-slate-200\/80 > :not([hidden]) ~ :not([hidden]),
+html[data-theme="dark"] .divide-slate-200\/70 > :not([hidden]) ~ :not([hidden]) {
+    border-color: #29384e !important;
+}
+
+html[data-theme="dark"] .hover\:bg-slate-50:hover,
+html[data-theme="dark"] .hover\:bg-slate-50\/80:hover,
+html[data-theme="dark"] .hover\:bg-slate-100:hover,
+html[data-theme="dark"] .hover\:bg-slate-200:hover {
+    background-color: #263449 !important;
+}
+
+/* 6. Inputs, selects y buscadores */
+html[data-theme="dark"] input:not([type="radio"]):not([type="checkbox"]),
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+    background-color: #0f172a !important;
+    color: #ffffff !important;
+    border-color: #3b4d66 !important;
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+    color: #64748b !important;
+}
+
+/* 7. Textos e indicadores institucionales (sin rojo apagado ilegible) */
+html[data-theme="dark"] .text-sape-burdeo:not(.bg-sape-amarillo) {
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"] .bg-sape-amarillo.text-sape-burdeo {
+    color: #450a0a !important;
+}
+
+html[data-theme="dark"] .bg-sape-burdeo\/10,
+html[data-theme="dark"] .bg-sape-burdeo\/5,
+html[data-theme="dark"] .bg-sape-burdeo\/\[0\.02\] {
+    background-color: rgba(154, 35, 25, 0.25) !important;
+    border-color: rgba(248, 113, 113, 0.45) !important;
+}
+
+/* 8. Botones con texto o borde rojo / secundario: TEXTO BLANCO y borde rojo limpio */
+html[data-theme="dark"] button.bg-white,
+html[data-theme="dark"] button.bg-slate-100,
+html[data-theme="dark"] button.text-red-700,
+html[data-theme="dark"] button.text-red-600,
+html[data-theme="dark"] button.text-red-800,
+html[data-theme="dark"] button.text-slate-700,
+html[data-theme="dark"] button.text-sape-burdeo,
+html[data-theme="dark"] button.border-red-300 span,
+html[data-theme="dark"] button.border-red-200 span,
+html[data-theme="dark"] button.text-red-700 span,
+html[data-theme="dark"] button.text-red-600 span {
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"] button.border-red-300,
+html[data-theme="dark"] button.border-red-200 {
+    background-color: #1e293b !important;
+    border-color: #ef4444 !important;
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"] button.hover\:bg-red-600:hover,
+html[data-theme="dark"] button.border-red-300:hover {
+    background-color: #dc2626 !important;
+    border-color: #ef4444 !important;
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"] button.hover\:bg-sape-burdeo:hover {
+    background-color: #7A1C14 !important;
+    border-color: #9A2319 !important;
+    color: #F4C430 !important;
+}
+
+/* 9. Insignias y bloques semánticos (Esmeralda, Ámbar, Rojo, Azul) adaptados a Modo Oscuro */
+html[data-theme="dark"] .bg-emerald-50 {
+    background-color: rgba(16, 185, 129, 0.15) !important;
+    border-color: rgba(52, 211, 153, 0.4) !important;
+    color: #d1fae5 !important;
+}
+html[data-theme="dark"] .text-emerald-700,
+html[data-theme="dark"] .text-emerald-800,
+html[data-theme="dark"] .text-emerald-900 {
+    color: #6ee7b7 !important;
+}
+
+html[data-theme="dark"] .bg-amber-50 {
+    background-color: rgba(245, 158, 11, 0.15) !important;
+    border-color: rgba(251, 191, 36, 0.4) !important;
+    color: #fef3c7 !important;
+}
+html[data-theme="dark"] .text-amber-700,
+html[data-theme="dark"] .text-amber-800,
+html[data-theme="dark"] .text-amber-900 {
+    color: #fcd34d !important;
+}
+
+html[data-theme="dark"] .bg-red-50 {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    border-color: rgba(248, 113, 113, 0.55) !important;
+    color: #ffffff !important;
+}
+html[data-theme="dark"] .text-red-600,
+html[data-theme="dark"] .text-red-700,
+html[data-theme="dark"] .text-red-800,
+html[data-theme="dark"] .text-red-900 {
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"] .bg-blue-50 {
+    background-color: rgba(59, 130, 246, 0.16) !important;
+    border-color: rgba(96, 165, 250, 0.4) !important;
+    color: #dbeafe !important;
+}
+html[data-theme="dark"] .text-blue-700 {
+    color: #93c5fd !important;
+}
+
+/* 10. Gráficos Recharts en Modo Oscuro */
+html[data-theme="dark"] .recharts-cartesian-grid line {
+    stroke: #29384e !important;
+}
+html[data-theme="dark"] .recharts-text {
+    fill: #cbd5e1 !important;
+}
+html[data-theme="dark"] .recharts-default-tooltip {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+html[data-theme="dark"] .recharts-tooltip-item {
+    color: #f8fafc !important;
+}
+
