@@ -19,6 +19,12 @@
   2. **Add a description (cuerpo del commit):** Lista detallada con viñetas (`- ...`) explicando todos los cambios realizados en frontend, backend, rutas o estilos, de modo que al crear una Pull Request en GitHub se autocompleten de inmediato los campos **Add a title** y **Add a description**.
 - Además, en la respuesta al usuario tras subir a GitHub, mostrar siempre explícitamente los bloques **Add a title** y **Add a description**.
 
+## Reglas de desarrollo para Modo Oscuro (Dark Mode)
+
+- **Prohibido usar fondos blancos translúcidos (`bg-white/60`, `bg-white/80`, `hover:bg-white/60`, `bg-slate-100/90`, etc.) en tarjetas, selectores de rol, botones o contenedores:**
+  - En Modo Oscuro (`html[data-theme="dark"]`), los fondos blancos con opacidad producen un velo gris/blanco translúcido que rompe el contraste nocturno.
+  - Utilizar siempre clases de superficie sólidas (`bg-white`, `bg-slate-50`, `bg-slate-100`, `hover:bg-white`, `hover:bg-slate-100`) y asegurar que estén mapeadas a superficies oscuras sólidas (`#151f32`, `#1e293b`, `#0f172a`, `#263449`) en `resources/css/app.css`.
+
 ## Mensajes de commit tras fallos de pipeline (CI/CD)
 
 - **Corrección de errores de pipeline:** Cada vez que se corrija un fallo del pipeline (GitHub Actions / CI), el mensaje del commit subsecuente debe incluir obligatoriamente:
