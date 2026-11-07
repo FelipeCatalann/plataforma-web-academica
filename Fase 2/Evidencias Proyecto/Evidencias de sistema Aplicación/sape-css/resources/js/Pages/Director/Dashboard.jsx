@@ -1217,7 +1217,7 @@ export default function PanelDirector({
                                                                                 onChange={(e) =>
                                                                                     actualizarConfigGrafico({ mostrarValores: e.target.checked })
                                                                                 }
-                                                                                className="rounded border-slate-300 text-sape-burdeo focus:ring-sape-burdeo"
+                                                                                className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                                                                             />
                                                                             <span>Mostrar nota sobre cada curso</span>
                                                                         </label>
@@ -1229,21 +1229,9 @@ export default function PanelDirector({
                                                                                 onChange={(e) =>
                                                                                     actualizarConfigGrafico({ mostrarPromedioInst: e.target.checked })
                                                                                 }
-                                                                                className="rounded border-slate-300 text-sape-burdeo focus:ring-sape-burdeo"
+                                                                                className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                                                                             />
                                                                             <span>Línea Promedio Institucional ({metricasGlobales.promedioInstitucional})</span>
-                                                                        </label>
-
-                                                                        <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 select-none">
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                checked={configGrafico.mostrarGrilla}
-                                                                                onChange={(e) =>
-                                                                                    actualizarConfigGrafico({ mostrarGrilla: e.target.checked })
-                                                                                }
-                                                                                className="rounded border-slate-300 text-sape-burdeo focus:ring-sape-burdeo"
-                                                                            />
-                                                                            <span>Cuadrícula de guía</span>
                                                                         </label>
                                                                     </div>
 

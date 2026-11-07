@@ -61,11 +61,32 @@ class CalificacionesSheetImport implements ToCollection, WithHeadingRow
                 continue;
             }
 
-            // 3. Conectar Asignatura con el Curso
+            // 3. Conectar Asignatura con el Curso (reutilizando fila si un docente fue asignado previamente por nombre de subsector)
             $asigCurso = DB::table('asignatura_curso')
                 ->where('asignatura_id', $asignaturaId)
                 ->where('curso_id', $matricula->curso_id)
+                ->orderByRaw('CASE WHEN profesor_id IS NOT NULL THEN 0 ELSE 1 END')
                 ->first();
+
+            if (! $asigCurso && ! empty($row['subsector'])) {
+                $nombreSubsector = mb_strtolower(trim((string) $row['subsector']));
+                $asigCursoPorNombre = DB::table('asignatura_curso')
+                    ->join('asignaturas', 'asignatura_curso.asignatura_id', '=', 'asignaturas.id')
+                    ->where('asignatura_curso.curso_id', $matricula->curso_id)
+                    ->whereRaw('LOWER(TRIM(asignaturas.nombre)) = ?', [$nombreSubsector])
+                    ->select('asignatura_curso.*')
+                    ->first();
+
+                if ($asigCursoPorNombre) {
+                    DB::table('asignatura_curso')
+                        ->where('id', $asigCursoPorNombre->id)
+                        ->update([
+                            'asignatura_id' => $asignaturaId,
+                            'updated_at' => $now,
+                        ]);
+                    $asigCurso = $asigCursoPorNombre;
+                }
+            }
 
             $asigCursoId = $asigCurso ? $asigCurso->id : (string) Str::uuid();
             if (! $asigCurso) {
