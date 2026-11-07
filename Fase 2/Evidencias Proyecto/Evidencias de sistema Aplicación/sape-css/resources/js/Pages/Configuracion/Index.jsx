@@ -7,22 +7,14 @@ import {
     leerPreferenciasSape,
     guardarPreferenciasSape,
     PREFERENCIAS_DEFAULT,
+    VARIANTES_MODO_OSCURO,
 } from '@/utils/preferenciasSape';
 
 const PALETAS_DISPONIBLES = [
     {
         id: 'css',
-        nombre: 'CSS',
-        subtitulo: 'Paleta Institucional Oficial — Colegio San Sebastián',
-        descripcion:
-            'Esquema luminoso de alta legibilidad diurna con barra superior en Burdeo Institucional, acentos en Amarillo Dorado y superficies en blanco papel sobre pizarra clara.',
-        muestras: [
-            { nombre: 'Burdeo CSS', hex: '#6E1710' },
-            { nombre: 'Amarillo CSS', hex: '#E5E632' },
-            { nombre: 'Superficie Base', hex: '#F8FAFC' },
-            { nombre: 'Tarjeta Papel', hex: '#FFFFFF' },
-            { nombre: 'Tinta Pizarra', hex: '#0F172A' },
-        ],
+        nombre: 'CSS (Claro)',
+        subtitulo: 'Tema institucional diurno',
         preview: {
             navBg: '#6E1710',
             navAccent: '#E5E632',
@@ -36,22 +28,13 @@ const PALETAS_DISPONIBLES = [
     {
         id: 'dark',
         nombre: 'Modo Oscuro',
-        subtitulo: 'Paleta Nocturna de Descanso Visual',
-        descripcion:
-            'Adapta los paneles, tablas de notas y formularios a superficies pizarra profunda (#0B1120 y #1E293B) reduciendo el brillo en jornadas extensas de revisión docente.',
-        muestras: [
-            { nombre: 'Pizarra Nocturna', hex: '#0B1120' },
-            { nombre: 'Panel Elevado', hex: '#1E293B' },
-            { nombre: 'Burdeo Nocturno', hex: '#58120C' },
-            { nombre: 'Amarillo Dorado', hex: '#E5E632' },
-            { nombre: 'Texto Claro', hex: '#F8FAFC' },
-        ],
+        subtitulo: 'Tema nocturno de descanso visual',
         preview: {
             navBg: '#58120C',
             navAccent: '#E5E632',
-            canvasBg: '#0B1120',
-            cardBg: '#1E293B',
-            cardBorder: '#334155',
+            canvasBg: '#0D0E11',
+            cardBg: '#15171C',
+            cardBorder: '#2B2F3A',
             textPrimary: '#F8FAFC',
             textMuted: '#94A3B8',
         },
@@ -377,7 +360,7 @@ export default function ConfiguracionIndex({
                                             Diseño y Paleta de Colores
                                         </h2>
                                         <p className="text-slate-600 text-sm mt-1">
-                                            Alterna entre la paleta institucional oficial <strong>CSS</strong> y el tema en <strong>Modo Oscuro</strong> para sesiones de trabajo con baja iluminación.
+                                            Elige el tema visual de la plataforma.
                                         </p>
                                     </div>
                                     <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-extrabold bg-slate-100 text-slate-800 border border-slate-200 shrink-0 self-start sm:self-auto">
@@ -385,167 +368,165 @@ export default function ConfiguracionIndex({
                                             className="w-2.5 h-2.5 rounded-full"
                                             style={{ backgroundColor: paletaActivaObj.preview.navBg }}
                                         />
-                                        Tema activo: {paletaActivaObj.nombre}
+                                        Activo: {paletaActivaObj.nombre}
                                     </span>
                                 </div>
 
-                                {/* Selector de las 2 Paletas: CSS y Modo Oscuro */}
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* Selector simple de las 2 Paletas: CSS y Modo Oscuro */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                     {PALETAS_DISPONIBLES.map((paleta) => {
                                         const seleccionada = preferencias.paleta === paleta.id;
                                         return (
-                                            <div
+                                            <button
                                                 key={paleta.id}
+                                                type="button"
                                                 onClick={() => seleccionarPaleta(paleta.id)}
-                                                role="button"
-                                                tabIndex={0}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter' || e.key === ' ') {
-                                                        e.preventDefault();
-                                                        seleccionarPaleta(paleta.id);
-                                                    }
-                                                }}
                                                 aria-pressed={seleccionada}
-                                                className={`bg-white rounded-2xl border p-6 flex flex-col justify-between gap-5 cursor-pointer transition-all text-left focus:outline-none focus:ring-2 focus:ring-sape-burdeo ${
+                                                className={`bg-white rounded-2xl border p-5 flex flex-col gap-4 transition-all text-left focus:outline-none focus:ring-2 focus:ring-sape-burdeo ${
                                                     seleccionada
                                                         ? 'border-sape-burdeo ring-2 ring-sape-burdeo/20 shadow-md'
-                                                        : 'border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md'
+                                                        : 'border-slate-200 hover:border-slate-300 shadow-sm'
                                                 }`}
                                             >
-                                                <div className="space-y-4">
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div>
-                                                            <h3 className="text-lg font-extrabold text-slate-900">
-                                                                Paleta {paleta.nombre}
-                                                            </h3>
-                                                            <p className="text-xs font-semibold text-slate-500 mt-0.5">
-                                                                {paleta.subtitulo}
-                                                            </p>
-                                                        </div>
-                                                        <span
-                                                            className={`px-3 py-1 rounded-full text-xs font-extrabold border ${
-                                                                seleccionada
-                                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                                    : 'bg-slate-100 text-slate-600 border-slate-200'
-                                                            }`}
-                                                        >
-                                                            {seleccionada ? 'Activa' : 'Seleccionar'}
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Vista previa miniatura del tema */}
+                                                {/* Bloque de color grande y claro */}
+                                                <div
+                                                    className="h-24 w-full rounded-xl overflow-hidden border flex flex-col"
+                                                    style={{
+                                                        backgroundColor: paleta.preview.canvasBg,
+                                                        borderColor: paleta.preview.cardBorder,
+                                                    }}
+                                                >
                                                     <div
-                                                        className="rounded-xl overflow-hidden border transition-colors"
-                                                        style={{
-                                                            backgroundColor: paleta.preview.canvasBg,
-                                                            borderColor: paleta.preview.cardBorder,
-                                                        }}
+                                                        className="h-6 w-full flex items-center justify-between px-3"
+                                                        style={{ backgroundColor: paleta.preview.navBg }}
                                                     >
-                                                        {/* Mini barra superior */}
+                                                        <span className="w-8 h-2 rounded-full bg-white/80" />
+                                                        <span
+                                                            className="w-4 h-2 rounded-full"
+                                                            style={{ backgroundColor: paleta.preview.navAccent }}
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1 p-2.5 grid grid-cols-2 gap-2">
                                                         <div
-                                                            className="px-3.5 py-2 flex items-center justify-between"
-                                                            style={{ backgroundColor: paleta.preview.navBg }}
-                                                        >
-                                                            <div className="flex items-center gap-2">
-                                                                <span
-                                                                    className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black"
-                                                                    style={{
-                                                                        backgroundColor: '#FFFFFF',
-                                                                        color: paleta.preview.navBg,
-                                                                    }}
-                                                                >
-                                                                    CSS
-                                                                </span>
-                                                                <span className="text-[11px] font-bold text-white">
-                                                                    S.A.P.E CSS
-                                                                </span>
-                                                            </div>
-                                                            <span
-                                                                className="px-2 py-0.5 rounded text-[9px] font-extrabold"
-                                                                style={{
-                                                                    backgroundColor: paleta.preview.navAccent,
-                                                                    color: '#0F172A',
-                                                                }}
-                                                            >
-                                                                {paleta.nombre}
-                                                            </span>
-                                                        </div>
-
-                                                        {/* Mini contenido */}
-                                                        <div className="p-3.5 grid grid-cols-3 gap-2.5">
-                                                            <div
-                                                                className="col-span-2 rounded-lg p-2.5 border"
-                                                                style={{
-                                                                    backgroundColor: paleta.preview.cardBg,
-                                                                    borderColor: paleta.preview.cardBorder,
-                                                                }}
-                                                            >
-                                                                <div
-                                                                    className="text-[11px] font-extrabold"
-                                                                    style={{ color: paleta.preview.textPrimary }}
-                                                                >
-                                                                    1° Medio A · Promedio 5.8
-                                                                </div>
-                                                                <div
-                                                                    className="text-[10px] mt-0.5"
-                                                                    style={{ color: paleta.preview.textMuted }}
-                                                                >
-                                                                    38 estudiantes sincronizados
-                                                                </div>
-                                                            </div>
-                                                            <div
-                                                                className="rounded-lg p-2.5 border flex flex-col justify-center items-center"
-                                                                style={{
-                                                                    backgroundColor: paleta.preview.cardBg,
-                                                                    borderColor: paleta.preview.cardBorder,
-                                                                }}
-                                                            >
-                                                                <span className="text-xs font-extrabold text-emerald-600 tabular-nums">
-                                                                    100%
-                                                                </span>
-                                                                <span
-                                                                    className="text-[9px]"
-                                                                    style={{ color: paleta.preview.textMuted }}
-                                                                >
-                                                                    Al día
-                                                                </span>
-                                                            </div>
-                                                        </div>
+                                                            className="rounded-lg border"
+                                                            style={{
+                                                                backgroundColor: paleta.preview.cardBg,
+                                                                borderColor: paleta.preview.cardBorder,
+                                                            }}
+                                                        />
+                                                        <div
+                                                            className="rounded-lg border"
+                                                            style={{
+                                                                backgroundColor: paleta.preview.cardBg,
+                                                                borderColor: paleta.preview.cardBorder,
+                                                            }}
+                                                        />
                                                     </div>
-
-                                                    <p className="text-xs text-slate-600 leading-relaxed">
-                                                        {paleta.descripcion}
-                                                    </p>
                                                 </div>
 
-                                                {/* Muestras de color (Swatches) */}
-                                                <div className="pt-3 border-t border-slate-100 space-y-2.5">
-                                                    <span className="text-xs font-bold text-slate-700 block">
-                                                        Muestras de color ({paleta.nombre})
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div>
+                                                        <h3 className="text-base font-extrabold text-slate-900">
+                                                            {paleta.nombre}
+                                                        </h3>
+                                                        <p className="text-xs text-slate-500">
+                                                            {paleta.subtitulo}
+                                                        </p>
+                                                    </div>
+                                                    <span
+                                                        className={`px-3 py-1 rounded-full text-xs font-extrabold border shrink-0 ${
+                                                            seleccionada
+                                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                                                        }`}
+                                                    >
+                                                        {seleccionada ? 'Activo' : 'Elegir'}
                                                     </span>
-                                                    <div className="grid grid-cols-5 gap-2">
-                                                        {paleta.muestras.map((muestra) => (
-                                                            <div
-                                                                key={muestra.hex + muestra.nombre}
-                                                                className="flex flex-col items-center text-center gap-1"
-                                                            >
-                                                                <span
-                                                                    className="w-full h-8 rounded-lg border border-slate-300/80 shadow-inner block"
-                                                                    style={{ backgroundColor: muestra.hex }}
-                                                                />
-                                                                <span className="text-[10px] font-bold text-slate-700 leading-tight truncate w-full">
-                                                                    {muestra.nombre}
-                                                                </span>
-                                                                <span className="font-mono text-[10px] text-slate-500">
-                                                                    {muestra.hex}
-                                                                </span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
                                                 </div>
-                                            </div>
+                                            </button>
                                         );
                                     })}
+                                </div>
+
+                                {/* Selector simple de Variantes del Modo Oscuro */}
+                                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div>
+                                            <h3 className="text-base font-extrabold text-slate-900">
+                                                Tono del Modo Oscuro
+                                            </h3>
+                                            <p className="text-xs text-slate-500">
+                                                Haz clic en un color para aplicarlo.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+                                        {VARIANTES_MODO_OSCURO.map((v) => {
+                                            const activa =
+                                                preferencias.paleta === 'dark' &&
+                                                (preferencias.varianteOscura || 'carbon') === v.id;
+                                            return (
+                                                <button
+                                                    key={v.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const nuevas = guardarPreferenciasSape({
+                                                            paleta: 'dark',
+                                                            varianteOscura: v.id,
+                                                        });
+                                                        setPreferencias(nuevas);
+                                                        mostrarConfirmacion(
+                                                            `Modo Oscuro "${v.nombre}" activado.`
+                                                        );
+                                                    }}
+                                                    className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-2.5 ${
+                                                        activa
+                                                            ? 'bg-white border-sape-burdeo ring-2 ring-sape-burdeo/20 shadow-sm'
+                                                            : 'bg-white border-slate-200 hover:border-slate-300'
+                                                    }`}
+                                                >
+                                                    {/* Muestra grande del color */}
+                                                    <div
+                                                        className="h-16 w-full rounded-lg border overflow-hidden flex"
+                                                        style={{
+                                                            backgroundColor: v.preview.canvasBg,
+                                                            borderColor: v.preview.cardBorder,
+                                                        }}
+                                                    >
+                                                        <div
+                                                            className="w-1/2 h-full"
+                                                            style={{ backgroundColor: v.preview.canvasBg }}
+                                                        />
+                                                        <div
+                                                            className="w-1/2 h-full border-l flex items-end justify-end p-1.5"
+                                                            style={{
+                                                                backgroundColor: v.preview.cardBg,
+                                                                borderColor: v.preview.cardBorder,
+                                                            }}
+                                                        >
+                                                            {activa && (
+                                                                <span className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+                                                                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <span className="block text-sm font-extrabold text-slate-900 leading-tight">
+                                                            {v.nombre}
+                                                        </span>
+                                                        <span className="block text-[11px] text-slate-500 mt-0.5">
+                                                            {v.subtitulo}
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             </motion.div>
                         )}
