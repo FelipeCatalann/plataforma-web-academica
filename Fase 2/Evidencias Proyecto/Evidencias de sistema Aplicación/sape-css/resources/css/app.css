@@ -25,8 +25,9 @@ html[data-theme="dark"] body {
 }
 
 /* 1. Lienzo base y contenedores principales */
-html[data-theme="dark"] .bg-slate-50\/70,
+html[data-theme="dark"] .bg-slate-50\/90,
 html[data-theme="dark"] .bg-slate-50\/80,
+html[data-theme="dark"] .bg-slate-50\/70,
 html[data-theme="dark"] .bg-slate-50 {
     background-color: #0b1120 !important;
 }
@@ -38,10 +39,17 @@ html[data-theme="dark"] .bg-white {
 
 /* 3. Sub-bloques dentro de tarjetas (elevados para evitar efecto hundido) */
 html[data-theme="dark"] .bg-white .bg-slate-50,
+html[data-theme="dark"] .bg-white .bg-slate-50\/90,
 html[data-theme="dark"] .bg-white .bg-slate-50\/80,
 html[data-theme="dark"] .bg-white .bg-slate-50\/70,
 html[data-theme="dark"] .bg-white .bg-slate-50\/50 {
     background-color: #1e293b !important;
+}
+
+html[data-theme="dark"] .bg-white .bg-slate-50 .bg-white,
+html[data-theme="dark"] .bg-white .bg-slate-50\/90 .bg-white,
+html[data-theme="dark"] .bg-white .bg-slate-50\/80 .bg-white {
+    background-color: #0f172a !important;
 }
 
 html[data-theme="dark"] .bg-slate-100 {
@@ -51,21 +59,27 @@ html[data-theme="dark"] .bg-slate-100 {
 
 /* 4. Tipografía de alto contraste */
 html[data-theme="dark"] .text-slate-900,
-html[data-theme="dark"] .text-slate-800 {
+html[data-theme="dark"] .text-slate-800,
+html[data-theme="dark"] .text-gray-900,
+html[data-theme="dark"] .text-gray-800,
+html[data-theme="dark"] .text-gray-700 {
     color: #ffffff !important;
 }
 
 html[data-theme="dark"] .text-slate-700 {
-    color: #f1f5f9 !important;
+    color: #ffffff !important;
 }
 
-html[data-theme="dark"] .text-slate-600 {
-    color: #cbd5e1 !important;
+html[data-theme="dark"] .text-slate-600,
+html[data-theme="dark"] .text-gray-600 {
+    color: #f8fafc !important;
 }
 
 html[data-theme="dark"] .text-slate-500,
-html[data-theme="dark"] .text-slate-400 {
-    color: #94a3b8 !important;
+html[data-theme="dark"] .text-slate-400,
+html[data-theme="dark"] .text-gray-500,
+html[data-theme="dark"] .text-gray-400 {
+    color: #cbd5e1 !important;
 }
 
 /* 5. Bordes y divisores definidos */
@@ -88,8 +102,12 @@ html[data-theme="dark"] .divide-slate-200\/70 > :not([hidden]) ~ :not([hidden]) 
 html[data-theme="dark"] .hover\:bg-slate-50:hover,
 html[data-theme="dark"] .hover\:bg-slate-50\/80:hover,
 html[data-theme="dark"] .hover\:bg-slate-100:hover,
-html[data-theme="dark"] .hover\:bg-slate-200:hover {
+html[data-theme="dark"] .hover\:bg-slate-200:hover,
+html[data-theme="dark"] .hover\:bg-gray-100:hover,
+html[data-theme="dark"] .focus\:bg-slate-100:focus,
+html[data-theme="dark"] .focus\:bg-gray-100:focus {
     background-color: #263449 !important;
+    color: #ffffff !important;
 }
 
 /* 6. Inputs, selects y buscadores */
@@ -201,7 +219,23 @@ html[data-theme="dark"] .text-blue-700 {
     color: #93c5fd !important;
 }
 
-/* 10. Gráficos Recharts en Modo Oscuro */
+/* 10. Gráficos Recharts (Modo Claro y Modo Oscuro) */
+.recharts-wrapper,
+.recharts-wrapper *,
+.recharts-surface,
+.recharts-surface:focus,
+.recharts-surface:focus-visible,
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+}
+.recharts-tooltip-cursor,
+html[data-theme="dark"] .recharts-tooltip-cursor {
+    fill: transparent !important;
+    stroke: transparent !important;
+    display: none !important;
+}
 html[data-theme="dark"] .recharts-cartesian-grid line {
     stroke: #29384e !important;
 }
@@ -213,6 +247,7 @@ html[data-theme="dark"] .recharts-default-tooltip {
     border-color: #334155 !important;
     color: #f8fafc !important;
 }
+html[data-theme="dark"] .recharts-tooltip-label,
 html[data-theme="dark"] .recharts-tooltip-item {
     color: #f8fafc !important;
 }

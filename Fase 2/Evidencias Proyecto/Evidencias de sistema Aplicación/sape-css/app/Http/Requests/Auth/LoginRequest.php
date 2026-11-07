@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -34,6 +35,20 @@ class LoginRequest extends FormRequest
     }
 
     /**
+     * Mensajes de validación en español claros para el usuario.
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'email.required' => 'Debes ingresar tu correo electrónico.',
+            'email.email' => 'El formato del correo electrónico ingresado no es válido.',
+            'password.required' => 'Debes ingresar tu contraseña para iniciar sesión.',
+        ];
+    }
+
+    /**
      * Attempt to authenticate the request's credentials.
      *
      * @throws ValidationException
@@ -45,8 +60,17 @@ class LoginRequest extends FormRequest
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
+            $emailNormalizado = Str::lower(trim((string) $this->input('email')));
+            $existeUsuario = User::whereRaw('LOWER(email) = ?', [$emailNormalizado])->exists();
+
+            if (! $existeUsuario) {
+                throw ValidationException::withMessages([
+                    'email' => 'No encontramos ninguna cuenta institucional asociada a este correo electrónico.',
+                ]);
+            }
+
             throw ValidationException::withMessages([
-                'email' => trans('auth.failed'),
+                'password' => 'La contraseña ingresada es incorrecta. Verifica tus datos e inténtalo nuevamente.',
             ]);
         }
 
@@ -69,10 +93,7 @@ class LoginRequest extends FormRequest
         $seconds = RateLimiter::availableIn($this->throttleKey());
 
         throw ValidationException::withMessages([
-            'email' => trans('auth.throttle', [
-                'seconds' => $seconds,
-                'minutes' => ceil($seconds / 60),
-            ]),
+            'email' => "Demasiados intentos fallidos de inicio de sesión. Por seguridad, espera {$seconds} segundos antes de volver a intentarlo.",
         ]);
     }
 

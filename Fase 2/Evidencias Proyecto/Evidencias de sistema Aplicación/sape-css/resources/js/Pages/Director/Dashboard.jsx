@@ -6,6 +6,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     BarChart,
     Bar,
+    AreaChart,
+    Area,
+    LineChart,
+    Line,
+    LabelList,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -17,6 +22,58 @@ import {
     Cell,
     Legend
 } from 'recharts';
+
+const PALETAS_GRAFICO_CURSOS = [
+    {
+        id: 'burdeo',
+        nombre: 'Burdeo CSS',
+        top: '#9A2319',
+        bottom: '#58110B',
+        stroke: '#6E1710',
+        swatch: '#6E1710',
+    },
+    {
+        id: 'semaforo',
+        nombre: 'Semáforo',
+        top: '#059669',
+        bottom: '#047857',
+        stroke: '#059669',
+        swatch: 'linear-gradient(135deg, #DC2626 0%, #D97706 50%, #059669 100%)',
+        porTramo: true,
+    },
+    {
+        id: 'esmeralda',
+        nombre: 'Esmeralda',
+        top: '#10B981',
+        bottom: '#047857',
+        stroke: '#059669',
+        swatch: '#059669',
+    },
+    {
+        id: 'azul',
+        nombre: 'Azul Ejecutivo',
+        top: '#3B82F6',
+        bottom: '#1D4ED8',
+        stroke: '#2563EB',
+        swatch: '#2563EB',
+    },
+    {
+        id: 'ambar',
+        nombre: 'Ámbar Dorado',
+        top: '#F59E0B',
+        bottom: '#B45309',
+        stroke: '#D97706',
+        swatch: '#D97706',
+    },
+    {
+        id: 'pizarra',
+        nombre: 'Pizarra',
+        top: '#475569',
+        bottom: '#1E293B',
+        stroke: '#334155',
+        swatch: '#334155',
+    },
+];
 
 const staggerContainer = {
     hidden: { opacity: 0 },
@@ -53,6 +110,83 @@ export default function PanelDirector({
     const [cursoPorBorrar, setCursoPorBorrar] = useState(null);
     const [borrandoCursoId, setBorrandoCursoId] = useState(null);
     const [cursoSugeridoImportacion, setCursoSugeridoImportacion] = useState(null);
+
+    const [panelPersonalizarGrafico, setPanelPersonalizarGrafico] = useState(false);
+    const colorDebounceRef = useRef(null);
+    const colorPickerInputRef = useRef(null);
+    const [configGrafico, setConfigGrafico] = useState(() => {
+        const porDefecto = {
+            esquemaColor: 'burdeo',
+            colorPersonalizado: '#6E1710',
+            tipoGrafico: 'barras',
+            orden: 'nivel',
+            filtroNivel: 'todos',
+            mostrarValores: true,
+            mostrarPromedioInst: false,
+            mostrarGrilla: true,
+        };
+        if (typeof window === 'undefined') return porDefecto;
+        try {
+            const guardado = window.localStorage.getItem('sape_config_grafico_director');
+            return guardado ? { ...porDefecto, ...JSON.parse(guardado) } : porDefecto;
+        } catch {
+            return porDefecto;
+        }
+    });
+
+    const actualizarConfigGrafico = (parcial) => {
+        setConfigGrafico((prev) => {
+            const siguiente = { ...prev, ...parcial };
+            if (typeof window !== 'undefined') {
+                try {
+                    window.localStorage.setItem('sape_config_grafico_director', JSON.stringify(siguiente));
+                } catch {
+                    // Ignorar error de almacenamiento
+                }
+            }
+            return siguiente;
+        });
+    };
+
+    const manejarCambioColorLibre = (e) => {
+        const nuevoColor = e.target.value;
+        if (colorDebounceRef.current) {
+            clearTimeout(colorDebounceRef.current);
+        }
+        colorDebounceRef.current = setTimeout(() => {
+            actualizarConfigGrafico({
+                esquemaColor: 'custom',
+                colorPersonalizado: nuevoColor,
+            });
+        }, 180);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (colorDebounceRef.current) clearTimeout(colorDebounceRef.current);
+        };
+    }, []);
+
+    const restablecerConfigGrafico = () => {
+        const base = {
+            esquemaColor: 'burdeo',
+            colorPersonalizado: '#6E1710',
+            tipoGrafico: 'barras',
+            orden: 'nivel',
+            filtroNivel: 'todos',
+            mostrarValores: true,
+            mostrarPromedioInst: false,
+            mostrarGrilla: true,
+        };
+        setConfigGrafico(base);
+        if (typeof window !== 'undefined') {
+            try {
+                window.localStorage.removeItem('sape_config_grafico_director');
+            } catch {
+                // Ignorar error
+            }
+        }
+    };
 
     useEffect(() => {
         if (flash?.success) {
@@ -153,6 +287,139 @@ export default function PanelDirector({
         tipo_rol: 'jefe',
         asignatura_id: '',
     });
+
+    const [mostrarCrearProfesor, setMostrarCrearProfesor] = useState(false);
+    const [mostrarPasswordNuevoProf, setMostrarPasswordNuevoProf] = useState(false);
+
+    const {
+        data: dataNuevoProf,
+        setData: setDataNuevoProf,
+        post: postNuevoProf,
+        processing: procNuevoProf,
+        reset: resetNuevoProf,
+        errors: errorsNuevoProf,
+        clearErrors: clearErrorsNuevoProf,
+    } = useForm({
+        rol_inicial: '',
+        nombre: '',
+        primer_apellido: '',
+        segundo_apellido: '',
+        email: '',
+        password: '',
+    });
+
+    const limpiarSegmentoCorreo = (texto = '') =>
+        (texto || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, '')
+            .trim();
+
+    const generarCorreoSegunRolYNombre = ({ nombre, primer_apellido, segundo_apellido, rol_inicial }) => {
+        if (!rol_inicial) return '';
+
+        const nombreLimpio = limpiarSegmentoCorreo(nombre).split(/\s+/)[0] || '';
+        const apellidoPaternoLimpio = limpiarSegmentoCorreo(primer_apellido).replace(/\s+/g, '');
+        const apellidoMaternoLimpio = limpiarSegmentoCorreo(segundo_apellido).replace(/\s+/g, '');
+
+        const inicialesNombre = nombreLimpio.slice(0, 2);
+        const inicialSegundoApellido = apellidoMaternoLimpio.slice(0, 1);
+        const baseUsuario = `${inicialesNombre}${apellidoPaternoLimpio}${inicialSegundoApellido}`;
+
+        if (!baseUsuario) return '';
+
+        const esJefe = rol_inicial === 'Profesor Jefe';
+        const sufijoRol = esJefe ? 'jefe' : 'asig';
+
+        let candidato = `${baseUsuario}.${sufijoRol}@colegio.cl`;
+        if (apellidoPaternoLimpio) {
+            let correlativo = 2;
+            while ((profesores || []).some((p) => (p.email || '').toLowerCase() === candidato)) {
+                candidato = `${baseUsuario}${correlativo}.${sufijoRol}@colegio.cl`;
+                correlativo += 1;
+            }
+        }
+        return candidato;
+    };
+
+    const manejarCambioRolNuevoProf = (nuevoRol) => {
+        const correoAutogenerado = generarCorreoSegunRolYNombre({
+            nombre: dataNuevoProf.nombre,
+            primer_apellido: dataNuevoProf.primer_apellido,
+            segundo_apellido: dataNuevoProf.segundo_apellido,
+            rol_inicial: nuevoRol,
+        });
+        setDataNuevoProf((prev) => ({
+            ...prev,
+            rol_inicial: nuevoRol,
+            email: correoAutogenerado,
+        }));
+        if (errorsNuevoProf.rol_inicial) clearErrorsNuevoProf('rol_inicial');
+        if (errorsNuevoProf.email) clearErrorsNuevoProf('email');
+    };
+
+    const manejarCambioCampoNombreNuevoProf = (campo, valor) => {
+        const valorSoloLetras = (valor || '').replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, '');
+        const siguienteEstado = {
+            nombre: dataNuevoProf.nombre,
+            primer_apellido: dataNuevoProf.primer_apellido,
+            segundo_apellido: dataNuevoProf.segundo_apellido,
+            rol_inicial: dataNuevoProf.rol_inicial,
+            [campo]: valorSoloLetras,
+        };
+        const correoAutogenerado = generarCorreoSegunRolYNombre(siguienteEstado);
+        setDataNuevoProf((prev) => ({
+            ...prev,
+            [campo]: valorSoloLetras,
+            email: correoAutogenerado,
+        }));
+        if (errorsNuevoProf[campo]) clearErrorsNuevoProf(campo);
+        if (errorsNuevoProf.email) clearErrorsNuevoProf('email');
+    };
+
+    const requisitosPasswordNuevoProf = useMemo(() => {
+        const pwd = dataNuevoProf.password || '';
+        return [
+            { id: 'minLength', texto: 'Mínimo 6 caracteres', cumplido: pwd.length >= 6 },
+            { id: 'mayuscula', texto: 'Al menos 1 mayúscula (A-Z)', cumplido: /[A-ZÁÉÍÓÚÑ]/.test(pwd) },
+            { id: 'minuscula', texto: 'Al menos 1 minúscula (a-z)', cumplido: /[a-záéíóúñ]/.test(pwd) },
+            { id: 'numero', texto: 'Al menos 1 número (0-9)', cumplido: /[0-9]/.test(pwd) },
+            { id: 'especial', texto: 'Al menos 1 signo especial (@, #, $, ., *, !)', cumplido: /[^A-Za-z0-9\s]/.test(pwd) },
+        ];
+    }, [dataNuevoProf.password]);
+
+    const passwordNuevoProfEsSegura = useMemo(
+        () => requisitosPasswordNuevoProf.every((r) => r.cumplido),
+        [requisitosPasswordNuevoProf]
+    );
+
+    const manejarCrearProfesor = (e) => {
+        e.preventDefault();
+        const correoCreado = (dataNuevoProf.email || '').trim().toLowerCase();
+        const rolCreado = dataNuevoProf.rol_inicial;
+
+        postNuevoProf('/admin/profesores', {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                resetNuevoProf();
+                setMostrarPasswordNuevoProf(false);
+                setMostrarCrearProfesor(false);
+
+                const listaActualizada = page?.props?.profesores || [];
+                const nuevoDocente = listaActualizada.find(
+                    (p) => (p.email || '').toLowerCase() === correoCreado
+                );
+                if (nuevoDocente) {
+                    setDataAsig((prev) => ({
+                        ...prev,
+                        profesor_id: nuevoDocente.id,
+                        tipo_rol: rolCreado === 'Profesor Jefe' ? 'jefe' : 'asignatura',
+                    }));
+                }
+            },
+        });
+    };
 
     const manejarAsignacion = (e) => {
         e.preventDefault();
@@ -304,6 +571,8 @@ export default function PanelDirector({
                 grafico.push({
                     nombre: `${c.nivel}° ${c.letra}`,
                     cursoCompleto: c.codigo,
+                    nivel: String(c.nivel),
+                    letra: String(c.letra),
                     promedio: parseFloat(prom.toFixed(1)),
                     estudiantes: Number(c.estudiantes_count || 0),
                 });
@@ -539,7 +808,7 @@ export default function PanelDirector({
                 )}
             </AnimatePresence>
 
-            <div className="max-w-screen-2xl mx-auto flex flex-col md:flex-row min-h-[calc(100vh-4rem)]">
+            <div className="w-full flex flex-col md:flex-row min-h-[calc(100vh-4rem)]">
                 <aside className="w-full md:w-72 bg-white border-r border-slate-200/80 shadow-sm flex-shrink-0 relative z-10">
                     <div className="p-6 space-y-6">
                         {['Centro de Mando', 'Administración'].map((seccionNombre) => (
@@ -714,100 +983,574 @@ export default function PanelDirector({
                                     variants={fadeInUp}
                                     className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80"
                                 >
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-2">
-                                        <div>
-                                            <h3 className="text-lg font-extrabold text-slate-900">
-                                                Promedio Académico por Curso Cargado
-                                            </h3>
-                                            <p className="text-xs text-slate-500">
-                                                Solo se grafican los cursos con archivo Excel activo en la base de datos.
-                                            </p>
-                                        </div>
-                                        <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-700 self-start sm:self-auto">
-                                            {metricasGlobales.totalCalificaciones.toLocaleString('es-CL')} calificaciones activas
-                                        </span>
-                                    </div>
+                                    {(() => {
+                                        const paletaObj =
+                                            configGrafico.esquemaColor === 'custom'
+                                                ? {
+                                                      id: 'custom',
+                                                      nombre: 'Personalizado',
+                                                      top: configGrafico.colorPersonalizado || '#6E1710',
+                                                      bottom: configGrafico.colorPersonalizado || '#6E1710',
+                                                      stroke: configGrafico.colorPersonalizado || '#6E1710',
+                                                      swatch: configGrafico.colorPersonalizado || '#6E1710',
+                                                  }
+                                                : PALETAS_GRAFICO_CURSOS.find((p) => p.id === configGrafico.esquemaColor) ||
+                                                  PALETAS_GRAFICO_CURSOS[0];
 
-                                    {datosGraficoCursos.length > 0 ? (
-                                        <div className="h-80 w-full">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <BarChart
-                                                    data={datosGraficoCursos}
-                                                    margin={{ top: 15, right: 30, left: -10, bottom: 20 }}
-                                                >
-                                                    <defs>
-                                                        <linearGradient id="burdeoBarGradient" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="0%" stopColor="#9A2319" stopOpacity={1} />
-                                                            <stop offset="100%" stopColor="#58110B" stopOpacity={0.95} />
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                                                    <XAxis
-                                                        dataKey="cursoCompleto"
-                                                        axisLine={false}
-                                                        tickLine={false}
-                                                        tick={{ fill: '#334155', fontSize: 12, fontWeight: 700 }}
-                                                    />
-                                                    <YAxis
-                                                        domain={[1, 7]}
-                                                        axisLine={false}
-                                                        tickLine={false}
-                                                        tick={{ fill: '#64748B', fontSize: 12 }}
-                                                    />
-                                                    <ReferenceLine
-                                                        y={4.0}
-                                                        stroke="#EF4444"
-                                                        strokeDasharray="4 4"
-                                                        label={{
-                                                            value: 'Mín. 4.0',
-                                                            position: 'right',
-                                                            fill: '#DC2626',
-                                                            fontSize: 11,
-                                                            fontWeight: 700,
-                                                        }}
-                                                    />
-                                                    <Tooltip
-                                                        cursor={{ fill: '#F8FAFC' }}
-                                                        contentStyle={{
-                                                            borderRadius: '12px',
-                                                            border: '1px solid #E2E8F0',
-                                                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)',
-                                                            fontWeight: 600,
-                                                        }}
-                                                    />
-                                                    <Bar
-                                                        dataKey="promedio"
-                                                        fill="url(#burdeoBarGradient)"
-                                                        radius={[8, 8, 0, 0]}
-                                                        barSize={44}
-                                                        name="Promedio General"
-                                                        animationDuration={900}
-                                                    />
-                                                </BarChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    ) : (
-                                        <div className="py-14 text-center bg-slate-50/80 rounded-2xl border border-dashed border-slate-300">
-                                            <p className="text-slate-700 font-bold text-base">
-                                                No hay cursos con datos Excel cargados en este momento.
-                                            </p>
-                                            <p className="text-slate-400 text-sm mt-1">
-                                                Sube un archivo Excel desde la sección Importar Datos para visualizar las métricas.
-                                            </p>
-                                            <button
-                                                onClick={() => setVistaActiva('importar')}
-                                                className="mt-4 bg-sape-burdeo text-sape-amarillo px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-sape-burdeo-hover transition-all hover:-translate-y-0.5"
-                                            >
-                                                Subir Archivo Excel
-                                            </button>
-                                        </div>
-                                    )}
+                                        const obtenerColorPorPromedio = (prom) => {
+                                            if (prom < 4.0) return '#DC2626';
+                                            if (prom < 5.0) return '#D97706';
+                                            if (prom < 6.0) return '#059669';
+                                            return '#2563EB';
+                                        };
+
+                                        const datosProcesadosGrafico = [...datosGraficoCursos]
+                                            .filter((item) =>
+                                                configGrafico.filtroNivel === 'todos'
+                                                    ? true
+                                                    : String(item.nivel) === String(configGrafico.filtroNivel)
+                                            )
+                                            .sort((a, b) => {
+                                                if (configGrafico.orden === 'desc') return b.promedio - a.promedio;
+                                                if (configGrafico.orden === 'asc') return a.promedio - b.promedio;
+                                                return 0;
+                                            });
+
+                                        const promInstNum = parseFloat(metricasGlobales.promedioInstitucional);
+
+                                        return (
+                                            <>
+                                                <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 gap-3">
+                                                    <div>
+                                                        <h3 className="text-lg font-extrabold text-slate-900">
+                                                            Promedio Académico por Curso Cargado
+                                                        </h3>
+                                                        <p className="text-xs text-slate-500">
+                                                            Solo se grafican los cursos con archivo Excel activo en la base de datos.
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPanelPersonalizarGrafico((prev) => !prev)}
+                                                            aria-expanded={panelPersonalizarGrafico}
+                                                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+                                                                panelPersonalizarGrafico
+                                                                    ? 'bg-sape-burdeo text-sape-amarillo border-sape-burdeo shadow-sm'
+                                                                    : 'bg-white text-slate-700 border-slate-200 hover:border-sape-burdeo hover:text-sape-burdeo'
+                                                            }`}
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
+                                                            </svg>
+                                                            <span>Personalizar Gráfico</span>
+                                                        </button>
+
+                                                        <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-700 tabular-nums">
+                                                            {metricasGlobales.totalCalificaciones.toLocaleString('es-CL')} calificaciones activas
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <AnimatePresence>
+                                                    {panelPersonalizarGrafico && (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, height: 0 }}
+                                                            animate={{ opacity: 1, height: 'auto' }}
+                                                            exit={{ opacity: 0, height: 0 }}
+                                                            className="overflow-hidden mb-5"
+                                                        >
+                                                            <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-4">
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                                    {/* 1. Tipo de gráfico */}
+                                                                    <div>
+                                                                        <span className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+                                                                            Tipo de Visualización
+                                                                        </span>
+                                                                        <div className="grid grid-cols-3 gap-1 bg-white p-1 rounded-xl border border-slate-200/80">
+                                                                            {[
+                                                                                { id: 'barras', label: 'Barras' },
+                                                                                { id: 'area', label: 'Área' },
+                                                                                { id: 'linea', label: 'Línea' },
+                                                                            ].map((t) => (
+                                                                                <button
+                                                                                    key={t.id}
+                                                                                    type="button"
+                                                                                    onClick={() => actualizarConfigGrafico({ tipoGrafico: t.id })}
+                                                                                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-colors ${
+                                                                                        configGrafico.tipoGrafico === t.id
+                                                                                            ? 'bg-sape-burdeo text-sape-amarillo shadow-sm'
+                                                                                            : 'text-slate-600 hover:bg-slate-100'
+                                                                                    }`}
+                                                                                >
+                                                                                    {t.label}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* 2. Ordenamiento */}
+                                                                    <div>
+                                                                        <span className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+                                                                            Ordenar Cursos
+                                                                        </span>
+                                                                        <div className="grid grid-cols-3 gap-1 bg-white p-1 rounded-xl border border-slate-200/80">
+                                                                            {[
+                                                                                { id: 'nivel', label: 'Por Nivel' },
+                                                                                { id: 'desc', label: 'Mayor nota' },
+                                                                                { id: 'asc', label: 'Menor nota' },
+                                                                            ].map((o) => (
+                                                                                <button
+                                                                                    key={o.id}
+                                                                                    type="button"
+                                                                                    onClick={() => actualizarConfigGrafico({ orden: o.id })}
+                                                                                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-colors ${
+                                                                                        configGrafico.orden === o.id
+                                                                                            ? 'bg-sape-burdeo text-sape-amarillo shadow-sm'
+                                                                                            : 'text-slate-600 hover:bg-slate-100'
+                                                                                    }`}
+                                                                                >
+                                                                                    {o.label}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* 3. Filtro por nivel */}
+                                                                    <div>
+                                                                        <span className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+                                                                            Filtrar Nivel
+                                                                        </span>
+                                                                        <div className="grid grid-cols-5 gap-1 bg-white p-1 rounded-xl border border-slate-200/80">
+                                                                            {[
+                                                                                { id: 'todos', label: 'Todos' },
+                                                                                { id: '1', label: '1°M' },
+                                                                                { id: '2', label: '2°M' },
+                                                                                { id: '3', label: '3°M' },
+                                                                                { id: '4', label: '4°M' },
+                                                                            ].map((niv) => (
+                                                                                <button
+                                                                                    key={niv.id}
+                                                                                    type="button"
+                                                                                    onClick={() => actualizarConfigGrafico({ filtroNivel: niv.id })}
+                                                                                    className={`py-1.5 px-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                                                                        configGrafico.filtroNivel === niv.id
+                                                                                            ? 'bg-sape-burdeo text-sape-amarillo shadow-sm'
+                                                                                            : 'text-slate-600 hover:bg-slate-100'
+                                                                                    }`}
+                                                                                >
+                                                                                    {niv.label}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* 4. Esquema de color con etiqueta y selector libre */}
+                                                                    <div>
+                                                                        <span className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+                                                                            Paleta Cromática
+                                                                        </span>
+                                                                        <div className="flex flex-wrap items-center gap-1.5 bg-white p-1.5 rounded-xl border border-slate-200/80">
+                                                                            {PALETAS_GRAFICO_CURSOS.map((p) => (
+                                                                                <button
+                                                                                    key={p.id}
+                                                                                    type="button"
+                                                                                    onClick={() => actualizarConfigGrafico({ esquemaColor: p.id })}
+                                                                                    className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                                                                                        configGrafico.esquemaColor === p.id
+                                                                                            ? 'bg-slate-100 border-slate-400 text-slate-900'
+                                                                                            : 'border-transparent text-slate-600 hover:bg-slate-50'
+                                                                                    }`}
+                                                                                >
+                                                                                    <span
+                                                                                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                                                                                        style={{ background: p.swatch }}
+                                                                                    />
+                                                                                    <span>{p.nombre}</span>
+                                                                                </button>
+                                                                            ))}
+
+                                                                            <label
+                                                                                title="Elegir color personalizado"
+                                                                                className={`relative inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold border cursor-pointer transition-colors ${
+                                                                                    configGrafico.esquemaColor === 'custom'
+                                                                                        ? 'bg-slate-100 border-slate-400 text-slate-900'
+                                                                                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                                                                }`}
+                                                                            >
+                                                                                <svg
+                                                                                    className="w-3.5 h-3.5 shrink-0"
+                                                                                    fill="none"
+                                                                                    stroke="currentColor"
+                                                                                    strokeWidth="2"
+                                                                                    viewBox="0 0 24 24"
+                                                                                    aria-hidden="true"
+                                                                                >
+                                                                                    <path
+                                                                                        strokeLinecap="round"
+                                                                                        strokeLinejoin="round"
+                                                                                        d="M4.098 19.902a3.75 3.75 0 0 0 5.304 0l6.401-6.402M6.75 21A3.75 3.75 0 0 1 3 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 0 0 3.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008Z"
+                                                                                    />
+                                                                                </svg>
+                                                                                <input
+                                                                                    ref={colorPickerInputRef}
+                                                                                    type="color"
+                                                                                    aria-label="Selector de color libre para el gráfico"
+                                                                                    defaultValue={configGrafico.colorPersonalizado}
+                                                                                    onChange={manejarCambioColorLibre}
+                                                                                    className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                                                                                />
+                                                                                <span>Elegir color</span>
+                                                                            </label>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Fila inferior: interruptores de lectura y botón restablecer */}
+                                                                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200/70">
+                                                                    <div className="flex flex-wrap items-center gap-4">
+                                                                        <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 select-none">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={configGrafico.mostrarValores}
+                                                                                onChange={(e) =>
+                                                                                    actualizarConfigGrafico({ mostrarValores: e.target.checked })
+                                                                                }
+                                                                                className="rounded border-slate-300 text-sape-burdeo focus:ring-sape-burdeo"
+                                                                            />
+                                                                            <span>Mostrar nota sobre cada curso</span>
+                                                                        </label>
+
+                                                                        <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 select-none">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={configGrafico.mostrarPromedioInst}
+                                                                                onChange={(e) =>
+                                                                                    actualizarConfigGrafico({ mostrarPromedioInst: e.target.checked })
+                                                                                }
+                                                                                className="rounded border-slate-300 text-sape-burdeo focus:ring-sape-burdeo"
+                                                                            />
+                                                                            <span>Línea Promedio Institucional ({metricasGlobales.promedioInstitucional})</span>
+                                                                        </label>
+
+                                                                        <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 select-none">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={configGrafico.mostrarGrilla}
+                                                                                onChange={(e) =>
+                                                                                    actualizarConfigGrafico({ mostrarGrilla: e.target.checked })
+                                                                                }
+                                                                                className="rounded border-slate-300 text-sape-burdeo focus:ring-sape-burdeo"
+                                                                            />
+                                                                            <span>Cuadrícula de guía</span>
+                                                                        </label>
+                                                                    </div>
+
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={restablecerConfigGrafico}
+                                                                        className="text-xs font-bold text-slate-500 hover:text-sape-burdeo underline transition-colors"
+                                                                    >
+                                                                        Restablecer valores por defecto
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+
+                                                {datosProcesadosGrafico.length > 0 ? (
+                                                    <div className="h-80 w-full">
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            {configGrafico.tipoGrafico === 'area' ? (
+                                                                <AreaChart
+                                                                    data={datosProcesadosGrafico}
+                                                                    margin={{ top: 24, right: 35, left: -10, bottom: 20 }}
+                                                                >
+                                                                    <defs>
+                                                                        <linearGradient id="customAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                                                                            <stop offset="0%" stopColor={paletaObj.top} stopOpacity={0.45} />
+                                                                            <stop offset="100%" stopColor={paletaObj.bottom} stopOpacity={0.05} />
+                                                                        </linearGradient>
+                                                                    </defs>
+                                                                    {configGrafico.mostrarGrilla && (
+                                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                                                                    )}
+                                                                    <XAxis
+                                                                        dataKey="cursoCompleto"
+                                                                        axisLine={false}
+                                                                        tickLine={false}
+                                                                        tick={{ fill: '#334155', fontSize: 12, fontWeight: 700 }}
+                                                                    />
+                                                                    <YAxis
+                                                                        domain={[1, 7]}
+                                                                        axisLine={false}
+                                                                        tickLine={false}
+                                                                        tick={{ fill: '#64748B', fontSize: 12 }}
+                                                                    />
+                                                                    <ReferenceLine
+                                                                        y={4.0}
+                                                                        stroke="#EF4444"
+                                                                        strokeDasharray="4 4"
+                                                                        label={{
+                                                                            value: 'Mín. 4.0',
+                                                                            position: 'right',
+                                                                            fill: '#DC2626',
+                                                                            fontSize: 11,
+                                                                            fontWeight: 700,
+                                                                        }}
+                                                                    />
+                                                                    {configGrafico.mostrarPromedioInst && !isNaN(promInstNum) && (
+                                                                        <ReferenceLine
+                                                                            y={promInstNum}
+                                                                            stroke="#2563EB"
+                                                                            strokeDasharray="3 3"
+                                                                            label={{
+                                                                                value: `Prom. ${promInstNum.toFixed(1)}`,
+                                                                                position: 'left',
+                                                                                fill: '#2563EB',
+                                                                                fontSize: 11,
+                                                                                fontWeight: 700,
+                                                                            }}
+                                                                        />
+                                                                    )}
+                                                                    <Tooltip
+                                                                        cursor={false}
+                                                                        contentStyle={{
+                                                                            borderRadius: '12px',
+                                                                            border: '1px solid #E2E8F0',
+                                                                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)',
+                                                                            fontWeight: 600,
+                                                                        }}
+                                                                    />
+                                                                    <Area
+                                                                        type="monotone"
+                                                                        dataKey="promedio"
+                                                                        stroke={paletaObj.stroke}
+                                                                        strokeWidth={3}
+                                                                        fill="url(#customAreaGradient)"
+                                                                        name="Promedio General"
+                                                                        dot={{ r: 5, fill: paletaObj.stroke, strokeWidth: 2, stroke: '#FFFFFF' }}
+                                                                        activeDot={{ r: 7 }}
+                                                                        animationDuration={700}
+                                                                    >
+                                                                        {configGrafico.mostrarValores && (
+                                                                            <LabelList
+                                                                                dataKey="promedio"
+                                                                                position="top"
+                                                                                offset={10}
+                                                                                formatter={(v) => Number(v).toFixed(1)}
+                                                                                style={{ fill: '#334155', fontSize: 12, fontWeight: 800 }}
+                                                                            />
+                                                                        )}
+                                                                    </Area>
+                                                                </AreaChart>
+                                                            ) : configGrafico.tipoGrafico === 'linea' ? (
+                                                                <LineChart
+                                                                    data={datosProcesadosGrafico}
+                                                                    margin={{ top: 24, right: 35, left: -10, bottom: 20 }}
+                                                                >
+                                                                    {configGrafico.mostrarGrilla && (
+                                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                                                                    )}
+                                                                    <XAxis
+                                                                        dataKey="cursoCompleto"
+                                                                        axisLine={false}
+                                                                        tickLine={false}
+                                                                        tick={{ fill: '#334155', fontSize: 12, fontWeight: 700 }}
+                                                                    />
+                                                                    <YAxis
+                                                                        domain={[1, 7]}
+                                                                        axisLine={false}
+                                                                        tickLine={false}
+                                                                        tick={{ fill: '#64748B', fontSize: 12 }}
+                                                                    />
+                                                                    <ReferenceLine
+                                                                        y={4.0}
+                                                                        stroke="#EF4444"
+                                                                        strokeDasharray="4 4"
+                                                                        label={{
+                                                                            value: 'Mín. 4.0',
+                                                                            position: 'right',
+                                                                            fill: '#DC2626',
+                                                                            fontSize: 11,
+                                                                            fontWeight: 700,
+                                                                        }}
+                                                                    />
+                                                                    {configGrafico.mostrarPromedioInst && !isNaN(promInstNum) && (
+                                                                        <ReferenceLine
+                                                                            y={promInstNum}
+                                                                            stroke="#2563EB"
+                                                                            strokeDasharray="3 3"
+                                                                            label={{
+                                                                                value: `Prom. ${promInstNum.toFixed(1)}`,
+                                                                                position: 'left',
+                                                                                fill: '#2563EB',
+                                                                                fontSize: 11,
+                                                                                fontWeight: 700,
+                                                                            }}
+                                                                        />
+                                                                    )}
+                                                                    <Tooltip
+                                                                        cursor={false}
+                                                                        contentStyle={{
+                                                                            borderRadius: '12px',
+                                                                            border: '1px solid #E2E8F0',
+                                                                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)',
+                                                                            fontWeight: 600,
+                                                                        }}
+                                                                    />
+                                                                    <Line
+                                                                        type="monotone"
+                                                                        dataKey="promedio"
+                                                                        stroke={paletaObj.stroke}
+                                                                        strokeWidth={3}
+                                                                        name="Promedio General"
+                                                                        dot={{ r: 5, fill: paletaObj.stroke, strokeWidth: 2, stroke: '#FFFFFF' }}
+                                                                        activeDot={{ r: 7 }}
+                                                                        animationDuration={700}
+                                                                    >
+                                                                        {configGrafico.mostrarValores && (
+                                                                            <LabelList
+                                                                                dataKey="promedio"
+                                                                                position="top"
+                                                                                offset={10}
+                                                                                formatter={(v) => Number(v).toFixed(1)}
+                                                                                style={{ fill: '#334155', fontSize: 12, fontWeight: 800 }}
+                                                                            />
+                                                                        )}
+                                                                    </Line>
+                                                                </LineChart>
+                                                            ) : (
+                                                                <BarChart
+                                                                    data={datosProcesadosGrafico}
+                                                                    margin={{ top: 24, right: 35, left: -10, bottom: 20 }}
+                                                                >
+                                                                    <defs>
+                                                                        <linearGradient id="burdeoBarGradient" x1="0" y1="0" x2="0" y2="1">
+                                                                            <stop offset="0%" stopColor={paletaObj.top} stopOpacity={1} />
+                                                                            <stop offset="100%" stopColor={paletaObj.bottom} stopOpacity={0.95} />
+                                                                        </linearGradient>
+                                                                    </defs>
+                                                                    {configGrafico.mostrarGrilla && (
+                                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                                                                    )}
+                                                                    <XAxis
+                                                                        dataKey="cursoCompleto"
+                                                                        axisLine={false}
+                                                                        tickLine={false}
+                                                                        tick={{ fill: '#334155', fontSize: 12, fontWeight: 700 }}
+                                                                    />
+                                                                    <YAxis
+                                                                        domain={[1, 7]}
+                                                                        axisLine={false}
+                                                                        tickLine={false}
+                                                                        tick={{ fill: '#64748B', fontSize: 12 }}
+                                                                    />
+                                                                    <ReferenceLine
+                                                                        y={4.0}
+                                                                        stroke="#EF4444"
+                                                                        strokeDasharray="4 4"
+                                                                        label={{
+                                                                            value: 'Mín. 4.0',
+                                                                            position: 'right',
+                                                                            fill: '#DC2626',
+                                                                            fontSize: 11,
+                                                                            fontWeight: 700,
+                                                                        }}
+                                                                    />
+                                                                    {configGrafico.mostrarPromedioInst && !isNaN(promInstNum) && (
+                                                                        <ReferenceLine
+                                                                            y={promInstNum}
+                                                                            stroke="#2563EB"
+                                                                            strokeDasharray="3 3"
+                                                                            label={{
+                                                                                value: `Prom. ${promInstNum.toFixed(1)}`,
+                                                                                position: 'left',
+                                                                                fill: '#2563EB',
+                                                                                fontSize: 11,
+                                                                                fontWeight: 700,
+                                                                            }}
+                                                                        />
+                                                                    )}
+                                                                    <Tooltip
+                                                                        cursor={false}
+                                                                        contentStyle={{
+                                                                            borderRadius: '12px',
+                                                                            border: '1px solid #E2E8F0',
+                                                                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)',
+                                                                            fontWeight: 600,
+                                                                        }}
+                                                                    />
+                                                                    <Bar
+                                                                        dataKey="promedio"
+                                                                        fill="url(#burdeoBarGradient)"
+                                                                        radius={[8, 8, 0, 0]}
+                                                                        barSize={44}
+                                                                        name="Promedio General"
+                                                                        animationDuration={700}
+                                                                    >
+                                                                        {paletaObj.porTramo &&
+                                                                            datosProcesadosGrafico.map((entry, idx) => (
+                                                                                <Cell
+                                                                                    key={`cell-bar-${idx}`}
+                                                                                    fill={obtenerColorPorPromedio(entry.promedio)}
+                                                                                />
+                                                                            ))}
+                                                                        {configGrafico.mostrarValores && (
+                                                                            <LabelList
+                                                                                dataKey="promedio"
+                                                                                position="top"
+                                                                                offset={8}
+                                                                                formatter={(v) => Number(v).toFixed(1)}
+                                                                                style={{ fill: '#334155', fontSize: 12, fontWeight: 800 }}
+                                                                            />
+                                                                        )}
+                                                                    </Bar>
+                                                                </BarChart>
+                                                            )}
+                                                        </ResponsiveContainer>
+                                                    </div>
+                                                ) : (
+                                                    <div className="py-14 text-center bg-slate-50/80 rounded-2xl border border-dashed border-slate-300">
+                                                        <p className="text-slate-700 font-bold text-base">
+                                                            No hay cursos con datos Excel cargados para el filtro seleccionado.
+                                                        </p>
+                                                        <p className="text-slate-400 text-sm mt-1">
+                                                            Cambia el filtro de nivel o sube un archivo Excel desde la sección Importar Datos.
+                                                        </p>
+                                                        {configGrafico.filtroNivel !== 'todos' ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => actualizarConfigGrafico({ filtroNivel: 'todos' })}
+                                                                className="mt-4 bg-sape-burdeo text-sape-amarillo px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-sape-burdeo-hover transition-all"
+                                                            >
+                                                                Mostrar todos los niveles
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setVistaActiva('importar')}
+                                                                className="mt-4 bg-sape-burdeo text-sape-amarillo px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-sape-burdeo-hover transition-all hover:-translate-y-0.5"
+                                                            >
+                                                                Subir Archivo Excel
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </motion.div>
 
                                 <motion.div variants={fadeInUp} className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
                                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-200">
                                         <h3 className="text-lg font-extrabold text-emerald-800 mb-4 flex items-center gap-2">
-                                            🏆 Top 3 Cursos Destacados
+                                            <svg className="w-5 h-5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 0 0 2.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 0 1 2.916.52 6.003 6.003 0 0 1-5.395 4.972m0 0a6.726 6.726 0 0 1-2.749 1.35m0 0a6.772 6.772 0 0 1-3.044 0" />
+                                            </svg>
+                                            <span>Top 3 Cursos Destacados</span>
                                         </h3>
                                         <div className="space-y-3">
                                             {[...datosGraficoCursos]
@@ -829,7 +1572,10 @@ export default function PanelDirector({
 
                                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-red-200">
                                         <h3 className="text-lg font-extrabold text-red-800 mb-4 flex items-center gap-2">
-                                            ⚠️ Foco de Atención (Más Bajos)
+                                            <svg className="w-5 h-5 text-red-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                                            </svg>
+                                            <span>Foco de Atención (Más Bajos)</span>
                                         </h3>
                                         <div className="space-y-3">
                                             {[...datosGraficoCursos]
@@ -896,13 +1642,385 @@ export default function PanelDirector({
                                             Asignación de Carga Académica
                                         </h1>
                                         <p className="text-slate-600 text-sm mt-1">
-                                            Vincula a los profesores con sus cursos y subsectores. Revisa a la derecha la titularidad vigente antes de realizar cambios.
+                                            Registra nuevos docentes y vincúlalos con sus cursos y subsectores. Revisa a la derecha la titularidad vigente antes de realizar cambios.
                                         </p>
                                     </div>
-                                    <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-700 self-start sm:self-auto tabular-nums">
-                                        {cursos.filter((c) => c.profesor_jefe_id).length} de {cursos.length} cursos con Profesor Jefe
-                                    </span>
+                                    <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+                                        <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-700 tabular-nums">
+                                            {profesores.length} {profesores.length === 1 ? 'docente registrado' : 'docentes registrados'} • {cursos.filter((c) => c.profesor_jefe_id).length}/{cursos.length} cursos con Jefe
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setMostrarCrearProfesor((prev) => !prev);
+                                                clearErrorsNuevoProf();
+                                            }}
+                                            aria-expanded={mostrarCrearProfesor}
+                                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+                                                mostrarCrearProfesor
+                                                    ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                                                    : 'bg-sape-burdeo text-sape-amarillo border-sape-burdeo hover:bg-sape-burdeo-hover shadow-sm'
+                                            }`}
+                                        >
+                                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                {mostrarCrearProfesor ? (
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                                ) : (
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                                                )}
+                                            </svg>
+                                            <span>{mostrarCrearProfesor ? 'Cerrar Registro' : 'Crear Nuevo Profesor'}</span>
+                                        </button>
+                                    </div>
                                 </div>
+
+                                <AnimatePresence initial={false}>
+                                    {mostrarCrearProfesor && (
+                                        <motion.div
+                                            key="panel-crear-profesor"
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: 'auto' }}
+                                            exit={{ opacity: 0, height: 0 }}
+                                            transition={{ duration: 0.22, ease: 'easeOut' }}
+                                            className="overflow-hidden"
+                                        >
+                                            <div className="bg-white p-6 sm:p-7 rounded-2xl border border-slate-200/80 shadow-sm">
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 mb-5 border-b border-slate-100">
+                                                    <div>
+                                                        <h2 className="text-lg font-extrabold text-slate-900">
+                                                            Registrar Nuevo Profesor en el Sistema
+                                                        </h2>
+                                                        <p className="text-xs text-slate-500 mt-0.5">
+                                                            Crea las credenciales de acceso para el docente. Al guardar quedará seleccionado automáticamente para asignarle curso.
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <form onSubmit={manejarCrearProfesor} noValidate className="space-y-5">
+                                                    {/* PASO 1: SELECCIONAR ROL SÍ O SÍ */}
+                                                    <div>
+                                                        <label className="block text-xs font-extrabold text-slate-800 mb-2">
+                                                            1. Selecciona primero el Rol del Profesor (Obligatorio)
+                                                        </label>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50/80 p-3 rounded-xl border border-slate-200/90">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => manejarCambioRolNuevoProf('Profesor Jefe')}
+                                                                aria-pressed={dataNuevoProf.rol_inicial === 'Profesor Jefe'}
+                                                                className={`flex items-start gap-3 p-3.5 rounded-xl text-left border transition-all ${
+                                                                    dataNuevoProf.rol_inicial === 'Profesor Jefe'
+                                                                        ? 'bg-white border-sape-burdeo ring-2 ring-sape-burdeo/15 shadow-sm'
+                                                                        : 'border-slate-200/80 bg-white/60 hover:bg-white hover:border-slate-300'
+                                                                }`}
+                                                            >
+                                                                <span
+                                                                    className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                                                        dataNuevoProf.rol_inicial === 'Profesor Jefe'
+                                                                            ? 'border-sape-burdeo bg-sape-burdeo'
+                                                                            : 'border-slate-400'
+                                                                    }`}
+                                                                >
+                                                                    {dataNuevoProf.rol_inicial === 'Profesor Jefe' && (
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-sape-amarillo" />
+                                                                    )}
+                                                                </span>
+                                                                <div className="min-w-0">
+                                                                    <span className="block font-extrabold text-sm text-slate-900">
+                                                                        Profesor Jefe
+                                                                    </span>
+                                                                    <span className="block text-[11px] text-slate-500 mt-0.5">
+                                                                        Formato: <strong>2 iniciales nombre + 1° apellido + inicial 2° apellido.jefe@colegio.cl</strong>
+                                                                    </span>
+                                                                </div>
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => manejarCambioRolNuevoProf('Profesor de Asignatura')}
+                                                                aria-pressed={dataNuevoProf.rol_inicial === 'Profesor de Asignatura'}
+                                                                className={`flex items-start gap-3 p-3.5 rounded-xl text-left border transition-all ${
+                                                                    dataNuevoProf.rol_inicial === 'Profesor de Asignatura'
+                                                                        ? 'bg-white border-sape-burdeo ring-2 ring-sape-burdeo/15 shadow-sm'
+                                                                        : 'border-slate-200/80 bg-white/60 hover:bg-white hover:border-slate-300'
+                                                                }`}
+                                                            >
+                                                                <span
+                                                                    className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                                                        dataNuevoProf.rol_inicial === 'Profesor de Asignatura'
+                                                                            ? 'border-sape-burdeo bg-sape-burdeo'
+                                                                            : 'border-slate-400'
+                                                                    }`}
+                                                                >
+                                                                    {dataNuevoProf.rol_inicial === 'Profesor de Asignatura' && (
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-sape-amarillo" />
+                                                                    )}
+                                                                </span>
+                                                                <div className="min-w-0">
+                                                                    <span className="block font-extrabold text-sm text-slate-900">
+                                                                        Profesor de Asignatura
+                                                                    </span>
+                                                                    <span className="block text-[11px] text-slate-500 mt-0.5">
+                                                                        Formato: <strong>2 iniciales nombre + 1° apellido + inicial 2° apellido.asig@colegio.cl</strong>
+                                                                    </span>
+                                                                </div>
+                                                            </button>
+                                                        </div>
+                                                        {errorsNuevoProf.rol_inicial && (
+                                                            <p className="mt-1.5 text-xs font-semibold text-red-600">{errorsNuevoProf.rol_inicial}</p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* PASO 2: NOMBRE Y APELLIDOS SEPARADOS */}
+                                                    <div
+                                                        className={`space-y-4 transition-opacity ${
+                                                            !dataNuevoProf.rol_inicial ? 'opacity-55' : 'opacity-100'
+                                                        }`}
+                                                    >
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                                            <div>
+                                                                <label htmlFor="nuevo-prof-nombre" className="block text-xs font-bold text-slate-700 mb-1.5">
+                                                                    2. Nombre <span className="font-normal text-slate-400">(solo letras)</span>
+                                                                </label>
+                                                                <input
+                                                                    id="nuevo-prof-nombre"
+                                                                    type="text"
+                                                                    disabled={!dataNuevoProf.rol_inicial}
+                                                                    value={dataNuevoProf.nombre}
+                                                                    onChange={(e) => manejarCambioCampoNombreNuevoProf('nombre', e.target.value)}
+                                                                    placeholder={
+                                                                        dataNuevoProf.rol_inicial
+                                                                            ? 'Ingresa el nombre'
+                                                                            : 'Elige primero el rol arriba'
+                                                                    }
+                                                                    required
+                                                                    className={`w-full rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 transition-all shadow-sm disabled:cursor-not-allowed ${
+                                                                        errorsNuevoProf.nombre
+                                                                            ? 'border-red-400 bg-red-50/40 focus:border-red-600 focus:ring-red-600/20'
+                                                                            : 'border-slate-300 bg-slate-50/60 focus:bg-white focus:border-sape-burdeo focus:ring-sape-burdeo/20'
+                                                                    }`}
+                                                                />
+                                                                {errorsNuevoProf.nombre && (
+                                                                    <p className="mt-1.5 text-xs font-semibold text-red-600">{errorsNuevoProf.nombre}</p>
+                                                                )}
+                                                            </div>
+
+                                                            <div>
+                                                                <label htmlFor="nuevo-prof-primer-apellido" className="block text-xs font-bold text-slate-700 mb-1.5">
+                                                                    3. Primer Apellido <span className="font-normal text-slate-400">(solo letras)</span>
+                                                                </label>
+                                                                <input
+                                                                    id="nuevo-prof-primer-apellido"
+                                                                    type="text"
+                                                                    disabled={!dataNuevoProf.rol_inicial}
+                                                                    value={dataNuevoProf.primer_apellido}
+                                                                    onChange={(e) => manejarCambioCampoNombreNuevoProf('primer_apellido', e.target.value)}
+                                                                    placeholder={
+                                                                        dataNuevoProf.rol_inicial
+                                                                            ? 'Ingresa el primer apellido'
+                                                                            : 'Elige primero el rol arriba'
+                                                                    }
+                                                                    required
+                                                                    className={`w-full rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 transition-all shadow-sm disabled:cursor-not-allowed ${
+                                                                        errorsNuevoProf.primer_apellido
+                                                                            ? 'border-red-400 bg-red-50/40 focus:border-red-600 focus:ring-red-600/20'
+                                                                            : 'border-slate-300 bg-slate-50/60 focus:bg-white focus:border-sape-burdeo focus:ring-sape-burdeo/20'
+                                                                    }`}
+                                                                />
+                                                                {errorsNuevoProf.primer_apellido && (
+                                                                    <p className="mt-1.5 text-xs font-semibold text-red-600">{errorsNuevoProf.primer_apellido}</p>
+                                                                )}
+                                                            </div>
+
+                                                            <div>
+                                                                <label htmlFor="nuevo-prof-segundo-apellido" className="block text-xs font-bold text-slate-700 mb-1.5">
+                                                                    4. Segundo Apellido <span className="font-normal text-slate-400">(solo letras)</span>
+                                                                </label>
+                                                                <input
+                                                                    id="nuevo-prof-segundo-apellido"
+                                                                    type="text"
+                                                                    disabled={!dataNuevoProf.rol_inicial}
+                                                                    value={dataNuevoProf.segundo_apellido}
+                                                                    onChange={(e) => manejarCambioCampoNombreNuevoProf('segundo_apellido', e.target.value)}
+                                                                    placeholder={
+                                                                        dataNuevoProf.rol_inicial
+                                                                            ? 'Ingresa el segundo apellido'
+                                                                            : 'Elige primero el rol arriba'
+                                                                    }
+                                                                    required
+                                                                    className={`w-full rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 transition-all shadow-sm disabled:cursor-not-allowed ${
+                                                                        errorsNuevoProf.segundo_apellido
+                                                                            ? 'border-red-400 bg-red-50/40 focus:border-red-600 focus:ring-red-600/20'
+                                                                            : 'border-slate-300 bg-slate-50/60 focus:bg-white focus:border-sape-burdeo focus:ring-sape-burdeo/20'
+                                                                    }`}
+                                                                />
+                                                                {errorsNuevoProf.segundo_apellido && (
+                                                                    <p className="mt-1.5 text-xs font-semibold text-red-600">{errorsNuevoProf.segundo_apellido}</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                                                            <div>
+                                                                <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                                    <label htmlFor="nuevo-prof-email" className="block text-xs font-bold text-slate-700">
+                                                                        5. Correo Generado Según Rol <span className="font-normal text-slate-400">(bloqueado)</span>
+                                                                    </label>
+                                                                    {dataNuevoProf.rol_inicial && (
+                                                                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-sape-burdeo/10 text-sape-burdeo">
+                                                                            {dataNuevoProf.rol_inicial === 'Profesor Jefe' ? '.jefe@colegio.cl' : '.asig@colegio.cl'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="relative">
+                                                                    <input
+                                                                        id="nuevo-prof-email"
+                                                                        type="email"
+                                                                        readOnly
+                                                                        tabIndex={-1}
+                                                                        disabled={!dataNuevoProf.rol_inicial}
+                                                                        value={dataNuevoProf.email}
+                                                                        placeholder="Se genera automáticamente con el nombre y apellidos"
+                                                                        required
+                                                                        className={`w-full rounded-xl pl-3.5 pr-9 py-2.5 text-sm font-mono text-slate-700 placeholder-slate-400 bg-slate-100/90 border cursor-not-allowed select-all shadow-sm ${
+                                                                            errorsNuevoProf.email
+                                                                                ? 'border-red-400 bg-red-50/40'
+                                                                                : 'border-slate-300'
+                                                                        }`}
+                                                                    />
+                                                                    <span
+                                                                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 pointer-events-none"
+                                                                        title="Campo generado automáticamente (no editable)"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                                                        </svg>
+                                                                    </span>
+                                                                </div>
+                                                                <p className="mt-1.5 text-[11px] text-slate-500">
+                                                                    Este correo se construye automáticamente y no puede modificarse manualmente.
+                                                                </p>
+                                                                {errorsNuevoProf.email && (
+                                                                    <p className="mt-1 text-xs font-semibold text-red-600">{errorsNuevoProf.email}</p>
+                                                                )}
+                                                            </div>
+
+                                                            <div>
+                                                                <label htmlFor="nuevo-prof-password" className="block text-xs font-bold text-slate-700 mb-1.5">
+                                                                    6. Contraseña Inicial Segura
+                                                                </label>
+                                                                <div className="relative">
+                                                                    <input
+                                                                        id="nuevo-prof-password"
+                                                                        type={mostrarPasswordNuevoProf ? 'text' : 'password'}
+                                                                        disabled={!dataNuevoProf.rol_inicial}
+                                                                        value={dataNuevoProf.password}
+                                                                        onChange={(e) => {
+                                                                            setDataNuevoProf('password', e.target.value);
+                                                                            if (errorsNuevoProf.password) clearErrorsNuevoProf('password');
+                                                                        }}
+                                                                        placeholder="Ingresa una contraseña segura"
+                                                                        required
+                                                                        className={`w-full rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-slate-800 placeholder-slate-400 transition-all shadow-sm disabled:cursor-not-allowed ${
+                                                                            errorsNuevoProf.password
+                                                                                ? 'border-red-400 bg-red-50/40 focus:border-red-600 focus:ring-red-600/20'
+                                                                                : 'border-slate-300 bg-slate-50/60 focus:bg-white focus:border-sape-burdeo focus:ring-sape-burdeo/20'
+                                                                        }`}
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={!dataNuevoProf.rol_inicial}
+                                                                        onClick={() => setMostrarPasswordNuevoProf((v) => !v)}
+                                                                        aria-label={mostrarPasswordNuevoProf ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                                                                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 disabled:opacity-40"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            {mostrarPasswordNuevoProf ? (
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                                                            ) : (
+                                                                                <>
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                                </>
+                                                                            )}
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                                {errorsNuevoProf.password && (
+                                                                    <p className="mt-1.5 text-xs font-semibold text-red-600">{errorsNuevoProf.password}</p>
+                                                                )}
+
+                                                                {/* REQUISITOS OBLIGATORIOS DE CONTRASEÑA */}
+                                                                <div className="mt-2.5 p-3 rounded-xl bg-slate-50/90 border border-slate-200/80 space-y-1.5">
+                                                                    <p className="text-[11px] font-bold text-slate-700">
+                                                                        Requisitos obligatorios de la contraseña:
+                                                                    </p>
+                                                                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1">
+                                                                        {requisitosPasswordNuevoProf.map((req) => (
+                                                                            <li
+                                                                                key={req.id}
+                                                                                className={`flex items-center gap-1.5 text-[11px] font-semibold transition-colors ${
+                                                                                    req.cumplido
+                                                                                        ? 'text-emerald-700'
+                                                                                        : 'text-slate-500'
+                                                                                }`}
+                                                                            >
+                                                                                <svg
+                                                                                    className={`w-3.5 h-3.5 shrink-0 ${
+                                                                                        req.cumplido ? 'text-emerald-600' : 'text-slate-400'
+                                                                                    }`}
+                                                                                    fill="none"
+                                                                                    stroke="currentColor"
+                                                                                    viewBox="0 0 24 24"
+                                                                                >
+                                                                                    {req.cumplido ? (
+                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                                                                                    ) : (
+                                                                                        <circle cx="12" cy="12" r="7" strokeWidth="2" />
+                                                                                    )}
+                                                                                </svg>
+                                                                                <span>{req.texto}</span>
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-end gap-2.5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setMostrarCrearProfesor(false);
+                                                                clearErrorsNuevoProf();
+                                                            }}
+                                                            className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                                                        >
+                                                            Cancelar
+                                                        </button>
+                                                        <button
+                                                            type="submit"
+                                                            disabled={
+                                                                procNuevoProf ||
+                                                                !dataNuevoProf.rol_inicial ||
+                                                                !dataNuevoProf.nombre.trim() ||
+                                                                !dataNuevoProf.primer_apellido.trim() ||
+                                                                !dataNuevoProf.segundo_apellido.trim() ||
+                                                                !passwordNuevoProfEsSegura
+                                                            }
+                                                            className="inline-flex items-center justify-center gap-2 bg-sape-burdeo text-sape-amarillo px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-sape-burdeo-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                            <span>{procNuevoProf ? 'Registrando docente...' : 'Registrar Profesor'}</span>
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
 
                                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                                     {/* COLUMNA IZQUIERDA: FORMULARIO DE ASIGNACIÓN */}
@@ -916,9 +2034,21 @@ export default function PanelDirector({
 
                                         <form onSubmit={manejarAsignacion} className="space-y-5">
                                             <div>
-                                                <label className="block text-sm font-bold text-slate-700 mb-1.5">
-                                                    1. Seleccionar Profesor
-                                                </label>
+                                                <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                    <label className="block text-sm font-bold text-slate-700">
+                                                        1. Seleccionar Profesor
+                                                    </label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setMostrarCrearProfesor(true)}
+                                                        className="inline-flex items-center gap-1 text-xs font-bold text-sape-burdeo hover:underline"
+                                                    >
+                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+                                                        </svg>
+                                                        <span>Crear nuevo</span>
+                                                    </button>
+                                                </div>
                                                 <SearchableSelect
                                                     options={profesoresOpciones}
                                                     value={dataAsig.profesor_id}

@@ -8,15 +8,38 @@ import { Head, Link, useForm } from '@inertiajs/react';
 
 export default function Login({ status, canResetPassword }) {
     const [mostrarPassword, setMostrarPassword] = useState(false);
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const [erroresLocales, setErroresLocales] = useState({});
+    const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
         email: '',
         password: '',
         remember: false,
     });
 
+    const errorEmail = erroresLocales.email || errors.email;
+    const errorPassword = erroresLocales.password || errors.password;
+    const mensajeErrorGeneral = errorEmail || errorPassword;
+
     const submit = (e) => {
         e.preventDefault();
+        const nuevosErrores = {};
+        const emailLimpio = (data.email || '').trim();
 
+        if (!emailLimpio) {
+            nuevosErrores.email = 'Debes ingresar tu correo electrónico.';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLimpio)) {
+            nuevosErrores.email = 'El formato del correo electrónico ingresado no es válido.';
+        }
+
+        if (!data.password) {
+            nuevosErrores.password = 'Debes ingresar tu contraseña para iniciar sesión.';
+        }
+
+        if (Object.keys(nuevosErrores).length > 0) {
+            setErroresLocales(nuevosErrores);
+            return;
+        }
+
+        setErroresLocales({});
         post(route('login'), {
             onFinish: () => reset('password'),
         });
@@ -26,7 +49,7 @@ export default function Login({ status, canResetPassword }) {
         <GuestLayout>
             <Head title="Iniciar Sesión - S.A.P.E CSS" />
 
-            <div className="mb-8">
+            <div className="mb-6">
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
                     Bienvenido al Portal Institucional
                 </h2>
@@ -41,7 +64,38 @@ export default function Login({ status, canResetPassword }) {
                 </div>
             )}
 
-            <form onSubmit={submit} className="space-y-5">
+            {mensajeErrorGeneral && (
+                <div
+                    role="alert"
+                    aria-live="assertive"
+                    className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 flex items-start gap-3"
+                >
+                    <svg
+                        className="w-5 h-5 text-red-600 shrink-0 mt-0.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+                        />
+                    </svg>
+                    <div className="text-xs sm:text-sm">
+                        <p className="font-extrabold text-red-900">
+                            No se pudo iniciar sesión
+                        </p>
+                        <p className="font-medium text-red-700 mt-0.5">
+                            {mensajeErrorGeneral}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            <form onSubmit={submit} noValidate className="space-y-5">
                 <div>
                     <InputLabel
                         htmlFor="email"
@@ -50,7 +104,7 @@ export default function Login({ status, canResetPassword }) {
                     />
 
                     <div className="relative">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                        <div className={`pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 ${errorEmail ? 'text-red-500' : 'text-slate-400'}`}>
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path
                                     strokeLinecap="round"
@@ -65,15 +119,20 @@ export default function Login({ status, canResetPassword }) {
                             type="email"
                             name="email"
                             value={data.email}
-                            placeholder="nombre.apellido@colegiosansebastian.cl"
-                            className="pl-11 block w-full"
+                            placeholder="Ingresa tu correo electrónico"
+                            aria-invalid={Boolean(errorEmail)}
+                            className={`pl-11 block w-full ${errorEmail ? 'border-red-500 focus:border-red-600 focus:ring-red-500/20' : ''}`}
                             autoComplete="username"
                             isFocused={true}
-                            onChange={(e) => setData('email', e.target.value)}
+                            onChange={(e) => {
+                                setData('email', e.target.value);
+                                if (erroresLocales.email) setErroresLocales((prev) => ({ ...prev, email: undefined }));
+                                if (errors.email) clearErrors('email');
+                            }}
                         />
                     </div>
 
-                    <InputError message={errors.email} className="mt-2" />
+                    <InputError message={errorEmail} className="mt-2 font-semibold" />
                 </div>
 
                 <div>
@@ -94,7 +153,7 @@ export default function Login({ status, canResetPassword }) {
                     </div>
 
                     <div className="relative">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                        <div className={`pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 ${errorPassword ? 'text-red-500' : 'text-slate-400'}`}>
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path
                                     strokeLinecap="round"
@@ -110,9 +169,14 @@ export default function Login({ status, canResetPassword }) {
                             name="password"
                             value={data.password}
                             placeholder="••••••••"
-                            className="pl-11 pr-11 block w-full"
+                            aria-invalid={Boolean(errorPassword)}
+                            className={`pl-11 pr-11 block w-full ${errorPassword ? 'border-red-500 focus:border-red-600 focus:ring-red-500/20' : ''}`}
                             autoComplete="current-password"
-                            onChange={(e) => setData('password', e.target.value)}
+                            onChange={(e) => {
+                                setData('password', e.target.value);
+                                if (erroresLocales.password) setErroresLocales((prev) => ({ ...prev, password: undefined }));
+                                if (errors.password) clearErrors('password');
+                            }}
                         />
                         <button
                             type="button"
@@ -149,7 +213,7 @@ export default function Login({ status, canResetPassword }) {
                         </button>
                     </div>
 
-                    <InputError message={errors.password} className="mt-2" />
+                    <InputError message={errorPassword} className="mt-2 font-semibold" />
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
