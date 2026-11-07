@@ -176,7 +176,7 @@ html[data-theme="dark"] .focus\:bg-gray-100:focus {
     color: #ffffff !important;
 }
 
-/* 6. Inputs, selects y buscadores */
+/* 6. Inputs, selects, checkboxes y buscadores */
 html[data-theme="dark"] input:not([type="radio"]):not([type="checkbox"]),
 html[data-theme="dark"] textarea,
 html[data-theme="dark"] select {
@@ -185,13 +185,26 @@ html[data-theme="dark"] select {
     border-color: var(--dm-input-border) !important;
 }
 
+html[data-theme="dark"] input[type="checkbox"],
+html[data-theme="dark"] input[type="radio"] {
+    background-color: var(--dm-inset) !important;
+    border-color: var(--dm-input-border) !important;
+}
+
+html[data-theme="dark"] input[type="checkbox"]:checked,
+html[data-theme="dark"] input[type="radio"]:checked {
+    background-color: #10b981 !important;
+    border-color: #10b981 !important;
+    color: #10b981 !important;
+}
+
 html[data-theme="dark"] input::placeholder,
 html[data-theme="dark"] textarea::placeholder {
     color: var(--dm-text-muted) !important;
 }
 
 /* 7. Textos e indicadores institucionales (sin rojo apagado ilegible) */
-html[data-theme="dark"] .text-sape-burdeo:not(.bg-sape-amarillo) {
+html[data-theme="dark"] :not(input).text-sape-burdeo:not(.bg-sape-amarillo) {
     color: #ffffff !important;
 }
 

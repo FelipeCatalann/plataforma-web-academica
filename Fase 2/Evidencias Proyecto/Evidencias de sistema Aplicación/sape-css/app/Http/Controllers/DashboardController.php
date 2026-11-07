@@ -41,7 +41,7 @@ class DashboardController extends Controller
      */
     private function armarPropsDirector(): array
     {
-        $cursosModel = Curso::with(['asignaturas', 'profesorJefe', 'estudiantes.calificaciones.asignatura'])
+        $cursosModel = Curso::with(['asignaturas', 'profesorJefe'])
             ->orderBy('nivel')
             ->orderBy('letra')
             ->get();
@@ -63,6 +63,38 @@ class DashboardController extends Controller
             ->groupBy('matriculas.curso_id')
             ->get()
             ->keyBy('curso_id');
+
+        // Promedios por estudiante y asignatura en cada curso (evita hidratar 26.000+ modelos Eloquent en memoria)
+        $promediosPorEstudianteAsig = DB::table('calificaciones')
+            ->join('matriculas', 'calificaciones.matricula_id', '=', 'matriculas.id')
+            ->where('calificaciones.valor', '>', 0)
+            ->select(
+                'matriculas.curso_id',
+                'matriculas.estudiante_id',
+                'calificaciones.asignatura_curso_id',
+                DB::raw('AVG(calificaciones.valor) as promedio_asignatura')
+            )
+            ->groupBy('matriculas.curso_id', 'matriculas.estudiante_id', 'calificaciones.asignatura_curso_id')
+            ->get();
+
+        $estudiantesResumenPorCurso = [];
+        foreach ($promediosPorEstudianteAsig as $fila) {
+            $cursoId = $fila->curso_id;
+            $estId = $fila->estudiante_id;
+            if (! isset($estudiantesResumenPorCurso[$cursoId][$estId])) {
+                $estudiantesResumenPorCurso[$cursoId][$estId] = [
+                    'id' => $estId,
+                    'calificaciones' => [],
+                ];
+            }
+            $estudiantesResumenPorCurso[$cursoId][$estId]['calificaciones'][] = [
+                'asignatura_id' => $fila->asignatura_curso_id,
+                'valor' => round((float) $fila->promedio_asignatura, 4),
+            ];
+        }
+        foreach ($estudiantesResumenPorCurso as $cursoId => $mapaEstudiantes) {
+            $estudiantesResumenPorCurso[$cursoId] = array_values($mapaEstudiantes);
+        }
 
         // Últimos archivos Excel procesados
         $importacionesProcesadas = DB::table('importacion_excels')
@@ -125,7 +157,7 @@ class DashboardController extends Controller
                     'profesor_jefe_nombre' => $cursoSubido?->profesor_jefe_nombre,
                     'archivo_excel' => $cursoSubido?->archivo_excel,
                     'fecha_importacion' => $cursoSubido?->fecha_importacion,
-                    'estudiantes' => $cursoSubido?->estudiantes,
+                    'estudiantes' => $cursoSubido ? ($estudiantesResumenPorCurso[$cursoSubido->id] ?? []) : [],
                 ];
             }
         }
@@ -150,6 +182,7 @@ class DashboardController extends Controller
                     'profesor_jefe_nombre' => $cursoExtra->profesor_jefe_nombre,
                     'archivo_excel' => $cursoExtra->archivo_excel,
                     'fecha_importacion' => $cursoExtra->fecha_importacion,
+                    'estudiantes' => $estudiantesResumenPorCurso[$cursoExtra->id] ?? [],
                 ];
             }
         }
@@ -265,12 +298,55 @@ class DashboardController extends Controller
             $profesor->assignRole('Profesor Jefe');
 
         } else {
-            $profesor->cursos()->syncWithoutDetaching([
-                $curso->id => [
+            $asignaturaSolicitada = Asignatura::findOrFail($request->asignatura_id);
+            $nombreNormalizado = mb_strtolower(trim((string) $asignaturaSolicitada->nombre));
+
+            // Buscar filas existentes en asignatura_curso para este curso y asignatura (priorizando la que ya tiene calificaciones cargadas)
+            $filasExistentes = DB::table('asignatura_curso')
+                ->join('asignaturas', 'asignatura_curso.asignatura_id', '=', 'asignaturas.id')
+                ->leftJoin('calificaciones', 'calificaciones.asignatura_curso_id', '=', 'asignatura_curso.id')
+                ->where('asignatura_curso.curso_id', $curso->id)
+                ->where(function ($query) use ($asignaturaSolicitada, $nombreNormalizado) {
+                    $query->where('asignatura_curso.asignatura_id', $asignaturaSolicitada->id)
+                        ->orWhereRaw('LOWER(TRIM(asignaturas.nombre)) = ?', [$nombreNormalizado]);
+                })
+                ->select('asignatura_curso.id', DB::raw('COUNT(calificaciones.id) as total_notas'))
+                ->groupBy('asignatura_curso.id')
+                ->orderByDesc('total_notas')
+                ->get();
+
+            if ($filasExistentes->isNotEmpty()) {
+                $filaPrincipal = $filasExistentes->first();
+
+                DB::table('asignatura_curso')
+                    ->where('id', $filaPrincipal->id)
+                    ->update([
+                        'profesor_id' => $profesor->id,
+                        'updated_at' => now(),
+                    ]);
+
+                // Limpiar duplicados vacíos si existían para la misma asignatura y curso
+                $idsDuplicados = $filasExistentes->slice(1)->pluck('id')->all();
+                if (! empty($idsDuplicados)) {
+                    DB::table('calificaciones')
+                        ->whereIn('asignatura_curso_id', $idsDuplicados)
+                        ->update(['asignatura_curso_id' => $filaPrincipal->id]);
+
+                    DB::table('asignatura_curso')
+                        ->whereIn('id', $idsDuplicados)
+                        ->delete();
+                }
+            } else {
+                DB::table('asignatura_curso')->insert([
                     'id' => Str::uuid()->toString(),
-                    'asignatura_id' => $request->asignatura_id,
-                ],
-            ]);
+                    'curso_id' => $curso->id,
+                    'asignatura_id' => $asignaturaSolicitada->id,
+                    'profesor_id' => $profesor->id,
+                    'ponderacion' => 1.00,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
 
             $profesor->assignRole('Profesor de Asignatura');
         }
