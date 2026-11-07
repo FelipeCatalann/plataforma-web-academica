@@ -7,8 +7,10 @@ use App\Models\Curso;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Spatie\Permission\Models\Role;
 
 class DashboardController extends Controller
 {
@@ -166,13 +168,77 @@ class DashboardController extends Controller
     private function obtenerProfesores()
     {
         if (method_exists(User::class, 'role')) {
-            $profesores = User::role(['Profesor Jefe', 'Profesor de Asignatura'])->select('id', 'name', 'email')->get();
+            $profesores = User::role(['Profesor Jefe', 'Profesor de Asignatura'])
+                ->select('id', 'name', 'email')
+                ->orderBy('name')
+                ->get();
             if ($profesores->isNotEmpty()) {
                 return $profesores;
             }
         }
 
-        return User::select('id', 'name', 'email')->get();
+        return User::select('id', 'name', 'email')->orderBy('name')->get();
+    }
+
+    public function crearProfesor(Request $request)
+    {
+        $validated = $request->validate(
+            [
+                'rol_inicial' => ['required', 'in:Profesor Jefe,Profesor de Asignatura'],
+                'nombre' => ['required', 'string', 'max:60', 'regex:/^[\pL\s]+$/u'],
+                'primer_apellido' => ['required', 'string', 'max:60', 'regex:/^[\pL\s]+$/u'],
+                'segundo_apellido' => ['required', 'string', 'max:60', 'regex:/^[\pL\s]+$/u'],
+                'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users,email'],
+                'password' => [
+                    'required',
+                    'string',
+                    'min:6',
+                    'max:100',
+                    'regex:/[A-ZÁÉÍÓÚÑ]/',
+                    'regex:/[a-záéíóúñ]/',
+                    'regex:/[0-9]/',
+                    'regex:/[^A-Za-z0-9\s]/',
+                ],
+            ],
+            [
+                'rol_inicial.required' => 'Selecciona primero el rol del profesor.',
+                'rol_inicial.in' => 'El rol seleccionado no es válido.',
+                'nombre.required' => 'Ingresa el nombre del profesor.',
+                'nombre.regex' => 'El nombre solo puede contener letras.',
+                'primer_apellido.required' => 'Ingresa el primer apellido del profesor.',
+                'primer_apellido.regex' => 'El primer apellido solo puede contener letras.',
+                'segundo_apellido.required' => 'Ingresa el segundo apellido del profesor.',
+                'segundo_apellido.regex' => 'El segundo apellido solo puede contener letras.',
+                'email.required' => 'Completa el nombre y apellidos para generar el correo electrónico.',
+                'email.email' => 'El formato del correo electrónico generado no es válido.',
+                'email.unique' => 'Ya existe un usuario registrado con este correo electrónico.',
+                'password.required' => 'Ingresa una contraseña de acceso para el profesor.',
+                'password.min' => 'La contraseña debe tener al menos 6 caracteres.',
+                'password.regex' => 'La contraseña debe incluir mayúsculas, minúsculas, números y al menos un signo especial.',
+            ]
+        );
+
+        $nombreCompleto = collect([
+            trim($validated['nombre']),
+            trim($validated['primer_apellido']),
+            trim($validated['segundo_apellido']),
+        ])->filter()->implode(' ');
+
+        $profesor = new User([
+            'name' => $nombreCompleto,
+            'email' => trim($validated['email']),
+            'password' => Hash::make($validated['password']),
+        ]);
+        $profesor->email_verified_at = now();
+        $profesor->save();
+
+        Role::firstOrCreate(['name' => $validated['rol_inicial']]);
+        $profesor->assignRole($validated['rol_inicial']);
+
+        return back()->with(
+            'success',
+            "Docente \"{$profesor->name}\" registrado correctamente. Ya puedes asignarle cursos o asignaturas."
+        );
     }
 
     public function asignarCurso(Request $request)

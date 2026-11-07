@@ -33,6 +33,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::post('/admin/asignar-curso', [DashboardController::class, 'asignarCurso'])->name('admin.asignar.curso');
+    Route::post('/admin/profesores', [DashboardController::class, 'crearProfesor'])->name('admin.profesores.store');
     // 1. Mostrar la pantalla del formulario (GET)
     Route::get('/admin/importar', [ImportController::class, 'index'])->name('importar.vista');
 

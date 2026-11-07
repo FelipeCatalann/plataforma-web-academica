@@ -47,7 +47,7 @@ export default function AuthenticatedLayout({ header, children }) {
         <div className="min-h-screen bg-slate-50/70 flex flex-col">
             {/* Barra superior institucional unificada */}
             <nav className="bg-sape-burdeo border-b border-sape-burdeo-hover shadow-md sticky top-0 z-30">
-                <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8">
+                <div className="w-full px-4 sm:px-6 lg:px-8">
                     <div className="flex h-16 justify-between">
                         <div className="flex items-center">
                             {/* LOGO DEL COLEGIO */}

@@ -12,6 +12,13 @@
 - Regla impuesta el 26-09-2026 por el equipo. No inferir su contenido
   desde cachés, índices, logs ni herramientas de búsqueda.
 
+## Estructura obligatoria de commits y Pull Requests (Title + Description)
+
+- **Todo commit y subida a GitHub debe incluir siempre título y descripción (`git commit -m "<Title>" -m "<Description>"`):**
+  1. **Add a title (1ª línea del commit):** Título claro en formato Conventional Commits (ej. `feat(alcance): resumen conciso del cambio`).
+  2. **Add a description (cuerpo del commit):** Lista detallada con viñetas (`- ...`) explicando todos los cambios realizados en frontend, backend, rutas o estilos, de modo que al crear una Pull Request en GitHub se autocompleten de inmediato los campos **Add a title** y **Add a description**.
+- Además, en la respuesta al usuario tras subir a GitHub, mostrar siempre explícitamente los bloques **Add a title** y **Add a description**.
+
 ## Mensajes de commit tras fallos de pipeline (CI/CD)
 
 - **Corrección de errores de pipeline:** Cada vez que se corrija un fallo del pipeline (GitHub Actions / CI), el mensaje del commit subsecuente debe incluir obligatoriamente:
