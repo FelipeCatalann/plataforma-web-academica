@@ -9,18 +9,75 @@
 }
 
 /* ==========================================================================
-   PALETA "MODO OSCURO" (html[data-theme="dark"]) — S.A.P.E CSS
-   Jerarquía de superficies nocturnas de alto contraste (WCAG AA/AAA),
-   textos nítidos en blanco y bordes semánticos limpios.
+   PALETAS "MODO OSCURO" (html[data-theme="dark"]) — S.A.P.E CSS
+   Soporta 5 variantes seleccionables desde Configuración [data-dark-variant]:
+   1. carbon  — Carbón Neutro (Zinc Ejecutivo, por defecto)
+   2. ebano   — Ébano Cálido (Burdeo Nocturno Institucional)
+   3. grafito — Grafito Suave (Descanso Visual Mate)
+   4. oled    — Negro OLED (Contraste Profundo)
+   5. pizarra — Pizarra Azul (Clásico Original)
    ========================================================================== */
-html[data-theme="dark"] {
+html[data-theme="dark"],
+html[data-theme="dark"][data-dark-variant="carbon"] {
+    --dm-canvas: #0d0e11;
+    --dm-card: #15171c;
+    --dm-elevated: #1e2028;
+    --dm-inset: #101216;
+    --dm-hover: #262933;
+    --dm-border: #2b2f3a;
+    --dm-input-border: #3a3f4d;
+    --dm-text-muted: #a1a8b8;
     color-scheme: dark;
-    background-color: #0b1120;
+    background-color: var(--dm-canvas);
     color: #f8fafc;
 }
 
+html[data-theme="dark"][data-dark-variant="ebano"] {
+    --dm-canvas: #120d0e;
+    --dm-card: #1b1416;
+    --dm-elevated: #261c1f;
+    --dm-inset: #150f11;
+    --dm-hover: #312327;
+    --dm-border: #3b2a2f;
+    --dm-input-border: #4d373d;
+    --dm-text-muted: #cbb8bd;
+}
+
+html[data-theme="dark"][data-dark-variant="grafito"] {
+    --dm-canvas: #181a1f;
+    --dm-card: #21242b;
+    --dm-elevated: #2b2f38;
+    --dm-inset: #1b1d23;
+    --dm-hover: #343944;
+    --dm-border: #383d49;
+    --dm-input-border: #495060;
+    --dm-text-muted: #cbd5e1;
+}
+
+html[data-theme="dark"][data-dark-variant="oled"] {
+    --dm-canvas: #050507;
+    --dm-card: #0f1014;
+    --dm-elevated: #181a20;
+    --dm-inset: #090a0d;
+    --dm-hover: #22252e;
+    --dm-border: #262934;
+    --dm-input-border: #373b49;
+    --dm-text-muted: #9ca3af;
+}
+
+html[data-theme="dark"][data-dark-variant="pizarra"] {
+    --dm-canvas: #0b1120;
+    --dm-card: #151f32;
+    --dm-elevated: #1e293b;
+    --dm-inset: #0f172a;
+    --dm-hover: #263449;
+    --dm-border: #29384e;
+    --dm-input-border: #3b4d66;
+    --dm-text-muted: #cbd5e1;
+}
+
 html[data-theme="dark"] body {
-    background-color: #0b1120;
+    background-color: var(--dm-canvas);
     color: #f8fafc;
 }
 
@@ -29,12 +86,12 @@ html[data-theme="dark"] .bg-slate-50\/90,
 html[data-theme="dark"] .bg-slate-50\/80,
 html[data-theme="dark"] .bg-slate-50\/70,
 html[data-theme="dark"] .bg-slate-50 {
-    background-color: #0b1120 !important;
+    background-color: var(--dm-canvas) !important;
 }
 
 /* 2. Tarjetas principales */
 html[data-theme="dark"] .bg-white {
-    background-color: #151f32 !important;
+    background-color: var(--dm-card) !important;
 }
 
 /* 3. Sub-bloques dentro de tarjetas (elevados para evitar efecto hundido) */
@@ -43,7 +100,7 @@ html[data-theme="dark"] .bg-white .bg-slate-50\/90,
 html[data-theme="dark"] .bg-white .bg-slate-50\/80,
 html[data-theme="dark"] .bg-white .bg-slate-50\/70,
 html[data-theme="dark"] .bg-white .bg-slate-50\/50 {
-    background-color: #1e293b !important;
+    background-color: var(--dm-elevated) !important;
 }
 
 html[data-theme="dark"] .bg-white .bg-slate-50 .bg-white,
@@ -56,13 +113,13 @@ html[data-theme="dark"] .bg-white\/90,
 html[data-theme="dark"] .bg-white\/95,
 html[data-theme="dark"] .hover\:bg-white:hover,
 html[data-theme="dark"] .hover\:bg-white\/60:hover {
-    background-color: #0f172a !important;
+    background-color: var(--dm-inset) !important;
 }
 
 html[data-theme="dark"] .bg-slate-100,
 html[data-theme="dark"] .bg-slate-100\/90,
 html[data-theme="dark"] .bg-slate-100\/80 {
-    background-color: #263449 !important;
+    background-color: var(--dm-hover) !important;
     color: #f8fafc !important;
 }
 
@@ -88,7 +145,7 @@ html[data-theme="dark"] .text-slate-500,
 html[data-theme="dark"] .text-slate-400,
 html[data-theme="dark"] .text-gray-500,
 html[data-theme="dark"] .text-gray-400 {
-    color: #cbd5e1 !important;
+    color: var(--dm-text-muted) !important;
 }
 
 /* 5. Bordes y divisores definidos */
@@ -98,14 +155,14 @@ html[data-theme="dark"] .border-slate-200\/70,
 html[data-theme="dark"] .border-slate-200,
 html[data-theme="dark"] .border-slate-300,
 html[data-theme="dark"] .border-slate-100 {
-    border-color: #29384e !important;
+    border-color: var(--dm-border) !important;
 }
 
 html[data-theme="dark"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
 html[data-theme="dark"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
 html[data-theme="dark"] .divide-slate-200\/80 > :not([hidden]) ~ :not([hidden]),
 html[data-theme="dark"] .divide-slate-200\/70 > :not([hidden]) ~ :not([hidden]) {
-    border-color: #29384e !important;
+    border-color: var(--dm-border) !important;
 }
 
 html[data-theme="dark"] .hover\:bg-slate-50:hover,
@@ -115,7 +172,7 @@ html[data-theme="dark"] .hover\:bg-slate-200:hover,
 html[data-theme="dark"] .hover\:bg-gray-100:hover,
 html[data-theme="dark"] .focus\:bg-slate-100:focus,
 html[data-theme="dark"] .focus\:bg-gray-100:focus {
-    background-color: #263449 !important;
+    background-color: var(--dm-hover) !important;
     color: #ffffff !important;
 }
 
@@ -123,14 +180,14 @@ html[data-theme="dark"] .focus\:bg-gray-100:focus {
 html[data-theme="dark"] input:not([type="radio"]):not([type="checkbox"]),
 html[data-theme="dark"] textarea,
 html[data-theme="dark"] select {
-    background-color: #0f172a !important;
+    background-color: var(--dm-inset) !important;
     color: #ffffff !important;
-    border-color: #3b4d66 !important;
+    border-color: var(--dm-input-border) !important;
 }
 
 html[data-theme="dark"] input::placeholder,
 html[data-theme="dark"] textarea::placeholder {
-    color: #64748b !important;
+    color: var(--dm-text-muted) !important;
 }
 
 /* 7. Textos e indicadores institucionales (sin rojo apagado ilegible) */
@@ -166,7 +223,7 @@ html[data-theme="dark"] button.text-red-600 span {
 
 html[data-theme="dark"] button.border-red-300,
 html[data-theme="dark"] button.border-red-200 {
-    background-color: #1e293b !important;
+    background-color: var(--dm-elevated) !important;
     border-color: #ef4444 !important;
     color: #ffffff !important;
 }
@@ -246,14 +303,14 @@ html[data-theme="dark"] .recharts-tooltip-cursor {
     display: none !important;
 }
 html[data-theme="dark"] .recharts-cartesian-grid line {
-    stroke: #29384e !important;
+    stroke: var(--dm-border) !important;
 }
 html[data-theme="dark"] .recharts-text {
-    fill: #cbd5e1 !important;
+    fill: var(--dm-text-muted) !important;
 }
 html[data-theme="dark"] .recharts-default-tooltip {
-    background-color: #0f172a !important;
-    border-color: #334155 !important;
+    background-color: var(--dm-inset) !important;
+    border-color: var(--dm-input-border) !important;
     color: #f8fafc !important;
 }
 html[data-theme="dark"] .recharts-tooltip-label,

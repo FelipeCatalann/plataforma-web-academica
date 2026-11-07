@@ -959,7 +959,7 @@ export default function PanelDirector({
                                     <motion.div
                                         variants={fadeInUp}
                                         whileHover={{ y: -3 }}
-                                        className="bg-white p-6 rounded-2xl border border-red-200 shadow-sm flex items-center gap-4 transition-shadow hover:shadow-md cursor-help"
+                                        className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4 transition-shadow hover:shadow-md cursor-help"
                                         title="Estudiantes del colegio con al menos una asignatura bajo 4.0"
                                     >
                                         <div className="p-3.5 bg-red-50 text-red-600 rounded-xl">
@@ -1545,7 +1545,7 @@ export default function PanelDirector({
                                 </motion.div>
 
                                 <motion.div variants={fadeInUp} className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
-                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-200 flex flex-col justify-between">
+                                    <div className="bg-white p-6 rounded-2xl shadow-sm flex flex-col justify-between">
                                         <div className="flex items-center justify-between gap-3 mb-5">
                                             <h3 className="text-lg font-extrabold text-emerald-800 flex items-center gap-2">
                                                 <svg className="w-5 h-5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" aria-hidden="true">
@@ -1613,7 +1613,7 @@ export default function PanelDirector({
                                         </div>
                                     </div>
 
-                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-red-200 flex flex-col justify-between">
+                                    <div className="bg-white p-6 rounded-2xl shadow-sm flex flex-col justify-between">
                                         <div className="flex items-center justify-between gap-3 mb-5">
                                             <h3 className="text-lg font-extrabold text-red-800 flex items-center gap-2">
                                                 <svg className="w-5 h-5 text-red-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" aria-hidden="true">
@@ -1792,19 +1792,19 @@ export default function PanelDirector({
                                                         <label className="block text-xs font-extrabold text-slate-800 mb-2">
                                                             1. Selecciona primero el Rol del Profesor (Obligatorio)
                                                         </label>
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50/80 p-3 rounded-xl border border-slate-200/90">
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
                                                             <button
                                                                 type="button"
                                                                 onClick={() => manejarCambioRolNuevoProf('Profesor Jefe')}
                                                                 aria-pressed={dataNuevoProf.rol_inicial === 'Profesor Jefe'}
-                                                                className={`flex items-start gap-3 p-3.5 rounded-xl text-left border transition-all ${
+                                                                className={`flex items-center gap-3 p-3.5 rounded-xl text-left border transition-all ${
                                                                     dataNuevoProf.rol_inicial === 'Profesor Jefe'
                                                                         ? 'bg-white border-sape-burdeo ring-2 ring-sape-burdeo/15 shadow-sm'
                                                                         : 'border-slate-200 bg-white hover:border-slate-300'
                                                                 }`}
                                                             >
                                                                 <span
-                                                                    className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                                                    className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
                                                                         dataNuevoProf.rol_inicial === 'Profesor Jefe'
                                                                             ? 'border-sape-burdeo bg-sape-burdeo'
                                                                             : 'border-slate-400'
@@ -1814,28 +1814,23 @@ export default function PanelDirector({
                                                                         <span className="w-1.5 h-1.5 rounded-full bg-sape-amarillo" />
                                                                     )}
                                                                 </span>
-                                                                <div className="min-w-0">
-                                                                    <span className="block font-extrabold text-sm text-slate-900">
-                                                                        Profesor Jefe
-                                                                    </span>
-                                                                    <span className="block text-[11px] text-slate-500 mt-0.5">
-                                                                        Formato: <strong>2 iniciales nombre + 1° apellido + inicial 2° apellido.jefe@colegio.cl</strong>
-                                                                    </span>
-                                                                </div>
+                                                                <span className="block font-extrabold text-sm text-slate-900">
+                                                                    Profesor Jefe
+                                                                </span>
                                                             </button>
 
                                                             <button
                                                                 type="button"
                                                                 onClick={() => manejarCambioRolNuevoProf('Profesor de Asignatura')}
                                                                 aria-pressed={dataNuevoProf.rol_inicial === 'Profesor de Asignatura'}
-                                                                className={`flex items-start gap-3 p-3.5 rounded-xl text-left border transition-all ${
+                                                                className={`flex items-center gap-3 p-3.5 rounded-xl text-left border transition-all ${
                                                                     dataNuevoProf.rol_inicial === 'Profesor de Asignatura'
                                                                         ? 'bg-white border-sape-burdeo ring-2 ring-sape-burdeo/15 shadow-sm'
                                                                         : 'border-slate-200 bg-white hover:border-slate-300'
                                                                 }`}
                                                             >
                                                                 <span
-                                                                    className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                                                    className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
                                                                         dataNuevoProf.rol_inicial === 'Profesor de Asignatura'
                                                                             ? 'border-sape-burdeo bg-sape-burdeo'
                                                                             : 'border-slate-400'
@@ -1845,14 +1840,9 @@ export default function PanelDirector({
                                                                         <span className="w-1.5 h-1.5 rounded-full bg-sape-amarillo" />
                                                                     )}
                                                                 </span>
-                                                                <div className="min-w-0">
-                                                                    <span className="block font-extrabold text-sm text-slate-900">
-                                                                        Profesor de Asignatura
-                                                                    </span>
-                                                                    <span className="block text-[11px] text-slate-500 mt-0.5">
-                                                                        Formato: <strong>2 iniciales nombre + 1° apellido + inicial 2° apellido.asig@colegio.cl</strong>
-                                                                    </span>
-                                                                </div>
+                                                                <span className="block font-extrabold text-sm text-slate-900">
+                                                                    Profesor de Asignatura
+                                                                </span>
                                                             </button>
                                                         </div>
                                                         {errorsNuevoProf.rol_inicial && (

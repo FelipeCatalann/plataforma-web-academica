@@ -30,3 +30,9 @@
 - **Corrección de errores de pipeline:** Cada vez que se corrija un fallo del pipeline (GitHub Actions / CI), el mensaje del commit subsecuente debe incluir obligatoriamente:
   1. **Errores del pipeline:** Detallar exactamente qué falló (ej. qué reglas de Laravel Pint se infringieron, qué tests fallaron, errores de build o dependencias).
   2. **Solución aplicada:** Resumen claro y conciso de cómo se resolvió cada problema.
+
+## Regla de simplicidad visual y textos claros (Impeccable / UI)
+
+- **Texto simple y diseño directo para el usuario:**
+  - En selectores de opciones, botones de rol, paletas de colores y tarjetas interactivas, utilizar siempre **texto breve, directo y fácil de entender** (solo el nombre de la opción y, si aplica, una descripción corta de 2 a 4 palabras).
+  - Evitar párrafos largos, jerga técnica, fórmulas de formato o códigos hexadecimales visibles en controles pensados para el usuario final. Priorizar muestras visuales claras y limpias.
