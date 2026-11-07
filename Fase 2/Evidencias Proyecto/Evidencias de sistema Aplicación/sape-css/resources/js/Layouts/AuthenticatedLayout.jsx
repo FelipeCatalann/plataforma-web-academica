@@ -53,9 +53,7 @@ export default function AuthenticatedLayout({ header, children }) {
                             {/* LOGO DEL COLEGIO */}
                             <div className="flex shrink-0 items-center gap-3">
                                 <Link href={route('dashboard')} className="flex items-center gap-2.5 group">
-                                    <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-sape-burdeo font-extrabold text-sm shadow-inner ring-2 ring-sape-amarillo/80 group-hover:scale-105 transition-transform">
-                                        CSS
-                                    </div>
+                                    <img src="/images/insigniaCSS.png" alt="Logo CSS" className="h-12 object-contain w-auto" />
                                     <div className="hidden sm:block leading-tight">
                                         <span className="text-white font-bold block tracking-wide text-sm">
                                             Colegio San Sebastián
@@ -158,9 +156,13 @@ export default function AuthenticatedLayout({ header, children }) {
                                                 type="button"
                                                 className="inline-flex items-center gap-2.5 rounded-lg border border-white/15 bg-sape-burdeo-hover/70 px-3 py-1.5 text-sm font-medium leading-4 text-white hover:text-sape-amarillo hover:border-sape-amarillo/40 focus:outline-none transition ease-in-out duration-150"
                                             >
-                                                <span className="w-7 h-7 rounded-full bg-sape-amarillo text-sape-burdeo font-extrabold text-xs flex items-center justify-center">
-                                                    {iniciales}
+                                                {/* Nuevo ícono de usuario reemplazando las iniciales */}
+                                                <span className="w-7 h-7 rounded-full bg-sape-amarillo flex items-center justify-center text-sape-burdeo shrink-0">
+                                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                                                    </svg>
                                                 </span>
+                                                
                                                 <span>{user.name}</span>
 
                                                 <svg className="-me-0.5 h-4 w-4 opacity-80" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
