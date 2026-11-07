@@ -1545,52 +1545,142 @@ export default function PanelDirector({
                                 </motion.div>
 
                                 <motion.div variants={fadeInUp} className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
-                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-200">
-                                        <h3 className="text-lg font-extrabold text-emerald-800 mb-4 flex items-center gap-2">
-                                            <svg className="w-5 h-5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" aria-hidden="true">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 0 0 2.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 0 1 2.916.52 6.003 6.003 0 0 1-5.395 4.972m0 0a6.726 6.726 0 0 1-2.749 1.35m0 0a6.772 6.772 0 0 1-3.044 0" />
-                                            </svg>
-                                            <span>Top 3 Cursos Destacados</span>
-                                        </h3>
-                                        <div className="space-y-3">
+                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-200 flex flex-col justify-between">
+                                        <div className="flex items-center justify-between gap-3 mb-5">
+                                            <h3 className="text-lg font-extrabold text-emerald-800 flex items-center gap-2">
+                                                <svg className="w-5 h-5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 0 0 2.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 0 1 2.916.52 6.003 6.003 0 0 1-5.395 4.972m0 0a6.726 6.726 0 0 1-2.749 1.35m0 0a6.772 6.772 0 0 1-3.044 0" />
+                                                </svg>
+                                                <span>Top 3 Cursos Destacados</span>
+                                            </h3>
+                                            <span className="text-xs font-bold text-slate-500 tabular-nums">
+                                                Podio Académico
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                             {[...datosGraficoCursos]
                                                 .sort((a, b) => b.promedio - a.promedio)
                                                 .slice(0, 3)
                                                 .map((curso, idx) => (
-                                                <div key={idx} className="flex justify-between items-center p-3.5 bg-emerald-50 rounded-xl border border-emerald-100">
-                                                    <span className="font-bold text-emerald-900">{curso.cursoCompleto}</span>
-                                                    <span className="font-extrabold text-emerald-700 bg-white px-3 py-1 rounded-lg shadow-sm border border-emerald-100">
-                                                        {curso.promedio.toFixed(1)}
-                                                    </span>
+                                                <div
+                                                    key={idx}
+                                                    className={`p-4 rounded-xl border flex flex-col justify-between gap-3 ${
+                                                        idx === 0
+                                                            ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                                                            : 'bg-slate-50 border-slate-200'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-1">
+                                                        <span
+                                                            className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md tabular-nums ${
+                                                                idx === 0
+                                                                    ? 'bg-emerald-800 text-emerald-100'
+                                                                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                                            }`}
+                                                        >
+                                                            {idx + 1}° Lugar
+                                                        </span>
+                                                        <span
+                                                            className={`text-[11px] font-semibold tabular-nums ${
+                                                                idx === 0 ? 'text-emerald-100' : 'text-slate-500'
+                                                            }`}
+                                                        >
+                                                            {curso.estudiantes} est.
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <span
+                                                            className={`block text-3xl font-extrabold tabular-nums tracking-tight ${
+                                                                idx === 0 ? 'text-white' : 'text-emerald-700'
+                                                            }`}
+                                                        >
+                                                            {curso.promedio.toFixed(1)}
+                                                        </span>
+                                                        <span
+                                                            className={`block font-bold text-sm mt-1 ${
+                                                                idx === 0 ? 'text-emerald-50' : 'text-slate-900'
+                                                            }`}
+                                                        >
+                                                            {curso.cursoCompleto}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             ))}
                                             {datosGraficoCursos.length === 0 && (
-                                                <p className="text-sm text-emerald-600/70 text-center py-2">Sin datos suficientes</p>
+                                                <p className="col-span-3 text-sm text-slate-500 text-center py-2">Sin datos suficientes</p>
                                             )}
                                         </div>
                                     </div>
 
-                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-red-200">
-                                        <h3 className="text-lg font-extrabold text-red-800 mb-4 flex items-center gap-2">
-                                            <svg className="w-5 h-5 text-red-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" aria-hidden="true">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                                            </svg>
-                                            <span>Foco de Atención (Más Bajos)</span>
-                                        </h3>
-                                        <div className="space-y-3">
+                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-red-200 flex flex-col justify-between">
+                                        <div className="flex items-center justify-between gap-3 mb-5">
+                                            <h3 className="text-lg font-extrabold text-red-800 flex items-center gap-2">
+                                                <svg className="w-5 h-5 text-red-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                                                </svg>
+                                                <span>Foco de Atención (Más Bajos)</span>
+                                            </h3>
+                                            <span className="text-xs font-bold text-slate-500 tabular-nums">
+                                                Prioridad Pedagógica
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                             {[...datosGraficoCursos]
                                                 .sort((a, b) => a.promedio - b.promedio)
                                                 .slice(0, 3)
                                                 .map((curso, idx) => (
-                                                <div key={idx} className="flex justify-between items-center p-3.5 bg-red-50 rounded-xl border border-red-100">
-                                                    <span className="font-bold text-red-900">{curso.cursoCompleto}</span>
-                                                    <span className={`font-extrabold bg-white px-3 py-1 rounded-lg shadow-sm border ${curso.promedio < 4.0 ? 'text-red-700 border-red-200' : 'text-amber-700 border-amber-200'}`}>
-                                                        {curso.promedio.toFixed(1)}
-                                                    </span>
+                                                <div
+                                                    key={idx}
+                                                    className={`p-4 rounded-xl border flex flex-col justify-between gap-3 ${
+                                                        idx === 0
+                                                            ? 'bg-red-600 text-white border-red-500 shadow-sm'
+                                                            : 'bg-slate-50 border-slate-200'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-1">
+                                                        <span
+                                                            className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md tabular-nums ${
+                                                                idx === 0
+                                                                    ? 'bg-red-800 text-red-100'
+                                                                    : 'bg-red-50 text-red-800 border border-red-200'
+                                                            }`}
+                                                        >
+                                                            {idx + 1}° Foco
+                                                        </span>
+                                                        <span
+                                                            className={`text-[11px] font-semibold tabular-nums ${
+                                                                idx === 0 ? 'text-red-100' : 'text-slate-500'
+                                                            }`}
+                                                        >
+                                                            {curso.estudiantes} est.
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <span
+                                                            className={`block text-3xl font-extrabold tabular-nums tracking-tight ${
+                                                                idx === 0
+                                                                    ? 'text-white'
+                                                                    : curso.promedio < 4.0
+                                                                        ? 'text-red-700'
+                                                                        : 'text-amber-700'
+                                                            }`}
+                                                        >
+                                                            {curso.promedio.toFixed(1)}
+                                                        </span>
+                                                        <span
+                                                            className={`block font-bold text-sm mt-1 ${
+                                                                idx === 0 ? 'text-red-50' : 'text-slate-900'
+                                                            }`}
+                                                        >
+                                                            {curso.cursoCompleto}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             ))}
                                             {datosGraficoCursos.length === 0 && (
-                                                <p className="text-sm text-red-600/70 text-center py-2">Sin datos suficientes</p>
+                                                <p className="col-span-3 text-sm text-slate-500 text-center py-2">Sin datos suficientes</p>
                                             )}
                                         </div>
                                     </div>
@@ -1710,7 +1800,7 @@ export default function PanelDirector({
                                                                 className={`flex items-start gap-3 p-3.5 rounded-xl text-left border transition-all ${
                                                                     dataNuevoProf.rol_inicial === 'Profesor Jefe'
                                                                         ? 'bg-white border-sape-burdeo ring-2 ring-sape-burdeo/15 shadow-sm'
-                                                                        : 'border-slate-200/80 bg-white/60 hover:bg-white hover:border-slate-300'
+                                                                        : 'border-slate-200 bg-white hover:border-slate-300'
                                                                 }`}
                                                             >
                                                                 <span
@@ -1741,7 +1831,7 @@ export default function PanelDirector({
                                                                 className={`flex items-start gap-3 p-3.5 rounded-xl text-left border transition-all ${
                                                                     dataNuevoProf.rol_inicial === 'Profesor de Asignatura'
                                                                         ? 'bg-white border-sape-burdeo ring-2 ring-sape-burdeo/15 shadow-sm'
-                                                                        : 'border-slate-200/80 bg-white/60 hover:bg-white hover:border-slate-300'
+                                                                        : 'border-slate-200 bg-white hover:border-slate-300'
                                                                 }`}
                                                             >
                                                                 <span
@@ -1881,7 +1971,7 @@ export default function PanelDirector({
                                                                         value={dataNuevoProf.email}
                                                                         placeholder="Se genera automáticamente con el nombre y apellidos"
                                                                         required
-                                                                        className={`w-full rounded-xl pl-3.5 pr-9 py-2.5 text-sm font-mono text-slate-700 placeholder-slate-400 bg-slate-100/90 border cursor-not-allowed select-all shadow-sm ${
+                                                                        className={`w-full rounded-xl pl-3.5 pr-9 py-2.5 text-sm font-mono text-slate-700 placeholder-slate-400 bg-slate-100 border cursor-not-allowed select-all shadow-sm ${
                                                                             errorsNuevoProf.email
                                                                                 ? 'border-red-400 bg-red-50/40'
                                                                                 : 'border-slate-300'
@@ -2097,7 +2187,7 @@ export default function PanelDirector({
                                                         className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer border transition-all ${
                                                             dataAsig.tipo_rol === 'jefe'
                                                                 ? 'bg-white border-sape-burdeo shadow-sm'
-                                                                : 'border-transparent hover:bg-white/60'
+                                                                : 'border-transparent hover:bg-white'
                                                         }`}
                                                     >
                                                         <input
@@ -2120,7 +2210,7 @@ export default function PanelDirector({
                                                         className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer border transition-all ${
                                                             dataAsig.tipo_rol === 'asignatura'
                                                                 ? 'bg-white border-sape-burdeo shadow-sm'
-                                                                : 'border-transparent hover:bg-white/60'
+                                                                : 'border-transparent hover:bg-white'
                                                         }`}
                                                     >
                                                         <input
@@ -2429,25 +2519,27 @@ export default function PanelDirector({
                                             </button>
                                         </div>
 
-                                        <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5 pt-2 border-t border-white/15">
+                                        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-2.5 border-t border-white/15">
                                             {[
                                                 ...cursosSubidos.map((c) => ({ codigo: `${c.nivel}°${c.letra}`, ok: true })),
                                                 ...cursosDisponibles.map((c) => ({ codigo: `${c.nivel}°${c.letra}`, ok: false })),
                                             ].map((item) => (
                                                 <div
                                                     key={item.codigo}
-                                                    className={`px-2 py-1 rounded-lg text-[11px] font-bold text-center flex items-center justify-center gap-1 ${
+                                                    className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold tabular-nums flex items-center justify-center gap-1.5 shadow-sm transition-transform ${
                                                         item.ok
-                                                            ? 'bg-emerald-400/20 text-emerald-200 border border-emerald-400/30'
-                                                            : 'bg-white/10 text-white/70 border border-white/10'
+                                                            ? 'bg-emerald-600 text-white border border-emerald-400/70'
+                                                            : 'bg-white/10 text-white/70 border border-white/15'
                                                     }`}
                                                 >
-                                                    <span
-                                                        className={`w-1.5 h-1.5 rounded-full ${
-                                                            item.ok ? 'bg-emerald-400' : 'bg-amber-300/70'
-                                                        }`}
-                                                    />
-                                                    {item.codigo}
+                                                    {item.ok ? (
+                                                        <svg className="w-3.5 h-3.5 text-emerald-100 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    ) : (
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-300/70 shrink-0" />
+                                                    )}
+                                                    <span>{item.codigo}</span>
                                                 </div>
                                             ))}
                                         </div>
@@ -2853,25 +2945,27 @@ export default function PanelDirector({
                                         </button>
                                     </div>
 
-                                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5 pt-2 border-t border-white/15">
+                                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-2.5 border-t border-white/15">
                                         {[
                                             ...cursosSubidos.map((c) => ({ codigo: `${c.nivel}°${c.letra}`, ok: true })),
                                             ...cursosDisponibles.map((c) => ({ codigo: `${c.nivel}°${c.letra}`, ok: false })),
                                         ].map((item) => (
                                             <div
                                                 key={item.codigo}
-                                                className={`px-2 py-1.5 rounded-lg text-[11px] font-bold text-center flex items-center justify-center gap-1 ${
+                                                className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold tabular-nums flex items-center justify-center gap-1.5 shadow-sm transition-transform ${
                                                     item.ok
-                                                        ? 'bg-emerald-400/20 text-emerald-200 border border-emerald-400/30'
-                                                        : 'bg-white/10 text-white/70 border border-white/10'
+                                                        ? 'bg-emerald-600 text-white border border-emerald-400/70'
+                                                        : 'bg-white/10 text-white/70 border border-white/15'
                                                 }`}
                                             >
-                                                <span
-                                                    className={`w-1.5 h-1.5 rounded-full ${
-                                                        item.ok ? 'bg-emerald-400' : 'bg-amber-300/70'
-                                                    }`}
-                                                />
-                                                {item.codigo}
+                                                {item.ok ? (
+                                                    <svg className="w-3.5 h-3.5 text-emerald-100 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                ) : (
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300/70 shrink-0" />
+                                                )}
+                                                <span>{item.codigo}</span>
                                             </div>
                                         ))}
                                     </div>

@@ -48,11 +48,20 @@ html[data-theme="dark"] .bg-white .bg-slate-50\/50 {
 
 html[data-theme="dark"] .bg-white .bg-slate-50 .bg-white,
 html[data-theme="dark"] .bg-white .bg-slate-50\/90 .bg-white,
-html[data-theme="dark"] .bg-white .bg-slate-50\/80 .bg-white {
+html[data-theme="dark"] .bg-white .bg-slate-50\/80 .bg-white,
+html[data-theme="dark"] .bg-white\/60,
+html[data-theme="dark"] .bg-white\/70,
+html[data-theme="dark"] .bg-white\/80,
+html[data-theme="dark"] .bg-white\/90,
+html[data-theme="dark"] .bg-white\/95,
+html[data-theme="dark"] .hover\:bg-white:hover,
+html[data-theme="dark"] .hover\:bg-white\/60:hover {
     background-color: #0f172a !important;
 }
 
-html[data-theme="dark"] .bg-slate-100 {
+html[data-theme="dark"] .bg-slate-100,
+html[data-theme="dark"] .bg-slate-100\/90,
+html[data-theme="dark"] .bg-slate-100\/80 {
     background-color: #263449 !important;
     color: #f8fafc !important;
 }
