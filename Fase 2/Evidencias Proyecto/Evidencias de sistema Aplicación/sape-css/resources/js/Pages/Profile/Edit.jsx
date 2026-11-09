@@ -24,9 +24,13 @@ export default function Edit({ auth, mustVerifyEmail, status }) {
                     className="bg-gradient-to-r from-[#52100B] via-sape-burdeo to-[#8B1E16] rounded-2xl p-6 sm:p-8 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                 >
                     <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-2xl bg-sape-amarillo text-sape-burdeo font-extrabold text-2xl flex items-center justify-center shadow-md">
-                            {iniciales}
+                        {/* Nuevo ícono de perfil reemplazando las iniciales */}
+                        <div className="w-16 h-16 rounded-2xl bg-sape-amarillo text-sape-burdeo flex items-center justify-center shadow-md shrink-0">
+                            <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                            </svg>
                         </div>
+                        
                         <div>
                             <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-white/15 text-sape-amarillo mb-1">
                                 Cuenta Institucional Activa
