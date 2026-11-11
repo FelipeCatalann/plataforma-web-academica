@@ -104,7 +104,7 @@ export default function PanelAsignatura({ auth, cursos }) {
         <AuthenticatedLayout user={auth.user}>
             <Head title="Mis Asignaturas" />
 
-            <div className="max-w-screen-2xl mx-auto flex flex-col md:flex-row min-h-[calc(100vh-4rem)] relative">
+            <div className="w-full flex flex-col md:flex-row min-h-[calc(100vh-4rem)] relative">
                 <aside className="w-full md:w-72 bg-white border-b md:border-b-0 md:border-r border-slate-200/80 shadow-sm flex-shrink-0 relative z-10">
                     <div className="p-3 md:p-6 flex md:block items-center gap-3 overflow-x-auto md:overflow-visible">
                         <h2 className="hidden md:block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-3 px-3">
@@ -343,6 +343,12 @@ export default function PanelAsignatura({ auth, cursos }) {
                                     <ChatbotPedagogico
                                         cursoContexto={cursos.find((c) => String(c.id) === String(cursoChatbotId))}
                                         tipoProfesor="Profesor de Asignatura"
+                                        alturaClase="h-[calc(100dvh-15rem)] sm:h-[calc(100dvh-14rem)] md:h-[calc(100dvh-13.5rem)] min-h-[340px]"
+                                        onAbrirInforme={(est) => abrirModalInforme(est)}
+                                        onVerFicha={(est) => {
+                                            setEstudianteActivo(est);
+                                            setVistaActiva(cursoChatbotId);
+                                        }}
                                     />
                                 )}
                             </motion.div>

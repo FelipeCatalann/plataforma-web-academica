@@ -23,7 +23,11 @@ Route::get('/', function () {
     ]);
 });
 
-Route::post('/chat-pedagogico', [ChatbotController::class, 'sendMessage'])->name('chat.pedagogico')->middleware('auth');
+Route::middleware('auth')->group(function () {
+    Route::get('/chat-pedagogico/sesiones', [ChatbotController::class, 'listarSesiones'])->name('chat.sesiones');
+    Route::delete('/chat-pedagogico/sesiones/{sesion}', [ChatbotController::class, 'eliminarSesion'])->name('chat.sesiones.eliminar');
+    Route::post('/chat-pedagogico', [ChatbotController::class, 'sendMessage'])->name('chat.pedagogico');
+});
 
 Route::post('/generar-informe-ia', [InformeIAController::class, 'generarInforme']);
 Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
@@ -49,6 +53,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/enlaces-whatsapp', [EnlaceWhatsAppController::class, 'prepararEnlace'])->name('whatsapp.preparar');
 
     Route::get('/configuracion', [ConfiguracionController::class, 'index'])->name('configuracion.index');
+    Route::post('/configuracion/ia', [ConfiguracionController::class, 'guardarConfiguracionIA'])->name('configuracion.guardar-ia');
     Route::post('/configuracion/probar-ia', [ConfiguracionController::class, 'probarConexionIA'])->name('configuracion.probar-ia');
 
     Route::get('/ver-modelos-groq', function () {
