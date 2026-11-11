@@ -211,7 +211,7 @@ export default function PanelJefe({ auth, curso }) {
         <AuthenticatedLayout user={auth.user}>
             <Head title={`Jefatura ${curso.nivel}° ${curso.letra}`} />
 
-            <div className="max-w-screen-2xl mx-auto flex flex-col md:flex-row min-h-[calc(100vh-4rem)]">
+            <div className="w-full flex flex-col md:flex-row min-h-[calc(100vh-4rem)]">
                 <aside className="w-full md:w-72 bg-white border-b md:border-b-0 md:border-r border-slate-200/80 shadow-sm flex-shrink-0 relative z-10">
                     <div className="p-3 md:p-6 flex md:block items-center gap-3 overflow-x-auto md:overflow-visible">
                         <div className="hidden md:block mb-6 pb-4 border-b border-slate-100">
@@ -916,7 +916,16 @@ export default function PanelJefe({ auth, curso }) {
                                 exit={{ opacity: 0, scale: 0.98 }}
                                 transition={{ duration: 0.25 }}
                             >
-                                <ChatbotPedagogico cursoContexto={curso} tipoProfesor="Jefe" />
+                                <ChatbotPedagogico
+                                    cursoContexto={curso}
+                                    tipoProfesor="Jefe"
+                                    onAbrirInforme={(est) => abrirModalInforme(est)}
+                                    onAbrirWhatsApp={(est) => abrirModalWhatsApp(est)}
+                                    onVerFicha={(est) => {
+                                        setEstudianteActivo(est);
+                                        setVistaActiva('tabla');
+                                    }}
+                                />
                             </motion.div>
                         )}
                     </AnimatePresence>

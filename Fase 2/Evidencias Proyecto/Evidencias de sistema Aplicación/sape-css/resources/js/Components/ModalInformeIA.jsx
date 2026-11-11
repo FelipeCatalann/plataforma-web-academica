@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
+import { leerPreferenciasSape } from '@/utils/preferenciasSape';
 
 export default function ModalInformeIA({ estudiante, cursoNombre, isOpen, onClose }) {
     const [destinatario, setDestinatario] = useState('Apoderado');
@@ -124,6 +125,7 @@ export default function ModalInformeIA({ estudiante, cursoNombre, isOpen, onClos
         setCopiado(false);
 
         try {
+            const prefs = leerPreferenciasSape();
             const respuesta = await axios.post(
                 '/generar-informe-ia',
                 {
@@ -131,6 +133,10 @@ export default function ModalInformeIA({ estudiante, cursoNombre, isOpen, onClos
                     curso_nombre: cursoNombre,
                     destinatario: destinatario,
                     palabras_clave: palabrasClave.trim(),
+                    modelo_id: prefs.modeloActivoId,
+                    tono_ia: prefs.tonoInformeIA,
+                    extension_ia: prefs.extensionIA,
+                    precision_ia: prefs.precisionIA,
                 },
                 { signal: controller.signal }
             );
