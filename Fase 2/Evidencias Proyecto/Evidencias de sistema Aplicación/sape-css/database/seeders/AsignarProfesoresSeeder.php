@@ -15,7 +15,7 @@ class AsignarProfesoresSeeder extends Seeder
         }
 
         $profeJefe = User::where('email', 'jefe1ma@colegio.cl')->first();
-        $profeMate = User::where('email', 'ana@colegio.cl')->first();
+        $profeMate = User::where('email', RoleAndUserSeeder::CORREO_PROFESOR_ASIGNATURA)->first();
         if (! $profeJefe?->hasRole('Profesor Jefe') || ! $profeMate?->hasRole('Profesor de Asignatura')) {
             $this->command->warn('Primero crea las cuentas de demostración.');
 

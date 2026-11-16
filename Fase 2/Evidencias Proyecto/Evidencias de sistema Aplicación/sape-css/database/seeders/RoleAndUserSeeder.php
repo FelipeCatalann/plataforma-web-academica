@@ -9,6 +9,8 @@ use Spatie\Permission\Models\Role;
 
 class RoleAndUserSeeder extends Seeder
 {
+    public const CORREO_PROFESOR_ASIGNATURA = 'fecatalanv.asig@colegio.cl';
+
     public function run(): void
     {
         // 1. Crear los roles oficiales según el EPT
@@ -21,12 +23,13 @@ class RoleAndUserSeeder extends Seeder
         }
 
         // 2. Crear usuario Administrador (Director / UTP)
-        $admin = User::firstOrCreate(['email' => 'director@colegio.cl'], [
+        $admin = User::firstOrCreate(['email' => 'fecatalanv.admin@colegio.cl'], [
             'name' => 'Director San Sebastián',
-            'password' => Str::password(32),
+            'password' => '1234Ab',
         ]);
         if ($admin->wasRecentlyCreated) {
             $admin->assignRole($roleAdmin);
+            $admin->markEmailAsVerified();
         }
 
         // 3. Crear usuario Profesor Jefe (El que ya usabas)
@@ -38,13 +41,14 @@ class RoleAndUserSeeder extends Seeder
             $profJefe->assignRole($roleProfJefe);
         }
 
-        // 4. Crear usuario Profesor de Asignatura (La que ya usabas)
-        $profAsignatura = User::firstOrCreate(['email' => 'ana@colegio.cl'], [
-            'name' => 'Ana (Profe Matemáticas)',
-            'password' => Str::password(32),
+        // 4. Crear usuario Profesor de Asignatura de demostración
+        $profAsignatura = User::firstOrCreate(['email' => self::CORREO_PROFESOR_ASIGNATURA], [
+            'name' => 'Profesor de Asignatura',
+            'password' => '1234Ab',
         ]);
         if ($profAsignatura->wasRecentlyCreated) {
             $profAsignatura->assignRole($roleProfAsignatura);
+            $profAsignatura->markEmailAsVerified();
         }
     }
 }
