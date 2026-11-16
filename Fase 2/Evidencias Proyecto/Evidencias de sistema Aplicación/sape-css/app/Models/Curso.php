@@ -14,7 +14,8 @@ class Curso extends Model
     {
         // Le indicamos explícitamente que la tabla pivot se llama 'matriculas'
         return $this->belongsToMany(Estudiante::class, 'matriculas')
-            ->withPivot('id', 'apoderado_id', 'fechaIngreso', 'estado', 'vigente');
+            ->withPivot('id', 'apoderado_id', 'fechaIngreso', 'estado', 'vigente')
+            ->orderBy('estudiantes.identificadorInterno');
     }
 
     public function profesorJefe()

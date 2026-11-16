@@ -13,7 +13,8 @@ class ProfesorController extends Controller
     public function panelJefe(Request $request)
     {
         $cursoBase = Curso::where('profesor_jefe_id', $request->user()->id)
-            ->whereHas('estudiantes')
+            ->whereHas('estudiantes', fn ($query) => $query->where('matriculas.vigente', true))
+            ->orderByDesc('anioEscolar')
             ->first();
 
         $curso = null;
@@ -21,7 +22,7 @@ class ProfesorController extends Controller
         if ($cursoBase) {
             $cursoId = $cursoBase->id;
             $curso = Curso::with([
-                'estudiantes',
+                'estudiantes' => fn ($query) => $query->where('matriculas.vigente', true),
                 'estudiantes.calificaciones' => function ($query) use ($cursoId) {
                     $query->select(
                         'calificaciones.*',
@@ -31,7 +32,9 @@ class ProfesorController extends Controller
                     )
                         ->join('asignatura_curso', 'calificaciones.asignatura_curso_id', '=', 'asignatura_curso.id')
                         ->join('asignaturas', 'asignatura_curso.asignatura_id', '=', 'asignaturas.id')
-                        ->where('asignatura_curso.curso_id', $cursoId);
+                        ->where('asignatura_curso.curso_id', $cursoId)
+                        ->where('matriculas.curso_id', $cursoId)
+                        ->where('matriculas.vigente', true);
                 },
             ])->find($cursoId);
         }
@@ -89,12 +92,12 @@ class ProfesorController extends Controller
     {
         $profesorId = $request->user()->id;
 
-        $cursos = Curso::whereHas('estudiantes')
+        $cursos = Curso::whereHas('estudiantes', fn ($query) => $query->where('matriculas.vigente', true))
             ->whereHas('asignaturas', function ($query) use ($profesorId) {
                 $query->where('asignatura_curso.profesor_id', $profesorId);
             })
             ->with([
-                'estudiantes',
+                'estudiantes' => fn ($query) => $query->where('matriculas.vigente', true),
                 'asignaturas' => function ($q) use ($profesorId) {
                     $q->where('asignatura_curso.profesor_id', $profesorId);
                 },
@@ -107,10 +110,20 @@ class ProfesorController extends Controller
                     )
                         ->join('asignatura_curso', 'calificaciones.asignatura_curso_id', '=', 'asignatura_curso.id')
                         ->join('asignaturas', 'asignatura_curso.asignatura_id', '=', 'asignaturas.id')
-                        ->where('asignatura_curso.profesor_id', $profesorId);
+                        ->where('asignatura_curso.profesor_id', $profesorId)
+                        ->whereColumn('matriculas.curso_id', 'asignatura_curso.curso_id')
+                        ->where('matriculas.vigente', true);
                 },
             ])
             ->get();
+
+        // La misma persona puede tener matrículas en varios cursos del docente.
+        foreach ($cursos as $curso) {
+            foreach ($curso->estudiantes as $estudiante) {
+                $estudiante->setRelation('calificaciones', $estudiante->calificaciones->where('curso_id', $curso->id)->values());
+                $estudiante->makeHidden('pivot');
+            }
+        }
 
         return Inertia::render('Profesor/PanelAsignatura', [
             'cursos' => $cursos,

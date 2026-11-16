@@ -5,16 +5,50 @@ namespace App\Http\Controllers;
 use App\Imports\ImportadorSyscol;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ImportController extends Controller
 {
+    private const REGLAS_ARCHIVO = ['archivo_excel' => 'required|file|mimes:xlsx,xls|max:10240'];
+
     // Muestra el formulario de importación (GET).
     public function index()
     {
         return Inertia::render('Admin/ImportarNotas');
+    }
+
+    public function revisar(Request $request)
+    {
+        $request->session()->forget('importacion_revisada');
+        $request->validate(self::REGLAS_ARCHIVO);
+        $archivo = $request->file('archivo_excel');
+        $hash = hash_file('sha256', $archivo->getRealPath());
+
+        // El importador valida contra los datos reales y simula toda la escritura.
+        DB::beginTransaction();
+        try {
+            Excel::import(new ImportadorSyscol, $archivo);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::warning('Falló la revisión de la planilla.', ['tipo' => $e::class]);
+            throw ValidationException::withMessages([
+                'archivo_excel' => 'No se pudo revisar la planilla. Comprueba las hojas NOMINA y CALIFICACIONES.',
+            ]);
+        } finally {
+            DB::rollBack();
+        }
+
+        $request->session()->put('importacion_revisada', [
+            'hash' => $hash,
+            'expira' => now()->addMinutes(15)->timestamp,
+        ]);
+
+        return response()->json(['message' => 'Planilla revisada. Puedes confirmar la importación.']);
     }
 
     public function importar(Request $request)
@@ -22,12 +56,16 @@ class ImportController extends Controller
         // 1. AUMENTAR EL TIEMPO LÍMITE A 5 MINUTOS (300 segundos)
         set_time_limit(300);
 
-        $request->validate([
-            'archivo_excel' => 'required|mimes:xlsx,xls,csv',
-        ]);
+        $request->validate(self::REGLAS_ARCHIVO);
 
         $archivo = $request->file('archivo_excel');
         $hash = hash_file('sha256', $archivo->getRealPath());
+        $revision = $request->session()->pull('importacion_revisada');
+        if (! $revision || $revision['hash'] !== $hash || $revision['expira'] <= now()->timestamp) {
+            throw ValidationException::withMessages([
+                'archivo_excel' => 'Revisa esta planilla antes de confirmar la importación.',
+            ]);
+        }
 
         // CA-2 (INDG-15/INDG-16), hash idempotencia: la re-carga idéntica no duplica
         // siempre y cuando sigan existiendo cursos con calificaciones en el sistema.
@@ -41,13 +79,14 @@ class ImportController extends Controller
         }
 
         // Limpiar cualquier registro previo con el mismo checksum (ej. REPETIDO o curso borrado previamente)
-        DB::table('importacion_excels')->where('checksum', $hash)->delete();
-
         $importacionId = (string) Str::uuid();
         $calificacionesAntes = DB::table('calificaciones')->count();
 
         try {
             DB::beginTransaction();
+
+            DB::table('importacion_excels')->where('checksum', $hash)
+                ->where('estadoImportacion', '!=', 'PROCESADA')->delete();
 
             DB::table('importacion_excels')->insert([
                 'id' => $importacionId,
@@ -73,10 +112,15 @@ class ImportController extends Controller
             DB::commit();
 
             return back()->with('success', 'El archivo ha sido procesado e importado exitosamente.');
-        } catch (\Exception $e) {
+        } catch (ValidationException $e) {
             DB::rollBack();
 
-            return back()->withErrors(['archivo_excel' => 'Error crítico al procesar: '.$e->getMessage()]);
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::warning('Falló la importación de calificaciones.', ['tipo' => $e::class]);
+
+            return back()->withErrors(['archivo_excel' => 'No se pudo importar el archivo. Revisa el formato y las calificaciones.']);
         }
     }
 
@@ -180,8 +224,9 @@ class ImportController extends Controller
             return back()->with('success', "Se eliminaron correctamente los datos Excel del curso {$etiquetaCurso} ({$matriculas->count()} estudiantes y {$calificacionesBorradas} calificaciones).");
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('Falló la eliminación de datos del curso.', ['tipo' => $e::class]);
 
-            return back()->withErrors(['curso' => 'Error al eliminar los datos del curso: '.$e->getMessage()]);
+            return back()->withErrors(['curso' => 'No se pudieron eliminar los datos del curso. Intenta nuevamente.']);
         }
     }
 }

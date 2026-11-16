@@ -6,9 +6,9 @@ services:
     environment:
       POSTGRES_DB: sistema_escolar
       POSTGRES_USER: admin_db
-      POSTGRES_PASSWORD: password_seguro
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
 

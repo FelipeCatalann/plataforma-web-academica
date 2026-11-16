@@ -3,50 +3,51 @@
 namespace App\Http\Controllers;
 
 use App\Models\Curso;
+use App\Models\Matricula;
 use App\Models\MensajeChat;
 use App\Models\SesionChat;
+use App\Services\ConexionIA;
 use App\Services\ConfiguracionIAService;
 use App\Services\PrivacidadService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ChatbotController extends Controller
 {
     public function listarSesiones(Request $request, ConfiguracionIAService $iaService): JsonResponse
     {
         $user = $request->user();
-        $cursoId = (string) $request->query('curso_id', '');
+        $validado = $request->validate(['curso_id' => 'required|uuid']);
+        $curso = Curso::find($validado['curso_id']);
+        abort_if(! $curso, 404, 'El curso ya no está disponible.');
+        Gate::authorize('consultarChat', $curso);
+        $alcance = $this->alcanceAcademico($curso, $user->id);
         $configIA = $iaService->obtenerConfiguracionPublica($user);
 
         $sesionesFormateadas = [];
 
         try {
-            $tieneColumnaCurso = Schema::hasColumn('sesion_chats', 'curso_id');
-            $tieneColumnaTitulo = Schema::hasColumn('sesion_chats', 'titulo');
-            $tieneColumnaModeloMsg = Schema::hasColumn('mensaje_chats', 'modelo_nombre');
-
-            $query = SesionChat::with('mensajes')
+            $sesiones = SesionChat::with('mensajes')
+                ->vigente()
                 ->where('user_id', $user->id)
-                ->orderByDesc('updated_at');
-
-            if ($tieneColumnaCurso && $cursoId !== '') {
-                $query->where(function ($q) use ($cursoId) {
-                    $q->where('curso_id', $cursoId)->orWhereNull('curso_id');
-                });
-            }
-
-            $sesiones = $query->limit(25)->get();
+                ->where('curso_id', $curso->id)
+                ->where('alcance_academico', $alcance['firma'])
+                ->orderByDesc('updated_at')
+                ->limit(25)
+                ->get();
 
             foreach ($sesiones as $sesion) {
                 $mensajes = $sesion->mensajes->map(fn ($m) => [
                     'id' => $m->id,
                     'role' => $m->autor === 'DOCENTE' ? 'user' : 'ai',
                     'content' => $m->contenido,
-                    'modeloNombre' => $tieneColumnaModeloMsg ? ($m->modelo_nombre ?? null) : null,
+                    'modeloNombre' => $m->modelo_nombre,
                     'fecha' => $m->creadoEn ?? $m->created_at,
                 ])->values()->all();
 
@@ -61,28 +62,29 @@ class ChatbotController extends Controller
 
                 $sesionesFormateadas[] = [
                     'id' => $sesion->id,
-                    'titulo' => ($tieneColumnaTitulo && ! empty($sesion->titulo))
-                        ? $sesion->titulo
-                        : $tituloFallback,
-                    'curso_id' => $tieneColumnaCurso ? $sesion->curso_id : $cursoId,
+                    'titulo' => $sesion->titulo ?: $tituloFallback,
+                    'curso_id' => $sesion->curso_id,
                     'modelo_id' => $sesion->modelo_id ?? null,
                     'actualizadaEn' => $sesion->updated_at?->toIso8601String(),
                     'mensajes' => $mensajes,
                 ];
             }
         } catch (\Throwable $e) {
-            Log::warning('No se pudieron cargar sesiones de chat: '.$e->getMessage());
+            Log::warning('No se pudieron cargar sesiones de chat.', ['tipo' => $e::class]);
+
+            return response()->json(['message' => 'No se pudo cargar el historial del chat.'], 500);
         }
 
         return response()->json([
             'sesiones' => $sesionesFormateadas,
             'configuracionIA' => $configIA,
-        ]);
+        ])->header('Cache-Control', 'no-store');
     }
 
     public function eliminarSesion(Request $request, string $sesionId): JsonResponse
     {
         $user = $request->user();
+        abort_unless(Str::isUuid($sesionId), 404);
 
         try {
             SesionChat::where('id', $sesionId)
@@ -100,11 +102,10 @@ class ChatbotController extends Controller
         // 1. Ampliar límite de tiempo
         set_time_limit(120);
 
-        $request->validate([
-            'mensaje' => 'required|string',
-            'curso_id' => 'required',
-            'tipo_profesor' => 'required|string',
-            'sesion_id' => 'nullable|string|max:64',
+        $validado = $request->validate([
+            'mensaje' => 'required|string|max:2000',
+            'curso_id' => 'required|uuid',
+            'sesion_id' => 'nullable|uuid',
             'modelo_id' => 'nullable|string|max:120',
             'tono_ia' => 'nullable|string|in:formal_decreto67,cercano_familia,ejecutivo_breve',
             'extension_ia' => 'nullable|string|in:breve,equilibrada,detallada',
@@ -113,14 +114,29 @@ class ChatbotController extends Controller
             'instrucciones_ia' => 'nullable|string|max:350',
         ]);
 
-        try {
-            $user = $request->user();
+        $user = $request->user();
+        $curso = Curso::find($validado['curso_id']);
+        abort_if(! $curso, 404, 'El curso ya no está disponible.');
+        Gate::authorize('consultarChat', $curso);
+        $alcance = $this->alcanceAcademico($curso, $user->id);
+        $sesionActiva = null;
+        if (! empty($validado['sesion_id'])) {
+            $sesionActiva = SesionChat::where('id', $validado['sesion_id'])
+                ->vigente()
+                ->where('user_id', $user->id)
+                ->where('curso_id', $curso->id)
+                ->where('alcance_academico', $alcance['firma'])
+                ->first();
+            if (! $sesionActiva) {
+                return response()->json(['respuesta' => 'Esta conversación ya no está disponible en el curso. Abre un chat nuevo.'], 404);
+            }
+        }
 
+        try {
             // 2. Obtener contexto real y desglosado del curso (sin exponer nombres reales a la IA)
-            $cursoId = (string) $request->curso_id;
-            $curso = Curso::with([
-                'estudiantes',
-                'estudiantes.calificaciones' => function ($query) use ($cursoId) {
+            $curso->load([
+                'estudiantes' => fn ($query) => $query->where('matriculas.vigente', true),
+                'estudiantes.calificaciones' => function ($query) use ($curso, $alcance) {
                     $query->select(
                         'calificaciones.*',
                         'asignaturas.nombre as asignatura_nombre',
@@ -129,9 +145,15 @@ class ChatbotController extends Controller
                     )
                         ->join('asignatura_curso', 'calificaciones.asignatura_curso_id', '=', 'asignatura_curso.id')
                         ->join('asignaturas', 'asignatura_curso.asignatura_id', '=', 'asignaturas.id')
-                        ->where('asignatura_curso.curso_id', $cursoId);
+                        ->where('asignatura_curso.curso_id', $curso->id)
+                        ->where('matriculas.curso_id', $curso->id)
+                        ->where('matriculas.vigente', true);
+
+                    if ($alcance['asignaturas'] !== null) {
+                        $query->whereIn('asignatura_curso.id', $alcance['asignaturas']);
+                    }
                 },
-            ])->find($cursoId);
+            ]);
 
             // INDG-27: anonimizar el mensaje antes de enviarlo a la IA.
             $privacidad = app(PrivacidadService::class);
@@ -164,17 +186,25 @@ class ChatbotController extends Controller
 
             $reglaIdentidad = 'REGLA DE NOMBRES Y RUT: En el contexto cada alumno está representado con su token [ALUMNO_X] y su RUT con [RUT_X]. El sistema reemplaza automáticamente [ALUMNO_X] y [RUT_X] por el nombre real y el RUT real en la pantalla del profesor. Cuando menciones a un estudiante o te pidan su nombre o RUT, escribe SIEMPRE el token exacto entre corchetes (por ejemplo: [ALUMNO_19] y [RUT_19]). NUNCA escribas "Estudiante 19" ni "Alumno 19" sin corchetes, y NUNCA digas que no puedes entregar nombres o RUT por privacidad.';
 
-            $extraInstrucciones = $credenciales['instrucciones_personalizadas'] !== ''
-                ? " Instrucción adicional del docente: {$credenciales['instrucciones_personalizadas']}."
+            $instrucciones = $privacidad->anonimizar($credenciales['instrucciones_personalizadas'], $curso->estudiantes)['texto'];
+            $instrucciones = $this->anonimizarRutsEnTexto($instrucciones, $curso->estudiantes);
+            $extraInstrucciones = $instrucciones !== ''
+                ? " Instrucción adicional del docente: {$instrucciones}."
                 : '';
 
-            $promptSistema = "Eres un asistente pedagógico experto y empático. Estás hablando con un {$request->tipo_profesor} de Chile. El profesor te consulta sobre este curso:\n{$contextoAcademico}\nDa diagnósticos claros basados en los datos reales del curso, sugerencias pedagógicas prácticas, pautas de evaluación y dinámicas según el Decreto 67. {$reglaDatosReales} {$reglaIdentidad} {$credenciales['instruccion_tono']} {$credenciales['instruccion_extension']} {$reglaFormato}{$extraInstrucciones}";
+            $rol = $alcance['asignaturas'] !== null
+                ? 'Profesor de Asignatura'
+                : ($user->hasRole('Administrador') ? 'Administrador' : 'Profesor Jefe');
+            $limiteAsignaturas = $alcance['asignaturas'] !== null
+                ? ' Los promedios incluyen solo las asignaturas impartidas por este docente.'
+                : '';
+            $promptSistema = "Eres un asistente pedagógico experto y empático. Estás hablando con un {$rol} de Chile. El docente te consulta sobre este curso:{$limiteAsignaturas}\n{$contextoAcademico}\nDa diagnósticos claros basados en los datos reales del curso, sugerencias pedagógicas prácticas, pautas de evaluación y dinámicas según el Decreto 67. {$reglaDatosReales} {$reglaIdentidad} {$credenciales['instruccion_tono']} {$credenciales['instruccion_extension']} {$reglaFormato}{$extraInstrucciones}";
 
             // 4. API Key (del modelo personalizado encriptado o GROQ_API_KEY por defecto)
             $apiKey = $credenciales['api_key'];
 
             if (empty($apiKey)) {
-                throw new \Exception('La API Key del proveedor de IA no está configurada.');
+                return response()->json(['respuesta' => 'Configura una clave de IA para continuar.'], 422);
             }
 
             // Construir mensajes incluyendo contexto previo de la sesión si existe (siempre anonimizado)
@@ -182,41 +212,35 @@ class ChatbotController extends Controller
                 ['role' => 'system', 'content' => $promptSistema],
             ];
 
-            $sesionActiva = null;
-            $sesionIdInput = $request->input('sesion_id');
-            if ($user && $sesionIdInput) {
-                try {
-                    $sesionActiva = SesionChat::with('mensajes')
-                        ->where('id', $sesionIdInput)
-                        ->where('user_id', $user->id)
-                        ->first();
-
-                    if ($sesionActiva) {
-                        $previos = $sesionActiva->mensajes->slice(-6);
-                        foreach ($previos as $prev) {
-                            $anonPrev = $privacidad->anonimizar($prev->contenido, $curso->estudiantes);
-                            $textoPrevSeguro = $this->anonimizarRutsEnTexto($anonPrev['texto'], $curso->estudiantes);
-                            $mensajesPayload[] = [
-                                'role' => $prev->autor === 'DOCENTE' ? 'user' : 'assistant',
-                                'content' => $textoPrevSeguro,
-                            ];
-                        }
-                    }
-                } catch (\Throwable) {
-                    $sesionActiva = null;
+            if ($sesionActiva) {
+                $previos = $sesionActiva->mensajes()->reorder('created_at', 'desc')->limit(6)->get()->reverse();
+                foreach ($previos as $prev) {
+                    $anonPrev = $privacidad->anonimizar($prev->contenido, $curso->estudiantes);
+                    $textoPrevSeguro = $this->anonimizarRutsEnTexto($anonPrev['texto'], $curso->estudiantes);
+                    $mensajesPayload[] = [
+                        'role' => $prev->autor === 'DOCENTE' ? 'user' : 'assistant',
+                        'content' => $textoPrevSeguro,
+                    ];
                 }
             }
 
             $mensajesPayload[] = ['role' => 'user', 'content' => $mensajeSeguro];
+            foreach ($mensajesPayload as &$mensaje) {
+                $mensaje['content'] = $privacidad->ocultarContactos($mensaje['content']);
+            }
+            unset($mensaje);
+
+            if (array_sum(array_map(fn ($mensaje) => mb_strlen($mensaje['content']), $mensajesPayload)) > 32000) {
+                return response()->json(['respuesta' => 'El contexto es demasiado extenso. Inicia un chat nuevo.'], 422);
+            }
 
             // 5. Petición al proveedor OpenAI-compatible (Groq por defecto)
-            $response = Http::withoutVerifying()
-                ->timeout(30)
-                ->withHeaders($credenciales['headers'])
-                ->post($credenciales['chat_url'], [
+            $response = ConexionIA::cliente($credenciales['base_url'], $credenciales['headers'], 30)
+                ->post('chat/completions', [
                     'model' => $credenciales['model'],
                     'messages' => $mensajesPayload,
                     'temperature' => $credenciales['temperature'],
+                    'max_tokens' => $credenciales['max_tokens'],
                 ]);
 
             // 6. Procesar respuesta y persistir en sesion_chats / mensaje_chats
@@ -226,85 +250,77 @@ class ChatbotController extends Controller
                 $textoRestaurado = $this->restaurarIdentidadesCurso($respuestaAPI, $mapa, $privacidad);
                 $textoIA = $this->limpiarTablasMarkdown($textoRestaurado);
 
-                $sesionIdDevuelto = $sesionIdInput;
-                $tituloSesion = Str::limit(trim($request->mensaje), 46);
+                $tituloSesion = $sesionActiva?->titulo ?: Str::limit(trim($request->mensaje), 46);
+                $sesionActiva = DB::transaction(function () use ($sesionActiva, $user, $curso, $alcance, $tituloSesion, $credenciales, $validado, $textoIA) {
+                    $sesion = $sesionActiva ?? SesionChat::create([
+                        'user_id' => $user->id,
+                        'curso_id' => $curso->id,
+                        'alcance_academico' => $alcance['firma'],
+                        'titulo' => $tituloSesion,
+                        'estado' => 'ACTIVA',
+                    ]);
+                    $sesion->modelo_id = $credenciales['modelo_id'];
+                    $sesion->expiraEn = now()->addDays(SesionChat::diasRetencion());
+                    $sesion->touch();
 
-                if ($user) {
-                    try {
-                        $tieneColumnaTitulo = Schema::hasColumn('sesion_chats', 'titulo');
-                        $tieneColumnaCurso = Schema::hasColumn('sesion_chats', 'curso_id');
-                        $tieneColumnaModelo = Schema::hasColumn('sesion_chats', 'modelo_id');
-                        $tieneColumnaModeloMsg = Schema::hasColumn('mensaje_chats', 'modelo_nombre');
+                    MensajeChat::create([
+                        'sesion_id' => $sesion->id,
+                        'autor' => 'DOCENTE',
+                        'contenido' => $validado['mensaje'],
+                    ]);
+                    MensajeChat::create([
+                        'sesion_id' => $sesion->id,
+                        'autor' => 'ASISTENTE_IA',
+                        'contenido' => $textoIA,
+                        'modelo_nombre' => $credenciales['modelo_nombre'],
+                    ]);
 
-                        if (! $sesionActiva) {
-                            $datosSesion = [
-                                'user_id' => $user->id,
-                                'estado' => 'ACTIVA',
-                            ];
-                            if ($tieneColumnaTitulo) {
-                                $datosSesion['titulo'] = $tituloSesion;
-                            }
-                            if ($tieneColumnaCurso) {
-                                $datosSesion['curso_id'] = (string) $curso->id;
-                            }
-                            if ($tieneColumnaModelo) {
-                                $datosSesion['modelo_id'] = $credenciales['modelo_id'];
-                            }
-                            $sesionActiva = SesionChat::create($datosSesion);
-                        } else {
-                            if ($tieneColumnaModelo) {
-                                $sesionActiva->modelo_id = $credenciales['modelo_id'];
-                            }
-                            $sesionActiva->touch();
-                            $sesionActiva->save();
-                            if ($tieneColumnaTitulo && ! empty($sesionActiva->titulo)) {
-                                $tituloSesion = $sesionActiva->titulo;
-                            }
-                        }
-
-                        $sesionIdDevuelto = $sesionActiva->id;
-
-                        MensajeChat::create([
-                            'sesion_id' => $sesionActiva->id,
-                            'autor' => 'DOCENTE',
-                            'contenido' => $request->mensaje,
-                        ]);
-
-                        $datosMensajeIA = [
-                            'sesion_id' => $sesionActiva->id,
-                            'autor' => 'ASISTENTE_IA',
-                            'contenido' => $textoIA,
-                        ];
-                        if ($tieneColumnaModeloMsg) {
-                            $datosMensajeIA['modelo_nombre'] = $credenciales['modelo_nombre'];
-                        }
-                        MensajeChat::create($datosMensajeIA);
-                    } catch (\Throwable $e) {
-                        Log::warning('No se pudo guardar el historial de chat: '.$e->getMessage());
-                    }
-                }
+                    return $sesion;
+                });
 
                 return response()->json([
                     'respuesta' => $textoIA,
-                    'sesion_id' => $sesionIdDevuelto,
+                    'sesion_id' => $sesionActiva->id,
                     'titulo_sesion' => $tituloSesion,
                     'modelo' => $credenciales['model'],
                     'modelo_id' => $credenciales['modelo_id'],
                     'modelo_nombre' => $credenciales['modelo_nombre'],
                     'proveedor' => $credenciales['proveedor_nombre'],
-                ]);
+                ])->header('Cache-Control', 'no-store');
             }
 
-            $detalleError = $response->json('error.message') ?? $response->body();
-            Log::error('Error IA Chat: '.$detalleError);
+            Log::warning('El proveedor rechazó la consulta de chat.', ['estado_http' => $response->status()]);
 
             return response()->json([
-                'respuesta' => "🚨 Error del proveedor de IA ({$response->status()}):\n\n".$detalleError,
-            ], 400);
+                'respuesta' => 'El proveedor de IA no pudo responder. Intenta nuevamente.',
+            ], $response->status() === 429 ? 429 : 502);
 
-        } catch (\Exception $e) {
-            return response()->json(['respuesta' => 'Error de Laravel: '.$e->getMessage()], 500);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (ConnectionException) {
+            Log::warning('No fue posible conectar con el proveedor de chat.');
+
+            return response()->json(['respuesta' => 'No fue posible conectar con el proveedor de IA.'], 503);
+        } catch (\Throwable $e) {
+            Log::error('No se pudo procesar la consulta del chat.', ['tipo' => $e::class]);
+
+            return response()->json(['respuesta' => 'No se pudo procesar la consulta. Intenta nuevamente.'], 500);
         }
+    }
+
+    private function alcanceAcademico(Curso $curso, int $userId): array
+    {
+        $asignaturas = Gate::allows('verCursoCompleto', $curso)
+            ? null
+            : $curso->asignaturas()->wherePivot('profesor_id', $userId)
+                ->orderBy('asignatura_curso.id')->pluck('asignatura_curso.id')->all();
+        $matriculas = Matricula::where('curso_id', $curso->id)->where('vigente', true)
+            ->orderBy('id')->pluck('id')->all();
+
+        return [
+            'asignaturas' => $asignaturas,
+            'firma' => hash('sha256', json_encode([$asignaturas, $matriculas], JSON_THROW_ON_ERROR)),
+        ];
     }
 
     /**

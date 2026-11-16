@@ -11,6 +11,10 @@ class ExcelSinteticosSeeder extends Seeder
 {
     public function run(): void
     {
+        if (! app()->environment('local', 'testing')) {
+            return;
+        }
+
         $this->command->info('Buscando archivos Excel...');
 
         // Apuntamos directamente a la ruta física absoluta de tu PC

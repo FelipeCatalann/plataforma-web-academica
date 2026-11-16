@@ -3,11 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Curso;
+use App\Services\ConexionIA;
 use App\Services\ConfiguracionIAService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -255,10 +256,8 @@ class ConfiguracionController extends Controller
             }
 
             try {
-                $ping = Http::withoutVerifying()
-                    ->timeout(10)
-                    ->withHeaders($credenciales['headers'])
-                    ->post($credenciales['chat_url'], [
+                $ping = ConexionIA::cliente($credenciales['base_url'], $credenciales['headers'], 10)
+                    ->post('chat/completions', [
                         'model' => $credenciales['model'],
                         'messages' => [['role' => 'user', 'content' => 'OK']],
                         'max_tokens' => 1,
@@ -280,10 +279,12 @@ class ConfiguracionController extends Controller
                     'message' => 'El proveedor respondió con estado HTTP '.$ping->status().'.',
                 ], 502);
             } catch (\Throwable $e) {
+                Log::warning('Falló la consulta de cuota de IA.', ['tipo' => $e::class]);
+
                 return response()->json([
                     'ok' => false,
-                    'message' => 'No fue posible consultar la cuota: '.$e->getMessage(),
-                ], 500);
+                    'message' => 'No fue posible consultar la cuota del proveedor.',
+                ], 503);
             }
         }
 
@@ -314,25 +315,31 @@ class ConfiguracionController extends Controller
     public function probarConexionIA(Request $request, ConfiguracionIAService $iaService): JsonResponse
     {
         $user = $request->user();
-        $apiKeyInput = trim((string) $request->input('api_key', ''));
-        $proveedorId = (string) $request->input('proveedor', '');
-        $modeloId = (string) $request->input('modelo_id', '');
-        $baseUrlInput = trim((string) $request->input('base_url', ''));
+        $validado = $request->validate([
+            'api_key' => 'nullable|string|max:300',
+            'proveedor' => 'nullable|string|in:groq,openai,gemini,anthropic,openrouter,custom',
+            'modelo_id' => 'nullable|string|max:120',
+            'model_id' => 'nullable|string|max:120',
+            'base_url' => 'nullable|string|max:255',
+        ]);
+        $apiKeyInput = trim($validado['api_key'] ?? '');
+        $proveedorId = $validado['proveedor'] ?? 'groq';
 
         if ($apiKeyInput !== '') {
             $proveedorInfo = ConfiguracionIAService::PROVEEDORES[$proveedorId] ?? ConfiguracionIAService::PROVEEDORES['groq'];
-            $baseUrl = rtrim($baseUrlInput ?: $proveedorInfo['base_url'], '/');
+            $baseUrl = ConexionIA::validarBaseUrl(($validado['base_url'] ?? '') ?: $proveedorInfo['base_url']);
             $apiKey = $apiKeyInput;
             $proveedorNombre = $proveedorInfo['nombre'];
-            $activeModel = (string) ($request->input('model_id') ?: 'llama-3.3-70b-versatile');
+            $activeModel = $validado['model_id'] ?? 'llama-3.3-70b-versatile';
         } else {
             $credenciales = $iaService->resolverCredencialesAgente($user, 'chat', [
-                'modelo_id' => $modeloId ?: null,
+                'modelo_id' => $validado['modelo_id'] ?? null,
             ]);
             $apiKey = $credenciales['api_key'];
             $baseUrl = $credenciales['base_url'];
             $proveedorNombre = $credenciales['proveedor_nombre'];
             $activeModel = $credenciales['model'];
+            $proveedorId = $credenciales['proveedor'];
         }
 
         if ($apiKey === '') {
@@ -347,16 +354,13 @@ class ConfiguracionController extends Controller
         $headers = [
             'Authorization' => 'Bearer '.$apiKey,
         ];
-        if ($proveedorId === 'anthropic' || str_contains($baseUrl, 'anthropic.com')) {
+        if ($proveedorId === 'anthropic') {
             $headers['x-api-key'] = $apiKey;
             $headers['anthropic-version'] = '2023-06-01';
         }
 
         try {
-            $response = Http::withoutVerifying()
-                ->timeout(8)
-                ->withHeaders($headers)
-                ->get($baseUrl.'/models');
+            $response = ConexionIA::cliente($baseUrl, $headers, 8)->get('models');
 
             $latenciaMs = (int) round((microtime(true) - $inicio) * 1000);
 
@@ -388,10 +392,12 @@ class ConfiguracionController extends Controller
                 'message' => "Conexión activa con {$proveedorNombre} ({$latenciaMs} ms · {$modelos} modelos disponibles).",
             ]);
         } catch (\Throwable $e) {
+            Log::warning('Falló la prueba de conexión de IA.', ['tipo' => $e::class]);
+
             return response()->json([
                 'ok' => false,
-                'message' => "No fue posible conectar con {$proveedorNombre}: ".$e->getMessage(),
-            ], 500);
+                'message' => "No fue posible conectar con {$proveedorNombre}.",
+            ], 503);
         }
     }
 }

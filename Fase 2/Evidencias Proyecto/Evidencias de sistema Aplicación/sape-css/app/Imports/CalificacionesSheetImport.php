@@ -2,8 +2,6 @@
 
 namespace App\Imports;
 
-use Carbon\Carbon;
-use Exception;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -12,20 +10,49 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class CalificacionesSheetImport implements ToCollection, WithHeadingRow
 {
+    public function __construct(private NominaSheetImport $nomina) {}
+
     public function collection(Collection $rows): void
     {
         $now = now();
-        $anoActual = $now->year;
         $paresLimpiados = [];
 
-        foreach ($rows as $row) {
+        foreach ($rows as $indice => $row) {
+            if ($row->filter(fn ($valor) => $valor !== null && $valor !== '')->isEmpty()) {
+                continue;
+            }
+            $numero = $indice + 2;
+            $identidad = IdentidadSyscol::datos($row, 'CALIFICACIONES', $numero);
+            if (! $this->nomina->incluyeMatricula($identidad)) {
+                IdentidadSyscol::rechazar('CALIFICACIONES', $numero, 'La matrícula de ese curso y año debe aparecer en la nómina de la planilla.');
+            }
+            $curso = IdentidadSyscol::curso($identidad['curso'], 'CALIFICACIONES', $numero);
+            $estudiante = DB::table('estudiantes')->where('identificadorInterno', $identidad['run'])->first();
+            $matriculas = $curso && $estudiante
+                ? DB::table('matriculas')->where('curso_id', $curso->id)->where('estudiante_id', $estudiante->id)->limit(2)->get()
+                : collect();
+            if ($matriculas->count() !== 1) {
+                IdentidadSyscol::rechazar('CALIFICACIONES', $numero, 'Se requiere una matrícula única para el estudiante, curso y año indicados.');
+            }
+            $matricula = $matriculas->first();
+            if (empty($row['cod_subsector']) || empty($row['subsector'])) {
+                IdentidadSyscol::rechazar('CALIFICACIONES', $numero, 'Falta el código o nombre de la asignatura.');
+            }
             // Validar regla de negocio de eximición
-            $tieneNota = ! empty($row['nota_final']);
+            $notaCruda = str_replace(',', '.', trim((string) ($row['nota_final'] ?? '')));
+            $tieneNota = $notaCruda !== '';
             $tieneConceptual = ! empty($row['nota_conceptual']);
             $esEximido = (strtoupper($row['eximido'] ?? '') === 'EX');
 
             if ((int) $tieneNota + (int) $tieneConceptual + (int) $esEximido > 1) {
-                throw new Exception("Error en RUN {$row['run_token']}: Un alumno no puede tener nota numérica, conceptual y estar eximido simultáneamente.");
+                IdentidadSyscol::rechazar('CALIFICACIONES', $numero, 'Indica solo un tipo de evaluación: nota, concepto o eximición.');
+            }
+            if ($tieneNota && (! is_numeric($notaCruda) || (float) $notaCruda < 1 || (float) $notaCruda > 7)) {
+                IdentidadSyscol::rechazar('CALIFICACIONES', $numero, 'La calificación numérica debe estar entre 1 y 7.');
+            }
+            $semestreExcel = trim((string) ($row['semestre'] ?? ''));
+            if (! in_array($semestreExcel, ['1', '2'], true)) {
+                IdentidadSyscol::rechazar('CALIFICACIONES', $numero, 'El semestre debe ser 1 o 2.');
             }
 
             // 1. Buscar la Asignatura
@@ -38,27 +65,6 @@ class CalificacionesSheetImport implements ToCollection, WithHeadingRow
                     'nombre' => $row['subsector'],
                     'created_at' => $now, 'updated_at' => $now,
                 ]);
-            }
-
-            // 2. Buscar al estudiante y su matrícula en el curso correspondiente a la fila
-            $estudiante = DB::table('estudiantes')->where('identificadorInterno', $row['run_token'])->first();
-            if (! $estudiante) {
-                continue;
-            }
-
-            $grado = trim((string) ($row['grado'] ?? ''));
-            $cursoLetra = trim((string) ($row['curso'] ?? ''));
-            $cursoRow = ($grado !== '' && $cursoLetra !== '')
-                ? DB::table('cursos')->where('nivel', $grado)->where('letra', $cursoLetra)->first()
-                : null;
-
-            $matriculaQuery = DB::table('matriculas')->where('estudiante_id', $estudiante->id);
-            if ($cursoRow) {
-                $matriculaQuery->where('curso_id', $cursoRow->id);
-            }
-            $matricula = $matriculaQuery->first();
-            if (! $matricula) {
-                continue;
             }
 
             // 3. Conectar Asignatura con el Curso (reutilizando fila si un docente fue asignado previamente por nombre de subsector)
@@ -101,24 +107,19 @@ class CalificacionesSheetImport implements ToCollection, WithHeadingRow
 
             // 3.5. Si ya existían calificaciones previas para este alumno y asignatura en una carga anterior,
             // se reemplazan una sola vez al inicio de la importación del archivo para no mezclar notas antiguas con nuevas.
-            $clavePar = "{$matricula->id}:{$asigCursoId}";
+            $clavePar = "{$matricula->id}:{$asigCursoId}:{$semestreExcel}";
             if (! isset($paresLimpiados[$clavePar])) {
                 DB::table('calificaciones')
                     ->where('matricula_id', $matricula->id)
                     ->where('asignatura_curso_id', $asigCursoId)
+                    ->where('semestre', (int) $semestreExcel)
                     ->delete();
                 $paresLimpiados[$clavePar] = true;
             }
 
             // 4. Transformar la Calificación
-            $notaCruda = str_replace(',', '.', (string) ($row['nota_final'] ?? ''));
             $valorDecimal = is_numeric($notaCruda) ? (float) $notaCruda : 0.0;
             $evaluacion = $esEximido ? 'EXIMIDO' : ($row['nota_conceptual'] ?? 'REGULAR');
-
-            $semestreExcel = (int) ($row['semestre'] ?? 1);
-            $mesFalso = $semestreExcel === 1 ? mt_rand(3, 7) : mt_rand(8, 12);
-            $diaFalso = mt_rand(1, 28);
-            $fechaNota = Carbon::create($anoActual, $mesFalso, $diaFalso);
 
             // 5. Insertar en la base de datos
             DB::table('calificaciones')->insert([
@@ -128,7 +129,7 @@ class CalificacionesSheetImport implements ToCollection, WithHeadingRow
                 'valor' => $valorDecimal,
                 'ponderacion' => 1.00,
                 'evaluacion' => $evaluacion,
-                'semestre' => $semestreExcel,
+                'semestre' => (int) $semestreExcel,
                 'fecha' => $now,
                 'created_at' => $now, 'updated_at' => $now,
             ]);

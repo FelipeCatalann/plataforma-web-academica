@@ -2,14 +2,28 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Curso;
 use App\Models\Estudiante;
+use App\Services\ConexionIA;
 use App\Services\ConfiguracionIAService;
+use App\Services\PrivacidadService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class InformeIAController extends Controller
 {
+    private const DESTINATARIOS = [
+        'Apoderado',
+        'Unidad Técnico Pedagógica (UTP)',
+        'Departamento de Psicología / Convivencia Escolar',
+        'Dirección del Establecimiento',
+    ];
+
     public function generarInforme(Request $request, ConfiguracionIAService $iaService)
     {
         // 1. Ampliar tiempo de ejecución
@@ -17,24 +31,41 @@ class InformeIAController extends Controller
 
         // Validamos que vengan todos los campos del Modal
         $request->validate([
-            'estudiante_id' => 'required',
-            'destinatario' => 'required|string',
-            'palabras_clave' => 'nullable|string',
+            'estudiante_id' => 'required|uuid',
+            'curso_id' => 'required|uuid',
+            'destinatario' => ['required', 'string', Rule::in(self::DESTINATARIOS)],
+            'palabras_clave' => 'nullable|string|max:500',
             'modelo_id' => 'nullable|string|max:120',
             'tono_ia' => 'nullable|string|in:formal_decreto67,cercano_familia,ejecutivo_breve',
             'extension_ia' => 'nullable|string|in:breve,equilibrada,detallada',
             'precision_ia' => 'nullable|string|in:estricto,balanceado,dinamico',
         ]);
 
+        $estudiante = Estudiante::find($request->estudiante_id);
+        $curso = Curso::find($request->curso_id);
+        abort_if(! $estudiante || ! $curso, 404, 'No se encontró el estudiante o el curso.');
+        Gate::authorize('generarInforme', [$estudiante, $curso]);
+
         try {
-            $estudiante = Estudiante::with('calificaciones')->findOrFail($request->estudiante_id);
-            $cursoTexto = $request->curso_nombre ?? 'su curso';
+            $cursoTexto = "{$curso->nivel}° Medio {$curso->letra}";
+            $puedeVerTodoElCurso = Gate::allows('verCursoCompleto', $curso);
+
+            $asignaturasPermitidas = DB::table('asignatura_curso')->where('curso_id', $curso->id);
+            if (! $puedeVerTodoElCurso) {
+                $asignaturasPermitidas->where('profesor_id', $request->user()->id);
+            }
+
+            $notas = $estudiante->calificaciones()
+                ->where('matriculas.curso_id', $curso->id)
+                ->where('matriculas.vigente', true)
+                ->whereIn('calificaciones.asignatura_curso_id', $asignaturasPermitidas->select('id'))
+                ->pluck('calificaciones.valor')
+                ->toArray();
 
             // 2. ENMASCARAMIENTO (Ley 19.628)
             $nombreReal = trim($estudiante->nombres.' '.$estudiante->apellidos);
             $runReal = $estudiante->identificadorInterno ?? $estudiante->run ?? 'Sin Registro';
 
-            $notas = $estudiante->calificaciones->pluck('valor')->toArray();
             $promedio = count($notas) > 0 ? array_sum($notas) / count($notas) : 0;
             $promedioFmt = number_format($promedio, 1);
             $listaNotas = count($notas) > 0 ? implode(', ', $notas) : 'Sin notas registradas';
@@ -52,17 +83,25 @@ class InformeIAController extends Controller
             );
 
             $destinatario = $request->destinatario;
-            $textoPalabrasClave = $request->palabras_clave
-                ? "Considera además estos puntos clave observados por el profesor: {$request->palabras_clave}."
+            $privacidad = app(PrivacidadService::class);
+            $sanear = function (string $texto) use ($privacidad, $estudiante, $runReal): string {
+                $texto = $privacidad->anonimizar($texto, [$estudiante])['texto'];
+
+                return $privacidad->ocultarContactos(str_ireplace((string) $runReal, '[RUN]', $texto));
+            };
+            $observaciones = $sanear((string) $request->palabras_clave);
+            $textoPalabrasClave = $observaciones !== ''
+                ? "Considera además estos puntos clave observados por el profesor: {$observaciones}."
                 : '';
 
-            $extraInstrucciones = $credenciales['instrucciones_personalizadas'] !== ''
-                ? "Instrucción adicional del docente: {$credenciales['instrucciones_personalizadas']}."
+            $instrucciones = $sanear($credenciales['instrucciones_personalizadas']);
+            $extraInstrucciones = $instrucciones !== ''
+                ? "Instrucción adicional del docente: {$instrucciones}."
                 : '';
 
             // 4. Prompt de usuario ocultando la identidad
             $prompt = "Redacta un informe pedagógico formal y respetuoso dirigido a: {$destinatario}.
-            El estudiante [ESTUDIANTE] (RUT: [RUN]), perteneciente a [CURSO], tiene un promedio general de {$promedioFmt}.
+            El estudiante [ESTUDIANTE] (RUT: [RUN]), perteneciente a [CURSO], tiene un promedio de {$promedioFmt} en las calificaciones autorizadas para este docente.
             Sus calificaciones recientes son: {$listaNotas}.
             
             {$textoPalabrasClave}
@@ -77,13 +116,17 @@ class InformeIAController extends Controller
             
             IMPORTANTE: No uses formato Markdown (ni asteriscos, ni negritas, ni tablas). Escribe solo en texto plano con saltos de línea.";
 
-            // 5. Petición a la IA (Groq predeterminado o modelo personalizado del usuario)
-            $apiKey = $credenciales['api_key'];
+            if (mb_strlen($prompt) > 32000) {
+                return response()->json(['error' => 'El contexto es demasiado extenso para generar el informe.'], 422);
+            }
 
-            $response = Http::withoutVerifying()
-                ->timeout(30)
-                ->withHeaders($credenciales['headers'])
-                ->post($credenciales['chat_url'], [
+            // 5. Petición a la IA (Groq predeterminado o modelo personalizado del usuario)
+            if (empty($credenciales['api_key'])) {
+                return response()->json(['error' => 'Configura una clave de IA para generar el informe.'], 422);
+            }
+
+            $response = ConexionIA::cliente($credenciales['base_url'], $credenciales['headers'], 30)
+                ->post('chat/completions', [
                     'model' => $credenciales['model'],
                     'messages' => [
                         [
@@ -115,20 +158,26 @@ class InformeIAController extends Controller
                     'informe' => $informeFinal,
                     'modelo' => $credenciales['model'],
                     'proveedor' => $credenciales['proveedor_nombre'],
-                ]);
+                ])->header('Cache-Control', 'no-store');
             }
 
-            Log::error('Error IA Informe: '.$response->body());
+            Log::warning('El proveedor rechazó el informe.', ['estado_http' => $response->status()]);
 
             return response()->json([
-                'error' => 'Error al conectar con la IA. Detalle: '.$response->status(),
-            ], 503);
+                'error' => 'El proveedor de IA no pudo generar el informe.',
+            ], $response->status() === 429 ? 429 : 502);
 
-        } catch (\Exception $e) {
-            Log::error('Error Excepción Informe: '.$e->getMessage());
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (ConnectionException) {
+            Log::warning('No fue posible conectar con el proveedor de informes.');
+
+            return response()->json(['error' => 'No fue posible conectar con el proveedor de IA.'], 503);
+        } catch (\Throwable $e) {
+            Log::error('No se pudo generar el informe.', ['tipo' => $e::class]);
 
             return response()->json([
-                'error' => 'Error interno: '.$e->getMessage(),
+                'error' => 'No se pudo generar el informe. Intenta nuevamente.',
             ], 500);
         }
     }

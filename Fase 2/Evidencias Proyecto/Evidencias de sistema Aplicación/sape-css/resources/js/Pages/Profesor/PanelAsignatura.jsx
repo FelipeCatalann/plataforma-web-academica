@@ -190,7 +190,7 @@ export default function PanelAsignatura({ auth, cursos }) {
                                             }`}
                                         ></div>
                                         <span className="text-xs sm:text-sm">
-                                            {curso.nivel}° Medio {curso.letra}
+                                            {curso.nivel}° Medio {curso.letra} · {curso.anioEscolar}
                                         </span>
                                     </div>
                                     <span
@@ -333,7 +333,7 @@ export default function PanelAsignatura({ auth, cursos }) {
                                         >
                                             {cursos.map((c) => (
                                                 <option key={c.id} value={c.id}>
-                                                    {c.nivel}° Medio {c.letra}
+                                                    {c.nivel}° Medio {c.letra} · {c.anioEscolar}
                                                 </option>
                                             ))}
                                         </select>
@@ -342,7 +342,6 @@ export default function PanelAsignatura({ auth, cursos }) {
                                 {cursoChatbotId && (
                                     <ChatbotPedagogico
                                         cursoContexto={cursos.find((c) => String(c.id) === String(cursoChatbotId))}
-                                        tipoProfesor="Profesor de Asignatura"
                                         alturaClase="h-[calc(100dvh-15rem)] sm:h-[calc(100dvh-14rem)] md:h-[calc(100dvh-13.5rem)] min-h-[340px]"
                                         onAbrirInforme={(est) => abrirModalInforme(est)}
                                         onVerFicha={(est) => {
@@ -683,6 +682,7 @@ export default function PanelAsignatura({ auth, cursos }) {
                 isOpen={modalInformeOpen}
                 onClose={() => setModalInformeOpen(false)}
                 estudiante={estudianteParaInforme}
+                cursoId={cursoActivo?.id}
                 cursoNombre={cursoActivo ? `${cursoActivo.nivel}° Medio ${cursoActivo.letra}` : ''}
             />
         </AuthenticatedLayout>
