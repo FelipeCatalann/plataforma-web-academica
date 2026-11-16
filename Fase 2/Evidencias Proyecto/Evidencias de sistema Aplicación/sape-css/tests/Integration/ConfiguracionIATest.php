@@ -1,18 +1,61 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Integration;
 
 use App\Imports\ImportadorSyscol;
 use App\Models\User;
+use App\Services\ConexionIA;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Maatwebsite\Excel\Facades\Excel;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class ConfiguracionIATest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Http::preventStrayRequests();
+    }
+
+    public function test_conexion_rechaza_destino_no_aprobado_antes_de_enviar_credenciales(): void
+    {
+        Http::fake();
+        $this->actingAs(User::factory()->create());
+        $datos = [
+            'proveedor' => 'custom',
+            'model_id' => 'modelo-prueba',
+            'base_url' => 'https://sin-aprobar.example.test/v1',
+            'api_key' => 'clave-de-prueba',
+        ];
+
+        $this->postJson(route('configuracion.probar-ia'), $datos)
+            ->assertUnprocessable()->assertJsonValidationErrors('base_url');
+        $this->postJson(route('configuracion.guardar-ia'), $datos + ['accion' => 'agregar_modelo'])
+            ->assertUnprocessable()->assertJsonValidationErrors('base_url');
+        Http::assertNothingSent();
+    }
+
+    public function test_destino_https_aprobado_no_sigue_redirecciones(): void
+    {
+        config(['services.ia.bases_aprobadas' => ['https://proveedor.example.test/v1']]);
+        $opciones = ConexionIA::cliente('https://proveedor.example.test/v1', [], 8)->getOptions();
+        $this->assertFalse($opciones['allow_redirects']);
+        $this->assertNotFalse($opciones['verify'] ?? true);
+
+        Http::fake(['proveedor.example.test/*' => Http::response([], 302, ['Location' => 'https://otro.example.test/v1/models'])]);
+        $this->actingAs(User::factory()->create())->postJson(route('configuracion.probar-ia'), [
+            'proveedor' => 'custom',
+            'base_url' => 'https://proveedor.example.test/v1',
+            'api_key' => 'clave-de-prueba',
+        ])->assertStatus(502);
+        Http::assertSentCount(1);
+    }
 
     public function test_usuario_puede_agregar_modelo_con_api_key_encriptada_y_enmascarada(): void
     {
@@ -76,16 +119,15 @@ class ConfiguracionIATest extends TestCase
 
     public function test_chatbot_utiliza_modelo_personalizado_y_preferencias_del_usuario(): void
     {
-        $archivo = tempnam(sys_get_temp_dir(), 'sape_cfg').'.xlsx';
+        $archivo = $this->archivoExcelTemporal();
         $this->artisan('sape:generar-sinteticos', [
             'grado' => '1', 'letra' => 'A', 'ano' => '2026',
             '--alumnos' => '6', '--seed' => '2026', '--salida' => $archivo,
         ])->assertSuccessful();
         Excel::import(new ImportadorSyscol, $archivo);
-        @unlink($archivo);
 
         $curso = DB::table('cursos')->first();
-        $user = User::factory()->create();
+        $user = $this->crearProfesorJefe($curso->id);
         $this->actingAs($user);
 
         // Guardar modelo personalizado en OpenAI y preferencias de respuesta
@@ -147,22 +189,19 @@ class ConfiguracionIATest extends TestCase
 
     public function test_chatbot_limpia_tablas_markdown_con_barras_en_la_respuesta(): void
     {
-        $_SERVER['GROQ_API_KEY'] = 'test-fake-key';
-        putenv('GROQ_API_KEY=test-fake-key');
-
-        $archivo = tempnam(sys_get_temp_dir(), 'sape_tbl').'.xlsx';
+        $archivo = $this->archivoExcelTemporal();
         $this->artisan('sape:generar-sinteticos', [
             'grado' => '1', 'letra' => 'A', 'ano' => '2026',
             '--alumnos' => '6', '--seed' => '2026', '--salida' => $archivo,
         ])->assertSuccessful();
         Excel::import(new ImportadorSyscol, $archivo);
-        @unlink($archivo);
 
         $curso = DB::table('cursos')->first();
-        $primerAlumno = DB::table('estudiantes')->first();
+        $primerAlumno = DB::table('estudiantes')->join('matriculas', 'matriculas.estudiante_id', '=', 'estudiantes.id')
+            ->where('matriculas.vigente', true)->orderBy('estudiantes.identificadorInterno')->first();
         $nombreRealPrimero = trim($primerAlumno->nombres.' '.$primerAlumno->apellidos);
         $rutRealPrimero = $primerAlumno->identificadorInterno;
-        $this->actingAs(User::factory()->create());
+        $this->actingAs($this->crearProfesorJefe($curso->id));
 
         Http::fake([
             'api.groq.com*' => Http::response([
@@ -188,25 +227,19 @@ class ConfiguracionIATest extends TestCase
         $this->assertStringContainsString($nombreRealPrimero, $texto);
         $this->assertStringContainsString($rutRealPrimero, $texto);
 
-        unset($_SERVER['GROQ_API_KEY']);
-        putenv('GROQ_API_KEY');
     }
 
     public function test_chatbot_registra_consumo_de_tokens_y_cuota_del_modelo_en_configuracion(): void
     {
-        $_SERVER['GROQ_API_KEY'] = 'test-fake-key';
-        putenv('GROQ_API_KEY=test-fake-key');
-
-        $archivo = tempnam(sys_get_temp_dir(), 'sape_tok').'.xlsx';
+        $archivo = $this->archivoExcelTemporal();
         $this->artisan('sape:generar-sinteticos', [
             'grado' => '1', 'letra' => 'A', 'ano' => '2026',
             '--alumnos' => '4', '--seed' => '2026', '--salida' => $archivo,
         ])->assertSuccessful();
         Excel::import(new ImportadorSyscol, $archivo);
-        @unlink($archivo);
 
         $curso = DB::table('cursos')->first();
-        $user = User::factory()->create();
+        $user = $this->crearProfesorJefe($curso->id);
         $this->actingAs($user);
 
         Http::fake([
@@ -256,7 +289,14 @@ class ConfiguracionIATest extends TestCase
             ->assertJsonPath('configuracionIA.metricas_consumo.total_tokens', 0)
             ->assertJsonPath('configuracionIA.metricas_consumo.total_consultas', 0);
 
-        unset($_SERVER['GROQ_API_KEY']);
-        putenv('GROQ_API_KEY');
+    }
+
+    private function crearProfesorJefe(string $cursoId): User
+    {
+        $user = User::factory()->create();
+        $user->assignRole(Role::findOrCreate('Profesor Jefe', 'web'));
+        DB::table('cursos')->where('id', $cursoId)->update(['profesor_jefe_id' => $user->id]);
+
+        return $user;
     }
 }

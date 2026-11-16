@@ -2,6 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
+.welcome-direct {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    min-block-size: max(35rem, calc(100svh - 8rem));
+    padding: clamp(3rem, 9vw, 7rem) clamp(1.25rem, 5vw, 4rem);
+    background-color: #4a0e09;
+    color: #fff;
+    text-align: center;
+}
+
+.welcome-direct-intro {
+    display: grid;
+    justify-items: center;
+    margin-inline: auto;
+}
+
+.welcome-direct-intro h1 {
+    margin-block-start: 0.75rem;
+    font-size: clamp(2.75rem, 8.5vw, 5.75rem);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+}
+
+.welcome-direct-intro h1 span {
+    color: #e5e632;
+}
+
+.welcome-direct-intro p {
+    max-inline-size: 46ch;
+    margin-block: 1rem 1.5rem;
+    color: #ffebe6;
+    font-size: 1.125rem;
+    line-height: 1.55;
+    text-wrap: pretty;
+}
+
+.welcome-direct-capabilities {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.625rem 1.5rem;
+    width: min(100%, 50rem);
+    margin: clamp(2.75rem, 7vw, 4.5rem) auto 0;
+    padding-block-start: 1rem;
+    border-block-start: 1px solid #975b52;
+    color: #ffebe6;
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
 @media (prefers-reduced-motion: reduce) {
     html:focus-within {
         scroll-behavior: auto;

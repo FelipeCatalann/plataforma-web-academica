@@ -235,7 +235,7 @@ class ConfiguracionIAService
         $modelId = trim((string) $datos['model_id']);
         $nombre = trim((string) ($datos['nombre'] ?? '')) ?: $modelId;
         $subtitulo = trim((string) ($datos['subtitulo'] ?? '')) ?: ($proveedorInfo['nombre'].' · API Key propia');
-        $baseUrl = rtrim(trim((string) ($datos['base_url'] ?? '')), '/') ?: $proveedorInfo['base_url'];
+        $baseUrl = ConexionIA::validarBaseUrl(($datos['base_url'] ?? '') ?: $proveedorInfo['base_url']);
         $apiKey = trim((string) $datos['api_key']);
 
         $personalizados = is_array($cruda['modelos_personalizados'] ?? null)
@@ -382,7 +382,7 @@ class ConfiguracionIAService
         if ($modeloPersonalizado && ! empty($modeloPersonalizado['api_key'])) {
             $proveedorId = $modeloPersonalizado['proveedor'] ?? 'groq';
             $proveedorInfo = self::PROVEEDORES[$proveedorId] ?? self::PROVEEDORES['custom'];
-            $baseUrl = rtrim($modeloPersonalizado['base_url'] ?: $proveedorInfo['base_url'], '/');
+            $baseUrl = ConexionIA::validarBaseUrl(($modeloPersonalizado['base_url'] ?? '') ?: $proveedorInfo['base_url']);
             $apiKey = trim((string) $modeloPersonalizado['api_key']);
             $modelId = (string) $modeloPersonalizado['model_id'];
             $modeloIdInterno = (string) $modeloPersonalizado['id'];
@@ -445,7 +445,6 @@ class ConfiguracionIAService
             'modelo_nombre' => $modeloNombre,
             'proveedor' => $proveedorId,
             'base_url' => $baseUrl,
-            'chat_url' => $baseUrl.'/chat/completions',
             'api_key' => $apiKey,
             'headers' => $headers,
             'proveedor_nombre' => $proveedorNombre,

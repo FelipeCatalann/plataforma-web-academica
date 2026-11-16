@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useForm, usePage } from '@inertiajs/react';
+import { mensajeRevision, revisarImportacion } from '@/utils/revisarImportacion';
 
 export default function ImportarNotas() {
     // Obtenemos las variables de sesión global (flash) desde Inertia
@@ -9,11 +10,29 @@ export default function ImportarNotas() {
     const { data, setData, post, processing, errors } = useForm({
         archivo_excel: null,
     });
+    const [revisado, setRevisado] = useState(null);
+    const [revisando, setRevisando] = useState(false);
+    const [errorRevision, setErrorRevision] = useState('');
 
-    const submit = (e) => {
+    const submit = async (e) => {
         e.preventDefault();
+        if (!data.archivo_excel || revisando || processing) return;
+        setErrorRevision('');
+        if (revisado !== data.archivo_excel) {
+            setRevisando(true);
+            try {
+                await revisarImportacion(data.archivo_excel);
+                setRevisado(data.archivo_excel);
+            } catch (error) {
+                setErrorRevision(mensajeRevision(error));
+            } finally {
+                setRevisando(false);
+            }
+            return;
+        }
         post(route('admin.importar.store'), {
             forceFormData: true, // Importante para enviar archivos binarios correctamente
+            onFinish: () => setRevisado(null),
         });
     };
 
@@ -40,28 +59,31 @@ export default function ImportarNotas() {
             <form onSubmit={submit} className="space-y-4">
                 <div>
                     <label className="block text-sm font-medium text-gray-700">
-                        Seleccionar Archivo Excel (.xlsx / .csv)
+                        Seleccionar planilla Excel
                     </label>
                     <input 
-                        type="file" 
+                        type="file"
+                        accept=".xlsx,.xls"
+                        disabled={revisando || processing}
                         onChange={e => setData('archivo_excel', e.target.files[0])}
                         className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm text-gray-700"
                     />
                     
                     {/* Mensaje de Error de Validación en el archivo */}
-                    {errors.archivo_excel && (
+                    {(errorRevision || errors.archivo_excel) && (
                         <div className="text-red-500 text-sm mt-1">
-                            {errors.archivo_excel}
+                            {errorRevision || errors.archivo_excel}
                         </div>
                     )}
                 </div>
 
                 <button 
                     type="submit" 
-                    disabled={processing}
+                    disabled={!data.archivo_excel || processing || revisando}
                     className="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 transition disabled:opacity-50"
                 >
-                    {processing ? 'Procesando e importando...' : 'Iniciar Importación Segura'}
+                    {processing ? 'Importando…' : revisando ? 'Revisando…' :
+                        revisado === data.archivo_excel && revisado ? 'Confirmar importación' : 'Revisar planilla'}
                 </button>
             </form>
         </div>

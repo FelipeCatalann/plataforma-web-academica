@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Apoderado;
+use App\Models\Curso;
 use App\Models\EnlaceWhatsApp;
 use App\Models\Matricula;
 use App\Models\RegistroBitacora;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 class EnlaceWhatsAppController extends Controller
@@ -19,8 +22,8 @@ class EnlaceWhatsAppController extends Controller
     public function prepararEnlace(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'estudiante_id' => 'required|string',
-            'curso_id' => 'required|string',
+            'estudiante_id' => 'required|uuid',
+            'curso_id' => 'required|uuid',
             'telefono' => 'required|string|min:8|max:25',
             'mensaje' => 'required|string|min:10|max:2000',
             'criterio' => 'nullable|string|max:100',
@@ -37,8 +40,18 @@ class EnlaceWhatsAppController extends Controller
             ], 422);
         }
 
+        return DB::transaction(fn () => $this->registrarEnlace($request, $validated, $telefonoNormalizado));
+    }
+
+    private function registrarEnlace(Request $request, array $validated, string $telefonoNormalizado): JsonResponse
+    {
+        $curso = Curso::query()->lockForUpdate()->find($validated['curso_id']);
+        abort_if(! $curso, 404, 'El curso ya no está disponible.');
+        Gate::authorize('verCursoCompleto', $curso);
         $matricula = Matricula::where('estudiante_id', $validated['estudiante_id'])
             ->where('curso_id', $validated['curso_id'])
+            ->where('vigente', true)
+            ->lockForUpdate()
             ->first();
 
         if (! $matricula) {
@@ -49,21 +62,22 @@ class EnlaceWhatsAppController extends Controller
 
         $telefonoConMas = '+'.$telefonoNormalizado;
 
-        // Si el profesor ingresó o actualizó el teléfono del apoderado, lo persistimos en la ficha
-        if ($matricula->apoderado_id) {
-            Apoderado::where('id', $matricula->apoderado_id)->update([
+        $apoderado = $matricula->apoderado()->lockForUpdate()->first();
+        $contactoCompartido = $apoderado && Matricula::where('apoderado_id', $apoderado->id)
+            ->where('id', '!=', $matricula->id)->exists();
+
+        if ($apoderado && ! $contactoCompartido) {
+            $apoderado->update([
                 'telefono' => $telefonoConMas,
                 'telefonoVigente' => true,
             ]);
-        } else {
-            $apoderado = Apoderado::firstOrCreate(
-                ['telefono' => $telefonoConMas],
-                [
-                    'id' => (string) Str::uuid(),
-                    'nombre' => 'Apoderado registrado por Profesor Jefe',
-                    'telefonoVigente' => true,
-                ]
-            );
+        } elseif (! $apoderado || $apoderado->telefono !== $telefonoConMas || ! $apoderado->telefonoVigente) {
+            $apoderado = Apoderado::create([
+                'id' => (string) Str::uuid(),
+                'nombre' => $apoderado?->nombre ?? 'Apoderado registrado por docente',
+                'telefono' => $telefonoConMas,
+                'telefonoVigente' => true,
+            ]);
             $matricula->update(['apoderado_id' => $apoderado->id]);
         }
 

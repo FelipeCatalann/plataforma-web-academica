@@ -140,7 +140,8 @@ class DashboardController extends Controller
         foreach ($niveles as $nivel) {
             foreach ($letras as $letra) {
                 $cursoSubido = $cursosEnriquecidos->first(
-                    fn ($c) => (string) $c->nivel === $nivel && strtoupper((string) $c->letra) === $letra
+                    fn ($c) => (int) $c->anioEscolar === now()->year
+                        && (string) $c->nivel === $nivel && strtoupper((string) $c->letra) === $letra
                 );
 
                 $catalogoCursos[] = [
@@ -165,11 +166,11 @@ class DashboardController extends Controller
         // Si hubiera algún curso extra fuera de A/B/C subido en BD, también lo agregamos
         foreach ($cursosEnriquecidos as $cursoExtra) {
             $existeEnCatalogo = collect($catalogoCursos)->contains(
-                fn ($item) => $item['nivel'] === (string) $cursoExtra->nivel && $item['letra'] === strtoupper((string) $cursoExtra->letra)
+                fn ($item) => $item['curso_id'] === $cursoExtra->id
             );
             if (! $existeEnCatalogo) {
                 $catalogoCursos[] = [
-                    'codigo' => "{$cursoExtra->nivel}° Medio {$cursoExtra->letra}",
+                    'codigo' => "{$cursoExtra->nivel}° Medio {$cursoExtra->letra} ({$cursoExtra->anioEscolar})",
                     'nivel' => (string) $cursoExtra->nivel,
                     'letra' => strtoupper((string) $cursoExtra->letra),
                     'subido' => true,
@@ -262,7 +263,6 @@ class DashboardController extends Controller
             'email' => trim($validated['email']),
             'password' => Hash::make($validated['password']),
         ]);
-        $profesor->email_verified_at = now();
         $profesor->save();
 
         Role::firstOrCreate(['name' => $validated['rol_inicial']]);

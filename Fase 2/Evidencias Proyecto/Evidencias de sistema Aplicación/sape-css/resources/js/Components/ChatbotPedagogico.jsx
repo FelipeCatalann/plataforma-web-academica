@@ -45,29 +45,13 @@ const construirMensajeBienvenida = (cursoContexto, nombreModelo = 'Llama 3.3 70B
         : '¡Hola! Soy tu **Copiloto Pedagógico S.A.P.E**. Selecciona un curso para comenzar el análisis.',
 });
 
-const obtenerClaveStorageChats = (cursoId) => `sape_chats_historial_curso_${cursoId || 'general'}`;
-
-const leerChatsLocales = (cursoId) => {
-    if (typeof window === 'undefined' || !cursoId) return [];
+const retirarCacheAnterior = () => {
     try {
-        const raw = window.localStorage.getItem(obtenerClaveStorageChats(cursoId));
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        Object.keys(window.localStorage)
+            .filter((clave) => clave.startsWith('sape_chats_historial_curso_'))
+            .forEach((clave) => window.localStorage.removeItem(clave));
     } catch {
-        return [];
-    }
-};
-
-const guardarChatsLocales = (cursoId, listaSesiones) => {
-    if (typeof window === 'undefined' || !cursoId) return;
-    try {
-        window.localStorage.setItem(
-            obtenerClaveStorageChats(cursoId),
-            JSON.stringify(listaSesiones.slice(0, 25))
-        );
-    } catch {
-        // Ignorar cuota de almacenamiento local
+        // El navegador puede bloquear el acceso al almacenamiento.
     }
 };
 
@@ -208,7 +192,6 @@ const detectarEstudiantesEnTexto = (texto, listaEstudiantes) => {
 
 export default function ChatbotPedagogico({
     cursoContexto,
-    tipoProfesor,
     alturaClase = '',
     onAbrirInforme = null,
     onAbrirWhatsApp = null,
@@ -223,7 +206,7 @@ export default function ChatbotPedagogico({
     const [selectorAlumnoAbierto, setSelectorAlumnoAbierto] = useState(false);
     const [busquedaAlumnoChat, setBusquedaAlumnoChat] = useState('');
 
-    const [sesiones, setSesiones] = useState(() => leerChatsLocales(cursoContexto?.id));
+    const [sesiones, setSesiones] = useState([]);
     const [sesionActivaId, setSesionActivaId] = useState(null);
     const [mensajes, setMensajes] = useState(() => [
         construirMensajeBienvenida(cursoContexto, leerPreferenciasSape().modeloActivoNombre),
@@ -238,6 +221,7 @@ export default function ChatbotPedagogico({
     const typingTimerRef = useRef(null);
     const selectorModeloRef = useRef(null);
     const selectorAlumnoRef = useRef(null);
+    const historialControllerRef = useRef(null);
 
     const todosLosModelos = [...modelosSistema, ...modelosPersonalizados];
     const modeloActivoObj =
@@ -268,6 +252,10 @@ export default function ChatbotPedagogico({
 
     // Cargar sesiones guardadas y catálogo de modelos cuando cambia el curso
     useEffect(() => {
+        retirarCacheAnterior();
+    }, []);
+
+    useEffect(() => {
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
@@ -281,23 +269,20 @@ export default function ChatbotPedagogico({
         setUltimaConsultaFallida('');
         setInput('');
 
-        const locales = leerChatsLocales(cursoContexto?.id);
-        setSesiones(locales);
-
-        if (locales.length > 0 && Array.isArray(locales[0].mensajes) && locales[0].mensajes.length > 0) {
-            setSesionActivaId(locales[0].id);
-            setMensajes(locales[0].mensajes);
-        } else {
-            setSesionActivaId(null);
-            setMensajes([
-                construirMensajeBienvenida(cursoContexto, preferencias.modeloActivoNombre),
-            ]);
-        }
+        setSesiones([]);
+        setSesionActivaId(null);
+        setMensajes([construirMensajeBienvenida(cursoContexto, preferencias.modeloActivoNombre)]);
+        const historial = new AbortController();
+        historialControllerRef.current = historial;
 
         if (cursoContexto?.id) {
             axios
-                .get(route('chat.sesiones'), { params: { curso_id: cursoContexto.id } })
+                .get(route('chat.sesiones'), {
+                    params: { curso_id: cursoContexto.id },
+                    signal: historial.signal,
+                })
                 .then((res) => {
+                    if (historial.signal.aborted) return;
                     if (res.data?.configuracionIA) {
                         const cfg = res.data.configuracionIA;
                         const nuevasPrefs = sincronizarPreferenciasDesdeServidor(cfg);
@@ -313,17 +298,17 @@ export default function ChatbotPedagogico({
                     if (Array.isArray(res.data?.sesiones) && res.data.sesiones.length > 0) {
                         const remotas = res.data.sesiones;
                         setSesiones(remotas);
-                        guardarChatsLocales(cursoContexto.id, remotas);
                         setSesionActivaId(remotas[0].id);
                         setMensajes(remotas[0].mensajes);
                     }
                 })
-                .catch(() => {
-                    // Mantener caché local si no hay respuesta
+                .catch((error) => {
+                    if (!historial.signal.aborted) setErrorConsulta(resolverMensajeError(error));
                 });
         }
 
         return () => {
+            historial.abort();
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
             }
@@ -361,6 +346,7 @@ export default function ChatbotPedagogico({
     };
 
     const iniciarNuevoChat = () => {
+        historialControllerRef.current?.abort();
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
@@ -399,7 +385,6 @@ export default function ChatbotPedagogico({
         e.stopPropagation();
         const filtradas = sesiones.filter((s) => s.id !== idEliminar);
         setSesiones(filtradas);
-        guardarChatsLocales(cursoContexto?.id, filtradas);
 
         if (sesionActivaId === idEliminar) {
             if (filtradas.length > 0) {
@@ -412,8 +397,8 @@ export default function ChatbotPedagogico({
 
         try {
             await axios.delete(route('chat.sesiones.eliminar', idEliminar));
-        } catch {
-            // Ignorar si era solo local
+        } catch (error) {
+            setErrorConsulta(resolverMensajeError(error));
         }
     };
 
@@ -430,7 +415,6 @@ export default function ChatbotPedagogico({
             const actualizadas = existe
                 ? [objetoSesion, ...prev.filter((s) => s.id !== idSesion)]
                 : [objetoSesion, ...prev];
-            guardarChatsLocales(cursoContexto?.id, actualizadas);
             return actualizadas;
         });
     };
@@ -441,6 +425,12 @@ export default function ChatbotPedagogico({
 
         if (status === 401 || status === 419) {
             return 'Tu sesión ha expirado. Recarga la página para continuar utilizando el Copiloto Pedagógico.';
+        }
+        if (status === 403) {
+            return 'No tienes acceso al chat de este curso.';
+        }
+        if (status === 404) {
+            return error.response?.data?.respuesta || 'El curso o la conversación ya no está disponible.';
         }
         if (status === 422) {
             return respuestaBackend || 'La consulta enviada supera el límite permitido o contiene un formato inválido.';
@@ -526,6 +516,7 @@ export default function ChatbotPedagogico({
         const consultaLimpia = (textoConsulta || '').trim();
         if (!consultaLimpia || cargando || !cursoContexto?.id) return;
 
+        historialControllerRef.current?.abort();
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
         }
@@ -552,7 +543,6 @@ export default function ChatbotPedagogico({
                 {
                     mensaje: consultaLimpia,
                     curso_id: cursoContexto.id,
-                    tipo_profesor: tipoProfesor,
                     sesion_id: sesionActivaId,
                     modelo_id: prefsActuales.modeloActivoId,
                     tono_ia: prefsActuales.tonoInformeIA,
@@ -568,8 +558,7 @@ export default function ChatbotPedagogico({
                 response.data?.respuesta ||
                 'No se recibió una respuesta válida del asistente. Intenta reformular tu consulta.';
 
-            const idSesionRespuesta =
-                response.data?.sesion_id || sesionActivaId || `local_${Date.now()}`;
+            const idSesionRespuesta = response.data?.sesion_id;
             const tituloSesion =
                 response.data?.titulo_sesion || consultaLimpia.slice(0, 44);
             const nombreModeloRespuesta =
@@ -896,6 +885,8 @@ export default function ChatbotPedagogico({
                                                 ) : (
                                                     <div className="space-y-3 leading-7">
                                                         <ReactMarkdown
+                                                            disallowedElements={['img', 'a']}
+                                                            unwrapDisallowed
                                                             components={{
                                                                 h1: ({ node, ...props }) => (
                                                                     <h1
