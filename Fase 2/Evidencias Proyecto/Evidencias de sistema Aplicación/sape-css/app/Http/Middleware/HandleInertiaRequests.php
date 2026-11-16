@@ -32,6 +32,13 @@ class HandleInertiaRequests extends Middleware
         return array_merge(parent::share($request), [
             'auth' => [
                 'user' => $request->user(),
+                'accesosDocente' => fn () => [
+                    'jefatura' => $request->user()?->hasRole('Profesor Jefe') ?? false,
+                    'asignaturas' => $request->user()?->hasRole('Profesor de Asignatura') ?? false,
+                ],
+            ],
+            'funciones' => [
+                'whatsapp' => (bool) config('funciones.whatsapp'),
             ],
             // Esto es lo que permite que React lea el mensaje
             'flash' => [

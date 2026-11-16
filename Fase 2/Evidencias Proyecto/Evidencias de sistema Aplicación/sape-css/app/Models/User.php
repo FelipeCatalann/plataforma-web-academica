@@ -35,6 +35,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'remember_token',
         'configuracion_ia',
+        'alta_docente_administrativa',
     ];
 
     /**
@@ -48,7 +49,15 @@ class User extends Authenticatable implements MustVerifyEmail
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'configuracion_ia' => 'encrypted:array',
+            'alta_docente_administrativa' => 'boolean',
         ];
+    }
+
+    public function tieneAccesoPorAltaDocente(): bool
+    {
+        return $this->alta_docente_administrativa
+            && $this->hasRole('Profesor de Asignatura')
+            && ! $this->hasRole('Administrador');
     }
 
     public function cursos()

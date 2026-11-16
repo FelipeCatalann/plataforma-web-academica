@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Curso;
 use App\Services\ConexionIA;
 use App\Services\ConfiguracionIAService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,10 +45,12 @@ class ConfiguracionController extends Controller
         ];
 
         try {
-            $enlacesGenerados = DB::table('enlace_whats_apps')->count();
-            $misEnlaces = DB::table('enlace_whats_apps')
-                ->where('user_id', $user->id)
-                ->count();
+            if (config('funciones.whatsapp')) {
+                $enlacesGenerados = DB::table('enlace_whats_apps')->count();
+                $misEnlaces = DB::table('enlace_whats_apps')
+                    ->where('user_id', $user->id)
+                    ->count();
+            }
             $registrosBitacora = DB::table('registro_bitacoras')->count();
 
             if ($esAdministrador) {
@@ -65,36 +68,38 @@ class ConfiguracionController extends Controller
                     ->values()
                     ->all();
 
-                $bitacoraWhatsapp = DB::table('enlace_whats_apps')
-                    ->leftJoin('users', 'enlace_whats_apps.user_id', '=', 'users.id')
-                    ->leftJoin('matriculas', 'enlace_whats_apps.matricula_id', '=', 'matriculas.id')
-                    ->leftJoin('estudiantes', 'matriculas.estudiante_id', '=', 'estudiantes.id')
-                    ->leftJoin('cursos', 'matriculas.curso_id', '=', 'cursos.id')
-                    ->select(
-                        'enlace_whats_apps.id',
-                        'enlace_whats_apps.telefonoDestinoSnapshot',
-                        'enlace_whats_apps.estado',
-                        'enlace_whats_apps.generadoEn',
-                        'users.name as docente_nombre',
-                        'estudiantes.nombres as estudiante_nombres',
-                        'estudiantes.apellidos as estudiante_apellidos',
-                        'cursos.nivel as curso_nivel',
-                        'cursos.letra as curso_letra'
-                    )
-                    ->orderByDesc('enlace_whats_apps.generadoEn')
-                    ->limit(15)
-                    ->get()
-                    ->map(fn ($row) => [
-                        'id' => $row->id,
-                        'docente' => $row->docente_nombre ?? 'Docente',
-                        'estudiante' => trim(($row->estudiante_nombres ?? '').' '.($row->estudiante_apellidos ?? '')) ?: 'Estudiante',
-                        'curso' => $row->curso_nivel ? "{$row->curso_nivel}° Medio {$row->curso_letra}" : '-',
-                        'telefono' => $row->telefonoDestinoSnapshot ?? '-',
-                        'estado' => $row->estado ?? 'ABIERTO_POR_DOCENTE',
-                        'fecha' => $row->generadoEn,
-                    ])
-                    ->values()
-                    ->all();
+                if (config('funciones.whatsapp')) {
+                    $bitacoraWhatsapp = DB::table('enlace_whats_apps')
+                        ->leftJoin('users', 'enlace_whats_apps.user_id', '=', 'users.id')
+                        ->leftJoin('matriculas', 'enlace_whats_apps.matricula_id', '=', 'matriculas.id')
+                        ->leftJoin('estudiantes', 'matriculas.estudiante_id', '=', 'estudiantes.id')
+                        ->leftJoin('cursos', 'matriculas.curso_id', '=', 'cursos.id')
+                        ->select(
+                            'enlace_whats_apps.id',
+                            'enlace_whats_apps.telefonoDestinoSnapshot',
+                            'enlace_whats_apps.estado',
+                            'enlace_whats_apps.generadoEn',
+                            'users.name as docente_nombre',
+                            'estudiantes.nombres as estudiante_nombres',
+                            'estudiantes.apellidos as estudiante_apellidos',
+                            'cursos.nivel as curso_nivel',
+                            'cursos.letra as curso_letra'
+                        )
+                        ->orderByDesc('enlace_whats_apps.generadoEn')
+                        ->limit(15)
+                        ->get()
+                        ->map(fn ($row) => [
+                            'id' => $row->id,
+                            'docente' => $row->docente_nombre ?? 'Docente',
+                            'estudiante' => trim(($row->estudiante_nombres ?? '').' '.($row->estudiante_apellidos ?? '')) ?: 'Estudiante',
+                            'curso' => $row->curso_nivel ? "{$row->curso_nivel}° Medio {$row->curso_letra}" : '-',
+                            'telefono' => $row->telefonoDestinoSnapshot ?? '-',
+                            'estado' => $row->estado ?? 'ABIERTO_POR_DOCENTE',
+                            'fecha' => $row->generadoEn,
+                        ])
+                        ->values()
+                        ->all();
+                }
             } else {
                 // Datos exclusivos para el rol Profesor
                 $jefaturas = Curso::where('profesor_jefe_id', $user->id)
@@ -137,35 +142,37 @@ class ConfiguracionController extends Controller
                     'asignaturas' => $asignaturas,
                 ];
 
-                $bitacoraWhatsapp = DB::table('enlace_whats_apps')
-                    ->leftJoin('matriculas', 'enlace_whats_apps.matricula_id', '=', 'matriculas.id')
-                    ->leftJoin('estudiantes', 'matriculas.estudiante_id', '=', 'estudiantes.id')
-                    ->leftJoin('cursos', 'matriculas.curso_id', '=', 'cursos.id')
-                    ->where('enlace_whats_apps.user_id', $user->id)
-                    ->select(
-                        'enlace_whats_apps.id',
-                        'enlace_whats_apps.telefonoDestinoSnapshot',
-                        'enlace_whats_apps.estado',
-                        'enlace_whats_apps.generadoEn',
-                        'estudiantes.nombres as estudiante_nombres',
-                        'estudiantes.apellidos as estudiante_apellidos',
-                        'cursos.nivel as curso_nivel',
-                        'cursos.letra as curso_letra'
-                    )
-                    ->orderByDesc('enlace_whats_apps.generadoEn')
-                    ->limit(10)
-                    ->get()
-                    ->map(fn ($row) => [
-                        'id' => $row->id,
-                        'docente' => $user->name,
-                        'estudiante' => trim(($row->estudiante_nombres ?? '').' '.($row->estudiante_apellidos ?? '')) ?: 'Estudiante',
-                        'curso' => $row->curso_nivel ? "{$row->curso_nivel}° Medio {$row->curso_letra}" : '-',
-                        'telefono' => $row->telefonoDestinoSnapshot ?? '-',
-                        'estado' => $row->estado ?? 'ABIERTO_POR_DOCENTE',
-                        'fecha' => $row->generadoEn,
-                    ])
-                    ->values()
-                    ->all();
+                if (config('funciones.whatsapp')) {
+                    $bitacoraWhatsapp = DB::table('enlace_whats_apps')
+                        ->leftJoin('matriculas', 'enlace_whats_apps.matricula_id', '=', 'matriculas.id')
+                        ->leftJoin('estudiantes', 'matriculas.estudiante_id', '=', 'estudiantes.id')
+                        ->leftJoin('cursos', 'matriculas.curso_id', '=', 'cursos.id')
+                        ->where('enlace_whats_apps.user_id', $user->id)
+                        ->select(
+                            'enlace_whats_apps.id',
+                            'enlace_whats_apps.telefonoDestinoSnapshot',
+                            'enlace_whats_apps.estado',
+                            'enlace_whats_apps.generadoEn',
+                            'estudiantes.nombres as estudiante_nombres',
+                            'estudiantes.apellidos as estudiante_apellidos',
+                            'cursos.nivel as curso_nivel',
+                            'cursos.letra as curso_letra'
+                        )
+                        ->orderByDesc('enlace_whats_apps.generadoEn')
+                        ->limit(10)
+                        ->get()
+                        ->map(fn ($row) => [
+                            'id' => $row->id,
+                            'docente' => $user->name,
+                            'estudiante' => trim(($row->estudiante_nombres ?? '').' '.($row->estudiante_apellidos ?? '')) ?: 'Estudiante',
+                            'curso' => $row->curso_nivel ? "{$row->curso_nivel}° Medio {$row->curso_letra}" : '-',
+                            'telefono' => $row->telefonoDestinoSnapshot ?? '-',
+                            'estado' => $row->estado ?? 'ABIERTO_POR_DOCENTE',
+                            'fecha' => $row->generadoEn,
+                        ])
+                        ->values()
+                        ->all();
+                }
             }
         } catch (\Throwable $e) {
             // Ignorar si las tablas aún no están migradas en entorno local
@@ -210,7 +217,12 @@ class ConfiguracionController extends Controller
                 'activar_inmediatamente' => 'nullable|boolean',
             ]);
 
-            $configActualizada = $iaService->agregarModeloPersonalizado($user, $validado);
+            $error = $this->validarAccesoAlModelo($iaService->credencialesModeloPersonalizado($validado));
+            if ($error) {
+                return $error;
+            }
+
+            $configActualizada = $iaService->agregarModeloPersonalizado($user->refresh(), $validado);
 
             return response()->json([
                 'ok' => true,
@@ -303,6 +315,26 @@ class ConfiguracionController extends Controller
             'mostrar_sugerencias_chat' => 'nullable|boolean',
         ]);
 
+        $modeloActivoId = $validado['modelo_activo_id'] ?? null;
+        if ($modeloActivoId !== null) {
+            $config = $iaService->obtenerConfiguracionCruda($user);
+            $modeloPersonalizado = collect($config['modelos_personalizados'])->firstWhere('id', $modeloActivoId);
+            if ($modeloPersonalizado && $modeloActivoId !== $config['modelo_activo_id']) {
+                $error = $this->validarAccesoAlModelo($iaService->credencialesModeloPersonalizado($modeloPersonalizado));
+                if ($error) {
+                    return $error;
+                }
+
+                $modelosActuales = $iaService->obtenerConfiguracionCruda($user->refresh())['modelos_personalizados'];
+                if (! in_array($modeloPersonalizado, (array) $modelosActuales, true)) {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => 'El modelo cambió durante la verificación. Actualiza la página e inténtalo de nuevo.',
+                    ], 409);
+                }
+            }
+        }
+
         $configActualizada = $iaService->actualizarPreferenciasIA($user, $validado);
 
         return response()->json([
@@ -314,84 +346,57 @@ class ConfiguracionController extends Controller
 
     public function probarConexionIA(Request $request, ConfiguracionIAService $iaService): JsonResponse
     {
-        $user = $request->user();
         $validado = $request->validate([
-            'api_key' => 'nullable|string|max:300',
+            'api_key' => 'nullable|string|min:6|max:300',
             'proveedor' => 'nullable|string|in:groq,openai,gemini,anthropic,openrouter,custom',
             'modelo_id' => 'nullable|string|max:120',
-            'model_id' => 'nullable|string|max:120',
-            'base_url' => 'nullable|string|max:255',
+            'model_id' => 'required_with:api_key|nullable|string|max:120',
+            'base_url' => 'nullable|url|max:255',
         ]);
-        $apiKeyInput = trim($validado['api_key'] ?? '');
-        $proveedorId = $validado['proveedor'] ?? 'groq';
-
-        if ($apiKeyInput !== '') {
-            $proveedorInfo = ConfiguracionIAService::PROVEEDORES[$proveedorId] ?? ConfiguracionIAService::PROVEEDORES['groq'];
-            $baseUrl = ConexionIA::validarBaseUrl(($validado['base_url'] ?? '') ?: $proveedorInfo['base_url']);
-            $apiKey = $apiKeyInput;
-            $proveedorNombre = $proveedorInfo['nombre'];
-            $activeModel = $validado['model_id'] ?? 'llama-3.3-70b-versatile';
-        } else {
-            $credenciales = $iaService->resolverCredencialesAgente($user, 'chat', [
+        $claveNueva = ! empty($validado['api_key']);
+        $credenciales = $claveNueva
+            ? $iaService->credencialesModeloPersonalizado($validado)
+            : $iaService->resolverCredencialesAgente($request->user(), 'chat', [
                 'modelo_id' => $validado['modelo_id'] ?? null,
             ]);
-            $apiKey = $credenciales['api_key'];
-            $baseUrl = $credenciales['base_url'];
-            $proveedorNombre = $credenciales['proveedor_nombre'];
-            $activeModel = $credenciales['model'];
-            $proveedorId = $credenciales['proveedor'];
+
+        $inicio = microtime(true);
+        $error = $this->validarAccesoAlModelo($credenciales);
+        if ($error) {
+            return $error;
         }
 
-        if ($apiKey === '') {
+        $latenciaMs = (int) round((microtime(true) - $inicio) * 1000);
+        $modelos = $claveNueva ? $this->listarModelosProveedor($credenciales) : [];
+
+        return response()->json([
+            'ok' => true,
+            'latencyMs' => $latenciaMs,
+            'modelsCount' => count($modelos),
+            'models' => array_slice($modelos, 0, 40),
+            'activeModel' => $credenciales['model'],
+            'message' => "Modelo verificado con {$credenciales['proveedor_nombre']}.",
+        ]);
+    }
+
+    private function validarAccesoAlModelo(array $credenciales): ?JsonResponse
+    {
+        $proveedorNombre = $credenciales['proveedor_nombre'];
+        if ($credenciales['api_key'] === '') {
             return response()->json([
                 'ok' => false,
                 'message' => 'No se encontró API Key configurada para este proveedor.',
             ], 422);
         }
 
-        $inicio = microtime(true);
-
-        $headers = [
-            'Authorization' => 'Bearer '.$apiKey,
-        ];
-        if ($proveedorId === 'anthropic') {
-            $headers['x-api-key'] = $apiKey;
-            $headers['anthropic-version'] = '2023-06-01';
-        }
-
         try {
-            $response = ConexionIA::cliente($baseUrl, $headers, 8)->get('models');
-
-            $latenciaMs = (int) round((microtime(true) - $inicio) * 1000);
-
-            if (! $response->successful()) {
-                return response()->json([
-                    'ok' => false,
-                    'latencyMs' => $latenciaMs,
-                    'message' => "{$proveedorNombre} respondió con código HTTP ".$response->status().'. Verifica la validez de la API Key.',
-                ], 502);
-            }
-
-            $data = $response->json();
-            $rawModels = isset($data['data']) && is_array($data['data']) ? $data['data'] : [];
-            $modelos = count($rawModels);
-
-            $listaIds = collect($rawModels)
-                ->map(fn ($m) => is_array($m) ? ($m['id'] ?? null) : null)
-                ->filter()
-                ->values()
-                ->take(40)
-                ->all();
-
-            return response()->json([
-                'ok' => true,
-                'latencyMs' => $latenciaMs,
-                'modelsCount' => $modelos,
-                'models' => $listaIds,
-                'activeModel' => $activeModel,
-                'message' => "Conexión activa con {$proveedorNombre} ({$latenciaMs} ms · {$modelos} modelos disponibles).",
-            ]);
-        } catch (\Throwable $e) {
+            $response = ConexionIA::cliente($credenciales['base_url'], $credenciales['headers'], 15)
+                ->post('chat/completions', [
+                    'model' => $credenciales['model'],
+                    'messages' => [['role' => 'user', 'content' => 'Responde OK.']],
+                    'max_tokens' => 16,
+                ]);
+        } catch (ConnectionException $e) {
             Log::warning('Falló la prueba de conexión de IA.', ['tipo' => $e::class]);
 
             return response()->json([
@@ -399,5 +404,38 @@ class ConfiguracionController extends Controller
                 'message' => "No fue posible conectar con {$proveedorNombre}.",
             ], 503);
         }
+
+        if ($response->successful() && is_array($response->json('choices.0.message'))) {
+            return null;
+        }
+
+        $message = match ($response->status()) {
+            401 => "{$proveedorNombre} rechazó la API Key. Revisa la clave y vuelve a intentarlo.",
+            403 => "{$proveedorNombre} denegó el acceso. Revisa los permisos de la API Key para este modelo.",
+            402, 429 => "Revisa los créditos o la cuota de tu cuenta en {$proveedorNombre}.",
+            400, 404, 422 => "{$proveedorNombre} no pudo usar este modelo. Revisa el ID y su disponibilidad.",
+            default => "{$proveedorNombre} no pudo verificar este modelo. Inténtalo de nuevo.",
+        };
+
+        return response()->json(['ok' => false, 'message' => $message], 502);
+    }
+
+    private function listarModelosProveedor(array $credenciales): array
+    {
+        try {
+            $response = ConexionIA::cliente($credenciales['base_url'], $credenciales['headers'], 5)->get('models');
+        } catch (ConnectionException) {
+            return [];
+        }
+
+        $modelos = $response->json('data');
+        if (! $response->successful() || ! is_array($modelos)) {
+            return [];
+        }
+
+        return collect($modelos)->pluck('id')
+            ->filter(fn ($id) => is_string($id) && $id !== '')
+            ->values()
+            ->all();
     }
 }

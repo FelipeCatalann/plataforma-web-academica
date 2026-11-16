@@ -21,6 +21,7 @@ class EnlaceWhatsAppFeatureTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['funciones.whatsapp' => true]);
         $archivo = $this->archivoExcelTemporal();
         $this->artisan('sape:generar-sinteticos', [
             'grado' => '1', 'letra' => 'A', 'ano' => '2026',
@@ -51,7 +52,7 @@ class EnlaceWhatsAppFeatureTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('enlace.estado', 'ABIERTO_POR_DOCENTE')
+            ->assertJsonPath('enlace.estado', 'PREPARADO')
             ->assertJsonPath('enlace.mensajePrellenado', $mensajeRevisado);
 
         $this->assertStringStartsWith('https://wa.me/569', $response->json('url'));
@@ -59,7 +60,7 @@ class EnlaceWhatsAppFeatureTest extends TestCase
         $this->assertDatabaseHas('enlace_whats_apps', [
             'user_id' => $profesor->id,
             'matricula_id' => $matricula->id,
-            'estado' => 'ABIERTO_POR_DOCENTE',
+            'estado' => 'PREPARADO',
             'mensajePrellenado' => $mensajeRevisado,
         ]);
 
@@ -68,6 +69,26 @@ class EnlaceWhatsAppFeatureTest extends TestCase
             'accion' => 'PREPARAR_ENLACE_WHATSAPP',
             'recursoTipo' => 'EnlaceWhatsApp',
         ]);
+
+        $confirmacion = route('whatsapp.confirmar', $response->json('enlace.id'));
+        $this->patchJson($confirmacion)->assertOk()->assertJsonPath('estado', 'CONTACTO_CONFIRMADO');
+        $this->patchJson($confirmacion)->assertOk()->assertJsonPath('estado', 'CONTACTO_CONFIRMADO');
+        $this->assertSame(1, DB::table('registro_bitacoras')->where('accion', 'CONFIRMAR_CONTACTO_WHATSAPP')->count());
+    }
+
+    public function test_whatsapp_oculto_bloquea_la_operacion_y_no_carga_datos_de_contacto(): void
+    {
+        config(['funciones.whatsapp' => false]);
+        $profesor = User::factory()->create();
+        $profesor->assignRole(Role::findOrCreate('Profesor Jefe', 'web'));
+        DB::table('cursos')->update(['profesor_jefe_id' => $profesor->id]);
+
+        $this->actingAs($profesor)->postJson(route('whatsapp.preparar'))->assertNotFound();
+        $this->assertDatabaseCount('enlace_whats_apps', 0);
+        $props = $this->get(route('profesor.jefe'))->assertOk()->viewData('page')['props'];
+        $this->assertFalse($props['funciones']['whatsapp']);
+        $this->assertArrayNotHasKey('apoderado_telefono', $props['curso']['estudiantes'][0]);
+        $this->assertArrayNotHasKey('ultimo_whatsapp', $props['curso']['estudiantes'][0]);
     }
 
     public function test_rechaza_telefono_invalido_al_preparar_enlace(): void

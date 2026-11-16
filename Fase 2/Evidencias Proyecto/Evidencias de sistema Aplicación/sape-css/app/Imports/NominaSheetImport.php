@@ -14,6 +14,25 @@ class NominaSheetImport implements ToCollection, WithHeadingRow
 {
     private array $matriculasPlanilla = [];
 
+    private array $cursos = [];
+
+    public function __construct(private array $cursosConfirmados = []) {}
+
+    public function resumen(): array
+    {
+        return $this->cursos;
+    }
+
+    public function omiteCurso(array $curso): bool
+    {
+        return isset($this->cursosConfirmados[implode(':', $curso)]);
+    }
+
+    public function registrarCalificacion(array $curso): void
+    {
+        $this->cursos[implode(':', $curso)]['calificaciones']++;
+    }
+
     public function incluyeMatricula(array $identidad): bool
     {
         return isset($this->matriculasPlanilla[$this->clave($identidad)]);
@@ -27,6 +46,7 @@ class NominaSheetImport implements ToCollection, WithHeadingRow
     public function collection(Collection $rows): void
     {
         $this->matriculasPlanilla = [];
+        $this->cursos = [];
         foreach ($rows as $indice => $row) {
             if ($row->filter(fn ($valor) => $valor !== null && $valor !== '')->isEmpty()) {
                 continue;
@@ -39,24 +59,39 @@ class NominaSheetImport implements ToCollection, WithHeadingRow
                 IdentidadSyscol::rechazar('NOMINA', $numero, 'Falta el nombre o la matrícula está repetida en la planilla.');
             }
             $this->matriculasPlanilla[$this->clave($identidad)] = true;
+            $claveCurso = implode(':', $identidad['curso']);
+
+            if (! isset($this->cursos[$claveCurso])) {
+                $confirmado = $this->cursosConfirmados[$claveCurso] ?? null;
+                $curso = $confirmado ? null : IdentidadSyscol::curso($identidad['curso'], 'NOMINA', $numero);
+                $cursoId = $confirmado ?? $curso?->id ?? (string) Str::uuid();
+                $this->cursos[$claveCurso] = [
+                    ...$identidad['curso'],
+                    'curso_id' => $cursoId,
+                    'accion' => $confirmado ? 'sin_cambios' : ($curso ? 'actualizar' : 'crear'),
+                    'matriculas' => 0,
+                    'calificaciones' => 0,
+                ];
+
+                if (! $confirmado && ! $curso) {
+                    DB::table('cursos')->insert([
+                        'id' => $cursoId,
+                        ...$identidad['curso'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
+
+            $this->cursos[$claveCurso]['matriculas']++;
+            if ($this->omiteCurso($identidad['curso'])) {
+                continue;
+            }
+            $cursoId = $this->cursos[$claveCurso]['curso_id'];
             $now = now();
 
             // Limpieza básica de texto
             $telefonoApoderado = ! empty($row['telefono_apoderado']) ? trim((string) $row['telefono_apoderado']) : null;
-
-            // 1. Buscar o crear el Curso
-            $curso = IdentidadSyscol::curso($identidad['curso'], 'NOMINA', $numero);
-
-            $cursoId = $curso ? $curso->id : (string) Str::uuid();
-
-            if (! $curso) {
-                DB::table('cursos')->insert([
-                    'id' => $cursoId,
-                    ...$identidad['curso'],
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]);
-            }
 
             // 2. Buscar o crear el Apoderado
             $apoderadoId = null;

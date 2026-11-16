@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { router } from '@inertiajs/react';
 import axios from 'axios';
 import { leerPreferenciasSape } from '@/utils/preferenciasSape';
 
@@ -152,8 +153,11 @@ export default function ModalInformeIA({ estudiante, cursoId, cursoNombre, isOpe
                 setError('El servicio no devolvió contenido para el informe. Intenta generarlo nuevamente.');
             }
         } catch (err) {
-            if (axios.isCancel(err) || err.name === 'CanceledError') return;
+            if (axios.isCancel(err) || controller.signal.aborted) return;
             setError(resolverMensajeError(err));
+            if (err.response?.data?.codigo === 'IA_PROVEEDOR_SIN_CONEXION') {
+                router.visit(`${route('configuracion.index', { seccion: 'ia', tab: 'modelos' })}#agregar-modelo-api-key`);
+            }
         } finally {
             if (abortControllerRef.current === controller) {
                 setCargando(false);

@@ -162,6 +162,61 @@ class ChatbotPrivacidadTest extends TestCase
         $this->assertDatabaseCount('sesion_chats', 0);
     }
 
+    public function test_plan_de_apoyo_usa_evidencia_individual_solo_de_las_asignaturas_autorizadas(): void
+    {
+        $asignatura = DB::table('asignatura_curso')->where('curso_id', $this->cursoId)->first();
+        $nombreAsignatura = DB::table('asignaturas')->where('id', $asignatura->asignatura_id)->value('nombre');
+        DB::table('cursos')->where('id', $this->cursoId)->update(['profesor_jefe_id' => null]);
+        DB::table('asignatura_curso')->where('id', $asignatura->id)->update(['profesor_id' => $this->docente->id]);
+        $this->docente->syncRoles(Role::findOrCreate('Profesor de Asignatura', 'web'));
+
+        $matricula = DB::table('matriculas')
+            ->join('estudiantes', 'estudiantes.id', '=', 'matriculas.estudiante_id')
+            ->where('matriculas.curso_id', $this->cursoId)
+            ->where('matriculas.vigente', true)
+            ->orderBy('estudiantes.identificadorInterno')
+            ->first(['matriculas.id', 'estudiantes.nombres', 'estudiantes.apellidos']);
+        DB::table('calificaciones')->where('matricula_id', $matricula->id)
+            ->where('asignatura_curso_id', $asignatura->id)->update(['valor' => 4.8]);
+        $nombre = "{$matricula->nombres} {$matricula->apellidos}";
+
+        Http::fake(['api.groq.com*' => Http::response(['choices' => [['message' => ['content' => 'Seguimiento preventivo.']]]])]);
+        $this->actingAs($this->docente)->postJson(route('chat.pedagogico'), [
+            'mensaje' => "Haz un plan de apoyo para {$nombre}.",
+            'curso_id' => $this->cursoId,
+        ])->assertOk();
+
+        $mensajes = Http::recorded()[0][0]['messages'];
+        $prompt = $mensajes[0]['content'];
+        $this->assertMatchesRegularExpression('/'.preg_quote($nombreAsignatura, '/').' \(promedio 4\.8, \d+ calificaciones\)/u', $prompt);
+        $this->assertStringContainsString('plantea seguimiento preventivo', $prompt);
+        $this->assertStringContainsString('No fijes una meta de nota si el docente no la pidió', $prompt);
+        $this->assertStringNotContainsString($nombre, implode("\n", array_column($mensajes, 'content')));
+        foreach (DB::table('asignaturas')->where('id', '!=', $asignatura->asignatura_id)->pluck('nombre') as $otroRamo) {
+            $this->assertStringNotContainsString("{$otroRamo} (promedio", $prompt);
+        }
+    }
+
+    public function test_chat_convierte_etiquetas_de_salto_en_lineas_en_respuestas_nuevas_y_guardadas(): void
+    {
+        $formatoProveedor = '### Plan de apoyo<br>Acción concreta \<BR />Evidencia &lt;br/&gt; Revisar el avance.';
+        $formatoChat = "### Plan de apoyo  \nAcción concreta  \nEvidencia  \nRevisar el avance.";
+        Http::fake(['api.groq.com*' => Http::response(['choices' => [['message' => ['content' => $formatoProveedor]]]])]);
+        $this->actingAs($this->docente);
+        $respuesta = $this->postJson(route('chat.pedagogico'), [
+            'mensaje' => 'Propón un plan de acción para este curso.',
+            'curso_id' => $this->cursoId,
+        ])->assertOk()->assertJsonPath('respuesta', $formatoChat);
+
+        $sesion = $respuesta->json('sesion_id');
+        $this->assertDatabaseHas('mensaje_chats', ['sesion_id' => $sesion, 'contenido' => $formatoChat]);
+
+        DB::table('mensaje_chats')->where('sesion_id', $sesion)
+            ->where('autor', 'ASISTENTE_IA')->update(['contenido' => $formatoProveedor]);
+        $this->getJson(route('chat.sesiones', ['curso_id' => $this->cursoId]))
+            ->assertOk()->assertJsonPath('sesiones.0.mensajes.1.content', $formatoChat);
+    }
+
     public function test_nombres_no_llegan_a_groq_y_respuesta_restaurada(): void
     {
         Http::fake([

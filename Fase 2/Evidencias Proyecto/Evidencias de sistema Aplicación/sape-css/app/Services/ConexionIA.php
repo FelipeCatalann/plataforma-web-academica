@@ -27,9 +27,15 @@ class ConexionIA
 
     public static function cliente(string $baseUrl, array $headers, int $timeout): PendingRequest
     {
-        return Http::baseUrl(self::validarBaseUrl($baseUrl))
+        $cliente = Http::baseUrl(self::validarBaseUrl($baseUrl))
             ->withHeaders($headers)
             ->withoutRedirecting()
             ->timeout($timeout);
+
+        if (PHP_OS_FAMILY === 'Windows' && defined('CURLSSLOPT_NATIVE_CA') && ! ini_get('curl.cainfo')) {
+            $cliente->withOptions(['curl' => [CURLOPT_SSL_OPTIONS => CURLSSLOPT_NATIVE_CA]]);
+        }
+
+        return $cliente;
     }
 }

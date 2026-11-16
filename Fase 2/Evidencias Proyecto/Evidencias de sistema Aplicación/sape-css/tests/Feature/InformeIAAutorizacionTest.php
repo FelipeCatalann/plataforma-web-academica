@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Services\ConfiguracionIAService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -140,6 +141,49 @@ class InformeIAAutorizacionTest extends TestCase
                 && ! str_contains($prompt, 'Estudiante Sintético')
                 && ! str_contains($prompt, 'RUN-SINTETICO-001');
         });
+    }
+
+    public function test_fallo_de_conexion_identifica_la_redireccion_a_configuracion_de_ia(): void
+    {
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.groq.com/openai/v1/chat/completions' => Http::failedConnection(),
+        ]);
+
+        $this->actingAs($this->jefe)->postJson(route('informes.generar'), $this->solicitud())
+            ->assertServiceUnavailable()
+            ->assertJsonPath('codigo', 'IA_PROVEEDOR_SIN_CONEXION');
+    }
+
+    public function test_el_apoyo_usa_evidencia_de_alerta_y_el_acuerdo_se_guarda_solo_en_su_jefatura(): void
+    {
+        $destino = route('profesor.seguimiento.guardar', [$this->cursoId, $this->estudianteId]);
+        $solicitud = ['curso_id' => $this->cursoId, 'estudiante_id' => $this->estudianteId, 'modo' => 'apoyo'];
+        $acuerdo = ['acuerdo' => 'Revisar la última evaluación.', 'fecha_revision' => now()->addDays(7)->toDateString()];
+
+        $this->actingAs($this->docenteAsignatura)->postJson('/generar-informe-ia', $solicitud)->assertForbidden();
+        $this->putJson($destino, $acuerdo)->assertForbidden();
+        Http::assertNothingSent();
+
+        $this->actingAs($this->jefe)->postJson('/generar-informe-ia', $solicitud)->assertOk();
+        Http::assertSent(function ($request) {
+            $prompt = $request['messages'][1]['content'];
+
+            return str_contains($prompt, 'Semestre 1: 3.1')
+                && ! str_contains($prompt, '6.2')
+                && ! str_contains($prompt, '1.3')
+                && ! str_contains($prompt, 'RUN-SINTETICO-001');
+        });
+        $this->putJson($destino, $acuerdo)->assertOk()->assertJsonPath('seguimiento.acuerdo', $acuerdo['acuerdo']);
+        $this->putJson($destino, [...$acuerdo, 'acuerdo' => 'Revisar con el estudiante.'])->assertOk();
+        $this->assertDatabaseCount('seguimientos_pedagogicos', 1);
+        $this->assertDatabaseHas('seguimientos_pedagogicos', [
+            'acuerdo' => 'Revisar con el estudiante.',
+            'actualizado_por' => $this->jefe->id,
+        ]);
+        $props = $this->get(route('profesor.jefe'))->assertOk()->viewData('page')['props'];
+        $this->assertSame('Revisar con el estudiante.', data_get($props, 'curso.estudiantes.0.seguimiento.acuerdo'));
     }
 
     public function test_docente_de_asignatura_solo_envia_notas_de_sus_ramos(): void

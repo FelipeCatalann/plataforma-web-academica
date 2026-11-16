@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 
 export default function Dashboard({ auth }) {
+    const { jefatura } = auth.accesosDocente ?? {};
     const fechaActual = new Date().toLocaleDateString('es-ES', {
         weekday: 'long',
         year: 'numeric',
@@ -33,42 +34,44 @@ export default function Dashboard({ auth }) {
                 </div>
 
                 {/* Portales Inmersivos */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+                <div className={`grid grid-cols-1 gap-6 sm:gap-8 ${jefatura ? 'md:grid-cols-2' : 'max-w-2xl'}`}>
                     
                     {/* PORTAL 1: JEFATURA (Gradiente Institucional Burdeo) */}
-                    <Link
-                        href={route('profesor.jefe')}
-                        className="relative overflow-hidden group bg-gradient-to-br from-sape-burdeo to-[#4a0e0a] rounded-[2rem] p-8 sm:p-10 shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-500"
-                    >
-                        {/* Marca de agua decorativa */}
-                        <div className="absolute -right-8 -bottom-8 opacity-10 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-700 pointer-events-none">
-                            <svg className="w-64 h-64 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                            </svg>
-                        </div>
-
-                        {/* Contenido */}
-                        <div className="relative z-10 flex flex-col h-full justify-between min-h-[220px]">
-                            <div>
-                                <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs font-bold rounded-full mb-6">
-                                    Módulo Principal
-                                </span>
-                                <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-3 tracking-tight">
-                                    Mi Jefatura
-                                </h2>
-                                <p className="text-white/80 text-sm sm:text-base font-medium max-w-sm leading-relaxed">
-                                    Radiografía de tu curso, alertas por Decreto 67 y contacto con apoderados.
-                                </p>
-                            </div>
-                            
-                            <div className="mt-10 inline-flex items-center justify-between w-max gap-3 bg-white text-sape-burdeo px-7 py-3.5 rounded-2xl font-extrabold group-hover:bg-sape-amarillo group-hover:text-slate-900 transition-colors duration-300 shadow-sm">
-                                Entrar a mi curso
-                                <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    {jefatura && (
+                        <Link
+                            href={route('profesor.jefe')}
+                            className="relative overflow-hidden group bg-gradient-to-br from-sape-burdeo to-[#4a0e0a] rounded-[2rem] p-8 sm:p-10 shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-500"
+                        >
+                            {/* Marca de agua decorativa */}
+                            <div className="absolute -right-8 -bottom-8 opacity-10 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-700 pointer-events-none">
+                                <svg className="w-64 h-64 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                                 </svg>
                             </div>
-                        </div>
-                    </Link>
+
+                            {/* Contenido */}
+                            <div className="relative z-10 flex flex-col h-full justify-between min-h-[220px]">
+                                <div>
+                                    <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs font-bold rounded-full mb-6">
+                                        Módulo Principal
+                                    </span>
+                                    <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-3 tracking-tight">
+                                        Mi Jefatura
+                                    </h2>
+                                    <p className="text-white/80 text-sm sm:text-base font-medium max-w-sm leading-relaxed">
+                                        Rendimiento del curso, alertas de calificaciones y seguimiento pedagógico.
+                                    </p>
+                                </div>
+
+                                <div className="mt-10 inline-flex items-center justify-between w-max gap-3 bg-white text-sape-burdeo px-7 py-3.5 rounded-2xl font-extrabold group-hover:bg-sape-amarillo group-hover:text-slate-900 transition-colors duration-300 shadow-sm">
+                                    Entrar a mi curso
+                                    <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </Link>
+                    )}
 
                     {/* PORTAL 2: ASIGNATURAS (Gradiente Oscuro Elegante) */}
                     <Link
@@ -95,7 +98,7 @@ export default function Dashboard({ auth }) {
                                     Libro de notas, rendimiento semestral y comparativas entre cursos.
                                 </p>
                             </div>
-                            
+
                             <div className="mt-10 inline-flex items-center justify-between w-max gap-3 bg-white/10 backdrop-blur-md border border-white/20 text-white px-7 py-3.5 rounded-2xl font-extrabold group-hover:bg-sape-amarillo group-hover:text-slate-900 group-hover:border-sape-amarillo transition-all duration-300 shadow-sm">
                                 Ver asignaturas
                                 <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">

@@ -140,6 +140,9 @@ class GestionDatosCursoTest extends TestCase
         $cursosAsignatura = $respAsig->viewData('page')['props']['cursos'];
         $this->assertCount(1, $cursosAsignatura);
         $this->assertSame($curso1A->id, $cursosAsignatura[0]['id']);
+        $profesor->removeRole('Profesor de Asignatura');
+        $respSinRol = $this->get(route('profesor.asignatura'))->assertOk();
+        $this->assertSame([], $respSinRol->viewData('page')['props']['cursos']);
 
         // 6. Verificar que el Panel Director muestra 1° A como subido y 1° B como disponible (subido = false)
         $respDirector = $this->actingAs($admin)->get(route('admin.director'));

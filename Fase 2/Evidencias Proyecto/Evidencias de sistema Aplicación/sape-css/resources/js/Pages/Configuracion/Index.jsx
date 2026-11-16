@@ -80,7 +80,7 @@ const CRITERIOS_WHATSAPP = [
 export default function ConfiguracionIndex({
     iaConfigurada = false,
     iaSistemaConfigurada = false,
-    modeloIA = 'llama-3.3-70b-versatile',
+    modeloIA = PREFERENCIAS_DEFAULT.modeloActivoId,
     proveedorIA = 'Groq Cloud',
     configuracionIA = null,
     rolInfo = {
@@ -94,7 +94,8 @@ export default function ConfiguracionIndex({
     bitacoraWhatsapp = [],
     miCargaDocente = { jefaturas: [], asignaturas: [] },
 }) {
-    const { auth } = usePage().props;
+    const { auth, funciones } = usePage().props;
+    const whatsappHabilitado = funciones?.whatsapp === true;
     const [seccionActiva, setSeccionActiva] = useState(() => {
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
@@ -115,7 +116,7 @@ export default function ConfiguracionIndex({
             if (
                 tabParam === 'modelos' ||
                 tabParam === 'respuestas_visuales' ||
-                tabParam === 'whatsapp' ||
+                (whatsappHabilitado && tabParam === 'whatsapp') ||
                 tabParam === 'consumo_cuota'
             ) {
                 return tabParam;
@@ -153,7 +154,7 @@ export default function ConfiguracionIndex({
     const [nuevoProveedor, setNuevoProveedor] = useState('groq');
     const [nuevaApiKey, setNuevaApiKey] = useState('');
     const [mostrarApiKey, setMostrarApiKey] = useState(false);
-    const [nuevoModelId, setNuevoModelId] = useState('llama-3.3-70b-versatile');
+    const [nuevoModelId, setNuevoModelId] = useState(PROVEEDORES_IA[0].modelosSugeridos[0].id);
     const [nuevoNombreModelo, setNuevoNombreModelo] = useState('');
     const [modelosDetectadosKey, setModelosDetectadosKey] = useState([]);
     const [guardandoIA, setGuardandoIA] = useState(false);
@@ -163,6 +164,9 @@ export default function ConfiguracionIndex({
     const [resultadoIA, setResultadoIA] = useState(null);
     const [probandoNuevaKey, setProbandoNuevaKey] = useState(false);
     const [resultadoNuevaKey, setResultadoNuevaKey] = useState(null);
+    const formularioModeloOcupado = probandoNuevaKey || guardandoIA;
+    const puedeComprobarModelo =
+        nuevaApiKey.trim() && nuevoModelId.trim() && !formularioModeloOcupado;
 
     useEffect(() => {
         if (configuracionIA) {
@@ -281,29 +285,35 @@ export default function ConfiguracionIndex({
     };
 
     const activarModelo = async (modelo) => {
-        const nuevasLocal = guardarPreferenciasSape({
-            modeloActivoId: modelo.id,
-            modeloActivoNombre: modelo.nombre,
-            modeloActivoProveedor: modelo.proveedor_nombre || 'Groq Cloud',
-        });
-        setPreferencias(nuevasLocal);
+        if (guardandoIA || modelo.id === preferencias.modeloActivoId) return;
+        setGuardandoIA(true);
 
         try {
             const response = await axios.post('/configuracion/ia', {
                 accion: 'actualizar_preferencias',
                 modelo_activo_id: modelo.id,
             });
+            if (
+                response.data?.ok !== true ||
+                response.data.configuracionIA?.modelo_activo_id !== modelo.id
+            ) {
+                throw new Error('El servidor no confirmó la activación.');
+            }
+
             aplicarRespuestaServidorIA(
                 response.data?.configuracionIA,
                 `Modelo "${modelo.nombre}" activado.`
             );
-        } catch {
-            mostrarConfirmacion(`Modelo "${modelo.nombre}" activado en este equipo.`);
+            setResultadoIA(null);
+        } catch (err) {
+            mostrarError(err.response?.data?.message || 'No se pudo activar este modelo.');
+        } finally {
+            setGuardandoIA(false);
         }
     };
 
     const probarKeyYDetectarModelos = async () => {
-        if (!nuevaApiKey.trim() || probandoNuevaKey) return;
+        if (!puedeComprobarModelo) return;
         setProbandoNuevaKey(true);
         setResultadoNuevaKey(null);
 
@@ -311,19 +321,20 @@ export default function ConfiguracionIndex({
             const response = await axios.post('/configuracion/probar-ia', {
                 proveedor: nuevoProveedor,
                 api_key: nuevaApiKey.trim(),
-                model_id: nuevoModelId,
+                model_id: nuevoModelId.trim(),
             });
-            const detectados = Array.isArray(response.data?.models) ? response.data.models : [];
-            setModelosDetectadosKey(detectados);
-            if (detectados.length > 0 && !nuevoModelId.trim()) {
-                setNuevoModelId(detectados[0]);
+            if (response.data?.ok !== true) {
+                throw new Error('El servidor no confirmó la verificación.');
             }
+
+            setModelosDetectadosKey(Array.isArray(response.data?.models) ? response.data.models : []);
             setResultadoNuevaKey({
                 ok: true,
                 latencyMs: response.data?.latencyMs,
                 message: response.data?.message || 'API Key verificada correctamente.',
             });
         } catch (err) {
+            setModelosDetectadosKey([]);
             setResultadoNuevaKey({
                 ok: false,
                 message:
@@ -337,38 +348,43 @@ export default function ConfiguracionIndex({
 
     const guardarNuevoModeloConKey = async (e) => {
         e.preventDefault();
-        if (!nuevaApiKey.trim() || !nuevoModelId.trim() || guardandoIA) return;
+        if (!puedeComprobarModelo) return;
 
         setGuardandoIA(true);
+        setResultadoNuevaKey(null);
         try {
             const nombreLimpio =
                 nuevoNombreModelo.trim() ||
                 proveedorSeleccionadoObj.modelosSugeridos?.find((m) => m.id === nuevoModelId.trim())
-                    ?.nombre ||
-                nuevoModelId.trim();
+                    ?.nombre;
 
             const response = await axios.post('/configuracion/ia', {
                 accion: 'agregar_modelo',
                 proveedor: nuevoProveedor,
                 model_id: nuevoModelId.trim(),
-                nombre: nombreLimpio,
+                nombre: nombreLimpio || null,
                 subtitulo: `${proveedorSeleccionadoObj.nombre} · API Key propia`,
                 api_key: nuevaApiKey.trim(),
                 activar_inmediatamente: true,
             });
+            if (response.data?.ok !== true || !response.data.configuracionIA?.modelo_activo_id) {
+                throw new Error('El servidor no confirmó el guardado.');
+            }
 
             setNuevaApiKey('');
             setNuevoNombreModelo('');
-            setResultadoNuevaKey(null);
+            setMostrarApiKey(false);
+            setModelosDetectadosKey([]);
+            setResultadoIA(null);
             aplicarRespuestaServidorIA(
                 response.data?.configuracionIA,
-                `Modelo "${nombreLimpio}" agregado y activado.`
+                `Modelo "${response.data?.configuracionIA?.modelo_activo_nombre || nuevoModelId.trim()}" guardado y activado.`
             );
         } catch (err) {
-            mostrarError(
-                err.response?.data?.message ||
-                    'Verifica el ID del modelo y que la API Key tenga al menos 6 caracteres.'
-            );
+            setResultadoNuevaKey({
+                ok: false,
+                message: err.response?.data?.message || 'No se pudo guardar el modelo. Inténtalo de nuevo.',
+            });
         } finally {
             setGuardandoIA(false);
         }
@@ -484,10 +500,13 @@ export default function ConfiguracionIndex({
             const response = await axios.post('/configuracion/probar-ia', {
                 modelo_id: preferencias.modeloActivoId,
             });
+            if (response.data?.ok !== true) {
+                throw new Error('El servidor no confirmó la verificación.');
+            }
+
             setResultadoIA({
                 ok: true,
                 latencyMs: response.data?.latencyMs,
-                modelsCount: response.data?.modelsCount,
                 message: response.data?.message || 'Conexión verificada correctamente.',
             });
         } catch (err) {
@@ -523,7 +542,7 @@ export default function ConfiguracionIndex({
         },
         {
             id: 'ia_whatsapp',
-            titulo: 'IA, Agentes y WhatsApp',
+            titulo: whatsappHabilitado ? 'IA y WhatsApp' : 'IA y agentes',
             subtitulo: 'Modelos, respuestas y firma',
             icono: (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -927,11 +946,11 @@ export default function ConfiguracionIndex({
                                                 titulo: 'Respuestas y Visuales',
                                                 subtitulo: 'Tono, formato y lectura',
                                             },
-                                            {
+                                            ...(whatsappHabilitado ? [{
                                                 id: 'whatsapp',
                                                 titulo: 'Plantillas WhatsApp',
                                                 subtitulo: 'Criterio y firma oficial',
-                                            },
+                                            }] : []),
                                         ].map((tab) => {
                                             const activa = subTabIA === tab.id;
                                             return (
@@ -1096,6 +1115,7 @@ export default function ConfiguracionIndex({
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => activarModelo(modelo)}
+                                                                    disabled={esActivo || formularioModeloOcupado}
                                                                     className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-extrabold border transition-colors ${
                                                                         esActivo
                                                                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -1154,6 +1174,7 @@ export default function ConfiguracionIndex({
                                                             <button
                                                                 key={prov.id}
                                                                 type="button"
+                                                                disabled={formularioModeloOcupado}
                                                                 onClick={() => {
                                                                     setNuevoProveedor(prov.id);
                                                                     setModelosDetectadosKey([]);
@@ -1194,7 +1215,12 @@ export default function ConfiguracionIndex({
                                                             id="nuevaApiKeyInput"
                                                             type={mostrarApiKey ? 'text' : 'password'}
                                                             value={nuevaApiKey}
-                                                            onChange={(e) => setNuevaApiKey(e.target.value)}
+                                                            disabled={formularioModeloOcupado}
+                                                            onChange={(e) => {
+                                                                setNuevaApiKey(e.target.value);
+                                                                setModelosDetectadosKey([]);
+                                                                setResultadoNuevaKey(null);
+                                                            }}
                                                             placeholder={proveedorSeleccionadoObj.placeholderKey}
                                                             className="w-full rounded-xl border-slate-300 text-sm text-slate-900 pr-20 focus:border-sape-burdeo focus:ring-sape-burdeo font-mono"
                                                         />
@@ -1209,7 +1235,7 @@ export default function ConfiguracionIndex({
                                                     <button
                                                         type="button"
                                                         onClick={probarKeyYDetectarModelos}
-                                                        disabled={!nuevaApiKey.trim() || probandoNuevaKey}
+                                                        disabled={!puedeComprobarModelo}
                                                         className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-bold text-xs px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 shrink-0"
                                                     >
                                                         {probandoNuevaKey
@@ -1217,24 +1243,6 @@ export default function ConfiguracionIndex({
                                                             : 'Verificar y cargar modelos'}
                                                     </button>
                                                 </div>
-
-                                                {resultadoNuevaKey && (
-                                                    <div
-                                                        role="status"
-                                                        className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 ${
-                                                            resultadoNuevaKey.ok
-                                                                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                                                                : 'bg-red-50 border-red-200 text-red-800'
-                                                        }`}
-                                                    >
-                                                        <span>{resultadoNuevaKey.message}</span>
-                                                        {resultadoNuevaKey.latencyMs && (
-                                                            <span className="font-mono font-bold tabular-nums">
-                                                                {resultadoNuevaKey.latencyMs} ms
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
                                             </div>
 
                                             {/* Paso 3: Elegir o Escribir el Modelo */}
@@ -1250,8 +1258,12 @@ export default function ConfiguracionIndex({
                                                         id="nuevoModelIdInput"
                                                         type="text"
                                                         value={nuevoModelId}
-                                                        onChange={(e) => setNuevoModelId(e.target.value)}
-                                                        placeholder="Ej: llama-3.3-70b-versatile"
+                                                        disabled={formularioModeloOcupado}
+                                                        onChange={(e) => {
+                                                            setNuevoModelId(e.target.value);
+                                                            setResultadoNuevaKey(null);
+                                                        }}
+                                                        placeholder={proveedorSeleccionadoObj.modelosSugeridos?.[0]?.id}
                                                         className="w-full rounded-xl border-slate-300 text-sm text-slate-900 focus:border-sape-burdeo focus:ring-sape-burdeo font-mono"
                                                     />
 
@@ -1267,9 +1279,11 @@ export default function ConfiguracionIndex({
                                                             <button
                                                                 key={sug.id}
                                                                 type="button"
+                                                                disabled={formularioModeloOcupado}
                                                                 onClick={() => {
                                                                     setNuevoModelId(sug.id);
                                                                     setNuevoNombreModelo(sug.nombre);
+                                                                    setResultadoNuevaKey(null);
                                                                 }}
                                                                 className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
                                                                     nuevoModelId === sug.id
@@ -1294,6 +1308,7 @@ export default function ConfiguracionIndex({
                                                         id="nuevoNombreModeloInput"
                                                         type="text"
                                                         value={nuevoNombreModelo}
+                                                        disabled={formularioModeloOcupado}
                                                         onChange={(e) => setNuevoNombreModelo(e.target.value)}
                                                         maxLength={48}
                                                         placeholder="Ej: Mi Modelo Personal"
@@ -1305,14 +1320,28 @@ export default function ConfiguracionIndex({
                                                 </div>
                                             </div>
 
+                                            {resultadoNuevaKey && (
+                                                <div
+                                                    role={resultadoNuevaKey.ok ? 'status' : 'alert'}
+                                                    className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 ${
+                                                        resultadoNuevaKey.ok
+                                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                                                            : 'bg-red-50 border-red-200 text-red-800'
+                                                    }`}
+                                                >
+                                                    <span>{resultadoNuevaKey.message}</span>
+                                                    {resultadoNuevaKey.latencyMs > 0 && (
+                                                        <span className="font-mono font-bold tabular-nums">
+                                                            {resultadoNuevaKey.latencyMs} ms
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+
                                             <div className="flex justify-end pt-2">
                                                 <button
                                                     type="submit"
-                                                    disabled={
-                                                        !nuevaApiKey.trim() ||
-                                                        !nuevoModelId.trim() ||
-                                                        guardandoIA
-                                                    }
+                                                    disabled={!puedeComprobarModelo}
                                                     className="bg-sape-burdeo hover:bg-sape-burdeo-hover text-sape-amarillo font-bold text-sm px-6 py-2.5 rounded-xl shadow-sm transition-colors disabled:opacity-50"
                                                 >
                                                     {guardandoIA
@@ -1629,7 +1658,7 @@ export default function ConfiguracionIndex({
                                 )}
 
                                 {/* SUB-APARTADO 3: PLANTILLAS Y FIRMA WHATSAPP */}
-                                {subTabIA === 'whatsapp' && (
+                                {whatsappHabilitado && subTabIA === 'whatsapp' && (
                                     <form
                                         onSubmit={guardarAjustesWhatsapp}
                                         className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6"
@@ -1644,7 +1673,7 @@ export default function ConfiguracionIndex({
                                                 </p>
                                             </div>
                                             <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full border border-slate-200 tabular-nums self-start sm:self-auto">
-                                                {estadisticasSistema.enlacesGenerados} envíos en bitácora
+                                                {estadisticasSistema.enlacesGenerados} enlaces en bitácora
                                             </span>
                                         </div>
 
@@ -2242,7 +2271,7 @@ export default function ConfiguracionIndex({
                                                     Auditoría e Historial Institucional
                                                 </h2>
                                                 <p className="text-slate-600 text-sm mt-1">
-                                                    Registro histórico de planillas Syscol importadas y bitácora de comunicaciones WhatsApp.
+                                                    Registro histórico de planillas Syscol importadas.
                                                 </p>
                                             </div>
                                             <Link
@@ -2317,65 +2346,66 @@ export default function ConfiguracionIndex({
                                             )}
                                         </div>
 
-                                        {/* Tabla 2: Bitácora Institucional de Envíos WhatsApp */}
-                                        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                                            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-                                                <div>
-                                                    <h3 className="text-base font-extrabold text-slate-900">
-                                                        Bitácora Institucional de Contactos WhatsApp
-                                                    </h3>
-                                                    <p className="text-xs text-slate-500 mt-0.5">
-                                                        Trazabilidad de enlaces Click-to-Chat generados hacia apoderados.
-                                                    </p>
+                                        {whatsappHabilitado && (
+                                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                                <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+                                                    <div>
+                                                        <h3 className="text-base font-extrabold text-slate-900">
+                                                            Enlaces de WhatsApp preparados
+                                                        </h3>
+                                                        <p className="text-xs text-slate-500 mt-0.5">
+                                                            Trazabilidad de enlaces Click-to-Chat generados hacia apoderados.
+                                                        </p>
+                                                    </div>
+                                                    <span className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-full border border-slate-200 tabular-nums">
+                                                        {estadisticasSistema.enlacesGenerados} totales
+                                                    </span>
                                                 </div>
-                                                <span className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-full border border-slate-200 tabular-nums">
-                                                    {estadisticasSistema.enlacesGenerados} totales
-                                                </span>
-                                            </div>
 
-                                            {bitacoraWhatsapp.length > 0 ? (
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-left border-collapse">
-                                                        <thead>
-                                                            <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600">
-                                                                <th className="py-3 px-4">Docente</th>
-                                                                <th className="py-3 px-4">Estudiante</th>
-                                                                <th className="py-3 px-4">Curso</th>
-                                                                <th className="py-3 px-4">Teléfono Destino</th>
-                                                                <th className="py-3 px-4 text-right">Fecha</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-slate-100 text-xs">
-                                                            {bitacoraWhatsapp.map((item) => (
-                                                                <tr key={item.id} className="hover:bg-slate-50">
-                                                                    <td className="py-3 px-4 font-bold text-slate-800">
-                                                                        {item.docente}
-                                                                    </td>
-                                                                    <td className="py-3 px-4 text-slate-700">
-                                                                        {item.estudiante}
-                                                                    </td>
-                                                                    <td className="py-3 px-4 font-semibold text-slate-700">
-                                                                        {item.curso}
-                                                                    </td>
-                                                                    <td className="py-3 px-4 font-mono text-slate-600 tabular-nums">
-                                                                        {item.telefono}
-                                                                    </td>
-                                                                    <td className="py-3 px-4 text-right text-slate-500 tabular-nums">
-                                                                        {item.fecha
-                                                                            ? new Date(item.fecha).toLocaleString('es-CL')
-                                                                            : '-'}
-                                                                    </td>
+                                                {bitacoraWhatsapp.length > 0 ? (
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-left border-collapse">
+                                                            <thead>
+                                                                <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600">
+                                                                    <th className="py-3 px-4">Docente</th>
+                                                                    <th className="py-3 px-4">Estudiante</th>
+                                                                    <th className="py-3 px-4">Curso</th>
+                                                                    <th className="py-3 px-4">Teléfono Destino</th>
+                                                                    <th className="py-3 px-4 text-right">Fecha</th>
                                                                 </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            ) : (
-                                                <div className="p-8 text-center text-sm text-slate-500">
-                                                    Aún no se han generado enlaces de contacto WhatsApp con apoderados.
-                                                </div>
-                                            )}
-                                        </div>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-slate-100 text-xs">
+                                                                {bitacoraWhatsapp.map((item) => (
+                                                                    <tr key={item.id} className="hover:bg-slate-50">
+                                                                        <td className="py-3 px-4 font-bold text-slate-800">
+                                                                            {item.docente}
+                                                                        </td>
+                                                                        <td className="py-3 px-4 text-slate-700">
+                                                                            {item.estudiante}
+                                                                        </td>
+                                                                        <td className="py-3 px-4 font-semibold text-slate-700">
+                                                                            {item.curso}
+                                                                        </td>
+                                                                        <td className="py-3 px-4 font-mono text-slate-600 tabular-nums">
+                                                                            {item.telefono}
+                                                                        </td>
+                                                                        <td className="py-3 px-4 text-right text-slate-500 tabular-nums">
+                                                                            {item.fecha
+                                                                                ? new Date(item.fecha).toLocaleString('es-CL')
+                                                                                : '-'}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-8 text-center text-sm text-slate-500">
+                                                        Aún no se han generado enlaces de contacto WhatsApp con apoderados.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </>
                                 ) : (
                                     <>
@@ -2471,60 +2501,62 @@ export default function ConfiguracionIndex({
                                             </div>
                                         </div>
 
-                                        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                                            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-                                                <div>
-                                                    <h3 className="text-base font-extrabold text-slate-900">
-                                                        Mis Contactos WhatsApp Recientes
-                                                    </h3>
-                                                    <p className="text-xs text-slate-500 mt-0.5">
-                                                        Últimos enlaces Click-to-Chat preparados desde tu cuenta docente.
-                                                    </p>
+                                        {whatsappHabilitado && (
+                                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                                <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+                                                    <div>
+                                                        <h3 className="text-base font-extrabold text-slate-900">
+                                                            Mis enlaces de WhatsApp
+                                                        </h3>
+                                                        <p className="text-xs text-slate-500 mt-0.5">
+                                                            Últimos enlaces Click-to-Chat preparados desde tu cuenta docente.
+                                                        </p>
+                                                    </div>
+                                                    <span className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-full border border-slate-200 tabular-nums">
+                                                        {estadisticasSistema.misEnlaces} preparados
+                                                    </span>
                                                 </div>
-                                                <span className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-full border border-slate-200 tabular-nums">
-                                                    {estadisticasSistema.misEnlaces} realizados
-                                                </span>
-                                            </div>
 
-                                            {bitacoraWhatsapp.length > 0 ? (
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-left border-collapse">
-                                                        <thead>
-                                                            <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600">
-                                                                <th className="py-3 px-4">Estudiante</th>
-                                                                <th className="py-3 px-4">Curso</th>
-                                                                <th className="py-3 px-4">Teléfono</th>
-                                                                <th className="py-3 px-4 text-right">Fecha</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-slate-100 text-xs">
-                                                            {bitacoraWhatsapp.map((item) => (
-                                                                <tr key={item.id} className="hover:bg-slate-50">
-                                                                    <td className="py-3 px-4 font-bold text-slate-800">
-                                                                        {item.estudiante}
-                                                                    </td>
-                                                                    <td className="py-3 px-4 font-semibold text-slate-700">
-                                                                        {item.curso}
-                                                                    </td>
-                                                                    <td className="py-3 px-4 font-mono text-slate-600 tabular-nums">
-                                                                        {item.telefono}
-                                                                    </td>
-                                                                    <td className="py-3 px-4 text-right text-slate-500 tabular-nums">
-                                                                        {item.fecha
-                                                                            ? new Date(item.fecha).toLocaleString('es-CL')
-                                                                            : '-'}
-                                                                    </td>
+                                                {bitacoraWhatsapp.length > 0 ? (
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-left border-collapse">
+                                                            <thead>
+                                                                <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600">
+                                                                    <th className="py-3 px-4">Estudiante</th>
+                                                                    <th className="py-3 px-4">Curso</th>
+                                                                    <th className="py-3 px-4">Teléfono</th>
+                                                                    <th className="py-3 px-4 text-right">Fecha</th>
                                                                 </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            ) : (
-                                                <div className="p-8 text-center text-sm text-slate-500">
-                                                    Aún no has generado enlaces de contacto WhatsApp desde tu ficha de jefatura.
-                                                </div>
-                                            )}
-                                        </div>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-slate-100 text-xs">
+                                                                {bitacoraWhatsapp.map((item) => (
+                                                                    <tr key={item.id} className="hover:bg-slate-50">
+                                                                        <td className="py-3 px-4 font-bold text-slate-800">
+                                                                            {item.estudiante}
+                                                                        </td>
+                                                                        <td className="py-3 px-4 font-semibold text-slate-700">
+                                                                            {item.curso}
+                                                                        </td>
+                                                                        <td className="py-3 px-4 font-mono text-slate-600 tabular-nums">
+                                                                            {item.telefono}
+                                                                        </td>
+                                                                        <td className="py-3 px-4 text-right text-slate-500 tabular-nums">
+                                                                            {item.fecha
+                                                                                ? new Date(item.fecha).toLocaleString('es-CL')
+                                                                                : '-'}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-8 text-center text-sm text-slate-500">
+                                                        Aún no has generado enlaces de contacto WhatsApp desde tu ficha de jefatura.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </>
                                 )}
                             </motion.div>

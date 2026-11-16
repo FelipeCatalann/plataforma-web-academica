@@ -14,8 +14,9 @@ import {
 } from 'recharts';
 import ChatbotPedagogico from '@/Components/ChatbotPedagogico';
 import ModalInformeIA from '@/Components/ModalInformeIA';
+import { formatearCursoConAnio } from '@/utils/formatearCurso';
 
-export default function PanelAsignatura({ auth, cursos }) {
+export default function PanelAsignatura({ auth, cursos, pendienteNomina = false }) {
     const [vistaActiva, setVistaActiva] = useState('grafico');
     const [estudianteActivo, setEstudianteActivo] = useState(null);
     const [busqueda, setBusqueda] = useState('');
@@ -90,9 +91,13 @@ export default function PanelAsignatura({ auth, cursos }) {
                 <Head title="Mis Asignaturas" />
                 <div className="min-h-[80vh] flex items-center justify-center p-4">
                     <div className="p-8 bg-white rounded-2xl shadow-sm text-center border border-slate-200/80 max-w-md">
-                        <h2 className="text-xl font-extrabold text-slate-900">No tienes asignaturas activas asignadas.</h2>
+                        <h1 className="text-xl font-extrabold text-slate-900">
+                            {pendienteNomina ? 'Tus cursos aún no tienen nómina' : 'Aún no tienes asignaturas'}
+                        </h1>
                         <p className="text-sm text-slate-600 mt-2">
-                            Verifica que los cursos donde impartes clases tengan su nómina Excel cargada en el sistema.
+                            {pendienteNomina
+                                ? 'Pídele al administrador que cargue la nómina de tus cursos.'
+                                : 'Pídele al administrador que te asigne las asignaturas que impartes.'}
                         </p>
                     </div>
                 </div>
@@ -190,7 +195,7 @@ export default function PanelAsignatura({ auth, cursos }) {
                                             }`}
                                         ></div>
                                         <span className="text-xs sm:text-sm">
-                                            {curso.nivel}° Medio {curso.letra} · {curso.anioEscolar}
+                                            {formatearCursoConAnio(curso)}
                                         </span>
                                     </div>
                                     <span
@@ -333,7 +338,7 @@ export default function PanelAsignatura({ auth, cursos }) {
                                         >
                                             {cursos.map((c) => (
                                                 <option key={c.id} value={c.id}>
-                                                    {c.nivel}° Medio {c.letra} · {c.anioEscolar}
+                                                    {formatearCursoConAnio(c)}
                                                 </option>
                                             ))}
                                         </select>

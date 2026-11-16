@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Apoderado;
 use App\Models\Curso;
 use App\Models\EnlaceWhatsApp;
+use App\Services\RendimientoAcademico;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class ProfesorController extends Controller
@@ -40,6 +42,26 @@ class ProfesorController extends Controller
         }
 
         if ($curso && $curso->estudiantes->isNotEmpty()) {
+            $seguimientos = DB::table('seguimientos_pedagogicos')
+                ->whereIn('matricula_id', $curso->estudiantes->pluck('pivot.id')->filter())
+                ->get(['matricula_id', 'acuerdo', 'fecha_revision'])
+                ->keyBy('matricula_id');
+
+            $curso->estudiantes->each(function ($estudiante) use ($seguimientos): void {
+                $rendimiento = RendimientoAcademico::resumir($estudiante->calificaciones);
+                unset($rendimiento['notas']);
+                $estudiante->setAttribute('rendimiento', $rendimiento);
+                $estudiante->setAttribute('seguimiento', $seguimientos->get($estudiante->pivot?->id));
+            });
+            $rendimientoCurso = RendimientoAcademico::resumir($curso->estudiantes->flatMap->calificaciones);
+            $curso->setAttribute('promedio_general', $rendimientoCurso['promedio']);
+            $curso->setAttribute('promedios_asignaturas', array_map(fn ($asignatura) => [
+                'nombre' => $asignatura['asignatura'],
+                'promedio' => $asignatura['promedio'],
+            ], $rendimientoCurso['asignaturas']));
+        }
+
+        if (config('funciones.whatsapp') && $curso && $curso->estudiantes->isNotEmpty()) {
             $apoderadoIds = $curso->estudiantes
                 ->pluck('pivot.apoderado_id')
                 ->filter()
@@ -61,7 +83,7 @@ class ProfesorController extends Controller
                 ->get()
                 ->groupBy('matricula_id');
 
-            $curso->estudiantes->each(function ($estudiante) use ($apoderadosPorId, $enlacesPorMatricula) {
+            $curso->estudiantes->each(function ($estudiante) use ($apoderadosPorId, $enlacesPorMatricula, $request) {
                 $apoderadoId = $estudiante->pivot?->apoderado_id;
                 $matriculaId = $estudiante->pivot?->id;
                 $apoderado = $apoderadoId ? $apoderadosPorId->get($apoderadoId) : null;
@@ -76,6 +98,7 @@ class ProfesorController extends Controller
                 $estudiante->setAttribute('ultimo_whatsapp', $ultimoEnlace ? [
                     'id' => $ultimoEnlace->id,
                     'estado' => $ultimoEnlace->estado,
+                    'confirmable' => (string) $ultimoEnlace->user_id === (string) $request->user()->id,
                     'telefono' => $ultimoEnlace->telefonoDestinoSnapshot,
                     'mensaje' => $ultimoEnlace->mensajePrellenado,
                     'fecha' => $ultimoEnlace->generadoEn?->toIso8601String(),
@@ -90,6 +113,10 @@ class ProfesorController extends Controller
 
     public function panelAsignatura(Request $request)
     {
+        if (! $request->user()->hasRole('Profesor de Asignatura')) {
+            return Inertia::render('Profesor/PanelAsignatura', ['cursos' => []]);
+        }
+
         $profesorId = $request->user()->id;
 
         $cursos = Curso::whereHas('estudiantes', fn ($query) => $query->where('matriculas.vigente', true))
@@ -127,6 +154,7 @@ class ProfesorController extends Controller
 
         return Inertia::render('Profesor/PanelAsignatura', [
             'cursos' => $cursos,
+            'pendienteNomina' => $cursos->isEmpty() && DB::table('asignatura_curso')->where('profesor_id', $profesorId)->exists(),
         ]);
     }
 }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useForm, usePage } from '@inertiajs/react';
+import ResumenImportacion from '@/Components/ResumenImportacion';
 import { mensajeRevision, revisarImportacion } from '@/utils/revisarImportacion';
 
 export default function ImportarNotas() {
@@ -18,11 +19,11 @@ export default function ImportarNotas() {
         e.preventDefault();
         if (!data.archivo_excel || revisando || processing) return;
         setErrorRevision('');
-        if (revisado !== data.archivo_excel) {
+        if (revisado?.archivo !== data.archivo_excel) {
             setRevisando(true);
             try {
-                await revisarImportacion(data.archivo_excel);
-                setRevisado(data.archivo_excel);
+                const { data: revision } = await revisarImportacion(data.archivo_excel);
+                setRevisado({ archivo: data.archivo_excel, cursos: revision.cursos });
             } catch (error) {
                 setErrorRevision(mensajeRevision(error));
             } finally {
@@ -77,13 +78,14 @@ export default function ImportarNotas() {
                     )}
                 </div>
 
+                {revisado && revisado.archivo === data.archivo_excel && <ResumenImportacion cursos={revisado.cursos} />}
                 <button 
                     type="submit" 
                     disabled={!data.archivo_excel || processing || revisando}
                     className="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 transition disabled:opacity-50"
                 >
                     {processing ? 'Importando…' : revisando ? 'Revisando…' :
-                        revisado === data.archivo_excel && revisado ? 'Confirmar importación' : 'Revisar planilla'}
+                        revisado?.archivo === data.archivo_excel ? 'Confirmar importación' : 'Revisar planilla'}
                 </button>
             </form>
         </div>

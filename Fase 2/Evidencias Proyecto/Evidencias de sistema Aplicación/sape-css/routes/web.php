@@ -8,6 +8,9 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\InformeIAController;
 use App\Http\Controllers\ProfesorController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SeguimientoPedagogicoController;
+use App\Http\Middleware\AsegurarAccesoAcademico;
+use App\Http\Middleware\VerificarWhatsAppHabilitado;
 use App\Services\ConexionIA;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Route;
@@ -24,14 +27,14 @@ Route::get('/', function () {
     ]);
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', AsegurarAccesoAcademico::class])->group(function () {
     Route::get('/chat-pedagogico/sesiones', [ChatbotController::class, 'listarSesiones'])->name('chat.sesiones');
     Route::delete('/chat-pedagogico/sesiones/{sesion}', [ChatbotController::class, 'eliminarSesion'])->name('chat.sesiones.eliminar');
     Route::post('/chat-pedagogico', [ChatbotController::class, 'sendMessage'])->middleware('throttle:ia')->name('chat.pedagogico');
     Route::post('/generar-informe-ia', [InformeIAController::class, 'generarInforme'])->middleware('throttle:ia')->name('informes.generar');
 });
 
-Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', AsegurarAccesoAcademico::class])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -39,10 +42,16 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', AsegurarAccesoAcademico::class])->group(function () {
     Route::get('/panel-jefe', [ProfesorController::class, 'panelJefe'])->middleware('role:Profesor Jefe')->name('profesor.jefe');
-    Route::get('/panel-asignatura', [ProfesorController::class, 'panelAsignatura'])->middleware('role:Profesor de Asignatura')->name('profesor.asignatura');
-    Route::post('/enlaces-whatsapp', [EnlaceWhatsAppController::class, 'prepararEnlace'])->name('whatsapp.preparar');
+    Route::get('/panel-asignatura', [ProfesorController::class, 'panelAsignatura'])
+        ->middleware('role:Profesor Jefe|Profesor de Asignatura')->name('profesor.asignatura');
+    Route::put('/cursos/{curso}/estudiantes/{estudiante}/seguimiento', [SeguimientoPedagogicoController::class, 'guardar'])
+        ->whereUuid(['curso', 'estudiante'])->middleware('role:Profesor Jefe')->name('profesor.seguimiento.guardar');
+    Route::post('/enlaces-whatsapp', [EnlaceWhatsAppController::class, 'prepararEnlace'])
+        ->middleware(VerificarWhatsAppHabilitado::class)->name('whatsapp.preparar');
+    Route::patch('/enlaces-whatsapp/{enlace}/contacto', [EnlaceWhatsAppController::class, 'confirmarContacto'])
+        ->whereUuid('enlace')->middleware(VerificarWhatsAppHabilitado::class)->name('whatsapp.confirmar');
 
     Route::get('/configuracion', [ConfiguracionController::class, 'index'])->name('configuracion.index');
     Route::post('/configuracion/ia', [ConfiguracionController::class, 'guardarConfiguracionIA'])->middleware('throttle:ia')->name('configuracion.guardar-ia');

@@ -7,6 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -39,6 +40,14 @@ class AutorizacionAdministrativaTest extends TestCase
         $this->get('/verify-email')->assertOk();
     }
 
+    public function test_docente_de_asignatura_fuera_del_alta_administrativa_debe_verificar_su_correo(): void
+    {
+        $docente = User::factory()->unverified()->create();
+        $docente->assignRole(Role::findOrCreate('Profesor de Asignatura', 'web'));
+
+        $this->actingAs($docente)->get(route('profesor.asignatura'))->assertRedirect(route('verification.notice'));
+    }
+
     public function test_panel_docente_bloquea_asignacion_con_rol_revocado(): void
     {
         $user = User::factory()->create();
@@ -51,6 +60,49 @@ class AutorizacionAdministrativaTest extends TestCase
         $this->actingAs($user)->get(route('profesor.jefe'))->assertOk();
         $user->removeRole($rol);
         $this->getJson(route('profesor.jefe'))->assertForbidden();
+    }
+
+    public static function rolesDocentes(): array
+    {
+        return [
+            'solo jefatura' => [['Profesor Jefe'], true, false],
+            'solo asignatura' => [['Profesor de Asignatura'], false, true],
+            'ambos roles' => [['Profesor Jefe', 'Profesor de Asignatura'], true, true],
+        ];
+    }
+
+    #[DataProvider('rolesDocentes')]
+    public function test_portal_docente_informa_los_roles_y_permite_ver_el_aviso_de_asignaturas(array $roles, bool $jefatura, bool $asignaturas): void
+    {
+        $docente = User::factory()->create();
+        foreach ($roles as $rol) {
+            $docente->assignRole(Role::findOrCreate($rol, 'web'));
+        }
+
+        $this->actingAs($docente)->get(route('dashboard'))->assertInertia(fn (Assert $pagina) => $pagina
+            ->component('Profesor/Dashboard')
+            ->where('auth.accesosDocente.jefatura', $jefatura)
+            ->where('auth.accesosDocente.asignaturas', $asignaturas));
+
+        $respuesta = $this->get(route('profesor.jefe'));
+        if ($jefatura) {
+            $respuesta->assertOk();
+        } else {
+            $respuesta->assertForbidden()->assertInertia(fn (Assert $pagina) => $pagina
+                ->component('Profesor/AccesoRestringido')
+                ->has('mensaje')
+                ->has('auth.user'));
+            $this->getJson(route('profesor.jefe'))->assertForbidden();
+        }
+
+        $this->get(route('profesor.asignatura'))->assertOk()->assertInertia(fn (Assert $pagina) => $pagina
+            ->component('Profesor/PanelAsignatura')
+            ->has('cursos', 0));
+    }
+
+    public function test_cuenta_sin_rol_docente_no_puede_entrar_a_asignaturas(): void
+    {
+        $this->actingAs(User::factory()->create())->getJson(route('profesor.asignatura'))->assertForbidden();
     }
 
     #[DataProvider('rutasAdministrativas')]
@@ -107,11 +159,12 @@ class AutorizacionAdministrativaTest extends TestCase
             'primer_apellido' => 'Sintético',
             'segundo_apellido' => 'Prueba',
             'email' => 'docente.sintetico@example.test',
-            'password' => 'ClavePrueba123!',
+            'password' => 'ClavePrueba123',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $docente = User::where('email', 'docente.sintetico@example.test')->firstOrFail();
         $this->assertTrue($docente->hasRole('Profesor Jefe'));
+        $this->assertFalse($docente->tieneAccesoPorAltaDocente());
 
         $this->post('/admin/asignar-curso', [
             'profesor_id' => $docente->id,
@@ -120,6 +173,36 @@ class AutorizacionAdministrativaTest extends TestCase
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('cursos', ['id' => $cursoId, 'profesor_jefe_id' => $docente->id]);
+    }
+
+    public function test_profesor_de_asignatura_creado_por_administrador_puede_ingresar_sin_verificar_el_correo(): void
+    {
+        $correo = 'asignatura.sintetica@example.test';
+        $clave = 'ClaveDocente123';
+        $this->actingAs($this->crearAdministrador())->post(route('admin.profesores.store'), [
+            'rol_inicial' => 'Profesor de Asignatura',
+            'nombre' => 'Docente',
+            'primer_apellido' => 'Sintético',
+            'segundo_apellido' => 'Prueba',
+            'email' => $correo,
+            'password' => $clave,
+        ])->assertSessionHasNoErrors();
+
+        $docente = User::where('email', $correo)->firstOrFail();
+        $this->assertFalse($docente->hasVerifiedEmail());
+        $this->post(route('logout'));
+
+        $this->post(route('login'), ['email' => $correo, 'password' => 'incorrecta'])->assertSessionHasErrors('password');
+        $this->assertGuest();
+        $this->post(route('login'), ['email' => $correo, 'password' => $clave])->assertSessionHasNoErrors();
+        $this->assertAuthenticatedAs($docente);
+        $this->get(route('dashboard'))->assertOk();
+        $this->get(route('profesor.asignatura'))->assertOk();
+        $this->get(route('verification.notice'))->assertRedirect(route('dashboard', absolute: false));
+        $this->getJson(route('admin.director'))->assertForbidden();
+
+        $docente->assignRole(Role::findOrCreate('Administrador', 'web'));
+        $this->actingAs($docente)->get(route('dashboard'))->assertRedirect(route('verification.notice'));
     }
 
     public function test_docente_no_puede_borrar_un_curso_existente(): void

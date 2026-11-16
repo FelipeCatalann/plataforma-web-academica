@@ -5,6 +5,7 @@ namespace Tests\Integration;
 use App\Imports\ImportadorSyscol;
 use App\Models\User;
 use App\Services\ConexionIA;
+use App\Services\ConfiguracionIAService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -51,14 +52,35 @@ class ConfiguracionIATest extends TestCase
         Http::fake(['proveedor.example.test/*' => Http::response([], 302, ['Location' => 'https://otro.example.test/v1/models'])]);
         $this->actingAs(User::factory()->create())->postJson(route('configuracion.probar-ia'), [
             'proveedor' => 'custom',
+            'model_id' => 'modelo-prueba',
             'base_url' => 'https://proveedor.example.test/v1',
             'api_key' => 'clave-de-prueba',
         ])->assertStatus(502);
         Http::assertSentCount(1);
     }
 
+    public function test_modelo_groq_retirado_se_reemplaza_en_el_catalogo_y_en_las_credenciales(): void
+    {
+        $user = User::factory()->create(['configuracion_ia' => [
+            'modelo_activo_id' => 'llama-3.3-70b-versatile',
+        ]]);
+        $ia = app(ConfiguracionIAService::class);
+
+        $publica = $ia->obtenerConfiguracionPublica($user);
+        $this->assertSame('openai/gpt-oss-120b', $publica['modelo_activo_id']);
+        $this->assertSame('GPT-OSS 120B', $publica['modelo_activo_nombre']);
+        $this->assertSame('openai/gpt-oss-120b', $ia->resolverCredencialesAgente($user)['model']);
+        $this->assertNotContains('llama-3.3-70b-versatile', array_column($publica['modelos_sistema'], 'id'));
+    }
+
     public function test_usuario_puede_agregar_modelo_con_api_key_encriptada_y_enmascarada(): void
     {
+        Http::fake([
+            'api.openai.com/v1/chat/completions' => Http::response([
+                'choices' => [['message' => ['content' => 'OK']]],
+            ]),
+        ]);
+
         $user = User::factory()->create();
         $this->actingAs($user);
 
@@ -89,11 +111,19 @@ class ConfiguracionIATest extends TestCase
         $valorCrudoDB = DB::table('users')->where('id', $user->id)->value('configuracion_ia');
         $this->assertNotEmpty($valorCrudoDB);
         $this->assertStringNotContainsString($rawKey, $valorCrudoDB);
+
+        Http::assertSent(fn ($request) => $request->method() === 'POST'
+            && $request->url() === 'https://api.openai.com/v1/chat/completions'
+            && $request->hasHeader('Authorization', 'Bearer '.$rawKey)
+            && $request['model'] === 'gpt-4o-mini');
     }
 
     public function test_probar_conexion_ia_con_api_key_personalizada_devuelve_modelos(): void
     {
         Http::fake([
+            'api.openai.com/v1/chat/completions' => Http::response([
+                'choices' => [['message' => ['content' => 'OK']]],
+            ]),
             'api.openai.com/v1/models' => Http::response([
                 'data' => [
                     ['id' => 'gpt-4o-mini'],
@@ -113,8 +143,72 @@ class ConfiguracionIATest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('ok', true)
+            ->assertJsonPath('activeModel', 'gpt-4o-mini')
             ->assertJsonPath('modelsCount', 2)
             ->assertJsonPath('models.0', 'gpt-4o-mini');
+    }
+
+    public function test_clave_rechazada_no_se_guarda_ni_activa_aunque_el_catalogo_sea_publico(): void
+    {
+        Http::fake([
+            'openrouter.ai/api/v1/models' => Http::response(['data' => [['id' => 'deepseek/deepseek-chat']]]),
+            'openrouter.ai/api/v1/chat/completions' => Http::response([], 401),
+        ]);
+
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $datos = [
+            'proveedor' => 'openrouter',
+            'model_id' => 'deepseek/deepseek-chat',
+            'api_key' => 'clave-invalida-de-prueba',
+        ];
+        $message = 'OpenRouter rechazó la API Key. Revisa la clave y vuelve a intentarlo.';
+
+        $this->postJson(route('configuracion.probar-ia'), $datos)
+            ->assertStatus(502)->assertJson(['ok' => false, 'message' => $message]);
+        $this->postJson(route('configuracion.guardar-ia'), $datos + [
+            'accion' => 'agregar_modelo',
+            'activar_inmediatamente' => true,
+        ])->assertStatus(502)->assertJson(['ok' => false, 'message' => $message]);
+
+        $this->assertNull($user->fresh()->configuracion_ia);
+        Http::assertSentCount(2);
+        Http::assertNotSent(fn ($request) => $request->method() === 'GET');
+    }
+
+    public function test_modelo_sin_acceso_no_reemplaza_la_clave_guardada_ni_se_activa_desde_la_lista(): void
+    {
+        Http::fake([
+            'api.openai.com/v1/chat/completions' => Http::response([], 404),
+        ]);
+
+        $configuracion = [
+            'modelo_activo_id' => 'llama-3.3-70b-versatile',
+            'modelos_personalizados' => [[
+                'id' => 'custom_previo',
+                'model_id' => 'modelo-sin-acceso',
+                'proveedor' => 'openai',
+                'api_key' => 'clave-guardada-de-prueba',
+            ]],
+        ];
+        $user = User::factory()->create(['configuracion_ia' => $configuracion]);
+        $this->actingAs($user);
+
+        $this->postJson(route('configuracion.guardar-ia'), [
+            'accion' => 'agregar_modelo',
+            'proveedor' => 'openai',
+            'model_id' => 'modelo-sin-acceso',
+            'api_key' => 'clave-nueva-de-prueba',
+            'activar_inmediatamente' => true,
+        ])->assertStatus(502)->assertJsonPath('ok', false);
+
+        $this->postJson(route('configuracion.guardar-ia'), [
+            'modelo_activo_id' => 'custom_previo',
+        ])->assertStatus(502)->assertJsonPath('ok', false);
+
+        $this->assertSame($configuracion, $user->fresh()->configuracion_ia);
+        Http::assertSent(fn ($request) => $request['model'] === 'modelo-sin-acceso'
+            && $request->hasHeader('Authorization', 'Bearer clave-guardada-de-prueba'));
     }
 
     public function test_chatbot_utiliza_modelo_personalizado_y_preferencias_del_usuario(): void
@@ -129,6 +223,14 @@ class ConfiguracionIATest extends TestCase
         $curso = DB::table('cursos')->first();
         $user = $this->crearProfesorJefe($curso->id);
         $this->actingAs($user);
+
+        Http::fake([
+            'api.openai.com/v1/chat/completions' => Http::response([
+                'choices' => [[
+                    'message' => ['content' => ' Estrategia ejecutiva lista.'],
+                ]],
+            ], 200),
+        ]);
 
         // Guardar modelo personalizado en OpenAI y preferencias de respuesta
         $this->postJson(route('configuracion.guardar-ia'), [
@@ -148,14 +250,6 @@ class ConfiguracionIATest extends TestCase
             'formato_visual_ia' => 'texto_plano',
             'instrucciones_ia' => 'Priorizar estrategias PIE',
         ])->assertOk();
-
-        Http::fake([
-            'api.openai.com/v1/chat/completions' => Http::response([
-                'choices' => [[
-                    'message' => ['content' => ' Estrategia ejecutiva lista.'],
-                ]],
-            ], 200),
-        ]);
 
         $respuestaChat = $this->postJson(route('chat.pedagogico'), [
             'mensaje' => 'Dame un resumen de riesgo.',
