@@ -28,10 +28,14 @@ class ImportController extends Controller
         $archivo = $request->file('archivo_excel');
         $hash = hash_file('sha256', $archivo->getRealPath());
 
-        // El importador valida contra los datos reales y simula toda la escritura.
+        $importacionId = DB::table('importacion_excels')->where('checksum', $hash)->value('id');
+        $importador = new ImportadorSyscol($this->cursosConfirmados($importacionId));
+
+        // Usa las mismas validaciones que al confirmar y revierte la escritura.
         DB::beginTransaction();
         try {
-            Excel::import(new ImportadorSyscol, $archivo);
+            Excel::import($importador, $archivo);
+            $resumen = $this->verificarResumen($importador);
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Throwable $e) {
@@ -48,87 +52,128 @@ class ImportController extends Controller
             'expira' => now()->addMinutes(15)->timestamp,
         ]);
 
-        return response()->json(['message' => 'Planilla revisada. Puedes confirmar la importación.']);
+        return response()->json([
+            'message' => 'Planilla revisada. Puedes confirmar la importación.',
+            'cursos' => array_values(array_map(fn ($curso) => [
+                'anio' => $curso['anioEscolar'],
+                'nivel' => $curso['nivel'],
+                'letra' => $curso['letra'],
+                'accion' => $curso['accion'],
+                'matriculas' => $curso['matriculas'],
+                'calificaciones' => $curso['calificaciones'],
+            ], $resumen)),
+        ]);
     }
 
     public function importar(Request $request)
     {
-        // 1. AUMENTAR EL TIEMPO LÍMITE A 5 MINUTOS (300 segundos)
         set_time_limit(300);
-
         $request->validate(self::REGLAS_ARCHIVO);
-
         $archivo = $request->file('archivo_excel');
         $hash = hash_file('sha256', $archivo->getRealPath());
-        $revision = $request->session()->pull('importacion_revisada');
+        $revision = $request->session()->get('importacion_revisada');
         if (! $revision || $revision['hash'] !== $hash || $revision['expira'] <= now()->timestamp) {
             throw ValidationException::withMessages([
                 'archivo_excel' => 'Revisa esta planilla antes de confirmar la importación.',
             ]);
         }
 
-        // CA-2 (INDG-15/INDG-16), hash idempotencia: la re-carga idéntica no duplica
-        // siempre y cuando sigan existiendo cursos con calificaciones en el sistema.
-        $yaProcesada = DB::table('importacion_excels')
-            ->where('checksum', $hash)
-            ->where('estadoImportacion', 'PROCESADA')
-            ->exists();
-
-        if ($yaProcesada && DB::table('calificaciones')->count() > 0) {
-            return back()->with('success', 'El archivo ya fue importado anteriormente (hash idéntico). No se duplicaron registros.');
-        }
-
-        // Limpiar cualquier registro previo con el mismo checksum (ej. REPETIDO o curso borrado previamente)
-        $importacionId = (string) Str::uuid();
-        $calificacionesAntes = DB::table('calificaciones')->count();
-
         try {
-            DB::beginTransaction();
+            $conCambios = DB::transaction(function () use ($archivo, $hash): bool {
+                $ahora = now();
+                DB::table('importacion_excels')->insertOrIgnore([
+                    'id' => (string) Str::uuid(),
+                    'archivoOriginal' => $archivo->getClientOriginalName(),
+                    'checksum' => $hash,
+                    'iniciadaEn' => $ahora,
+                    'estadoImportacion' => 'PROCESANDO',
+                    'filasProcesadas' => 0,
+                    'filasRechazadas' => 0,
+                    'created_at' => $ahora,
+                    'updated_at' => $ahora,
+                ]);
 
-            DB::table('importacion_excels')->where('checksum', $hash)
-                ->where('estadoImportacion', '!=', 'PROCESADA')->delete();
+                $importacion = DB::table('importacion_excels')->where('checksum', $hash)->lockForUpdate()->first();
+                $importador = new ImportadorSyscol($this->cursosConfirmados($importacion->id));
+                Excel::import($importador, $archivo);
+                $resumen = $this->verificarResumen($importador);
 
-            DB::table('importacion_excels')->insert([
-                'id' => $importacionId,
-                'archivoOriginal' => $archivo->getClientOriginalName(),
-                'checksum' => $hash,
-                'iniciadaEn' => now(),
-                'estadoImportacion' => 'PROCESANDO',
-                'filasProcesadas' => 0,
-                'filasRechazadas' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+                $vinculos = [];
+                foreach ($resumen as $identidad => $curso) {
+                    if ($curso['accion'] !== 'sin_cambios') {
+                        $vinculos[] = [
+                            'importacion_id' => $importacion->id,
+                            'identidad_curso' => $identidad,
+                            'curso_id' => $curso['curso_id'],
+                            'filas_calificaciones' => $curso['calificaciones'],
+                        ];
+                    }
+                }
 
-            Excel::import(new ImportadorSyscol, $archivo);
+                if ($vinculos === []) {
+                    return false;
+                }
 
-            DB::table('importacion_excels')->where('id', $importacionId)->update([
-                'estadoImportacion' => 'PROCESADA',
-                'finalizadaEn' => now(),
-                'filasProcesadas' => max(0, DB::table('calificaciones')->count() - $calificacionesAntes),
-                'updated_at' => now(),
-            ]);
+                DB::table('importacion_excel_curso')->upsert(
+                    $vinculos,
+                    ['importacion_id', 'identidad_curso'],
+                    ['curso_id', 'filas_calificaciones'],
+                );
+                DB::table('importacion_excels')->where('id', $importacion->id)->update([
+                    'estadoImportacion' => 'PROCESADA',
+                    'finalizadaEn' => now(),
+                    'filasProcesadas' => DB::table('importacion_excel_curso')
+                        ->where('importacion_id', $importacion->id)->sum('filas_calificaciones'),
+                    'updated_at' => now(),
+                ]);
 
-            DB::commit();
+                return true;
+            }, 3);
 
-            return back()->with('success', 'El archivo ha sido procesado e importado exitosamente.');
+            $request->session()->forget('importacion_revisada');
+
+            return back()->with('success', $conCambios
+                ? 'El archivo ha sido procesado e importado exitosamente.'
+                : 'El archivo ya fue importado anteriormente (hash idéntico). No se duplicaron registros.');
         } catch (ValidationException $e) {
-            DB::rollBack();
-
             throw $e;
         } catch (\Throwable $e) {
-            DB::rollBack();
             Log::warning('Falló la importación de calificaciones.', ['tipo' => $e::class]);
 
             return back()->withErrors(['archivo_excel' => 'No se pudo importar el archivo. Revisa el formato y las calificaciones.']);
         }
     }
 
+    private function cursosConfirmados(?string $importacionId): array
+    {
+        if ($importacionId === null) {
+            return [];
+        }
+
+        return DB::table('importacion_excel_curso')
+            ->where('importacion_id', $importacionId)
+            ->whereNotNull('curso_id')
+            ->pluck('curso_id', 'identidad_curso')
+            ->all();
+    }
+
+    private function verificarResumen(ImportadorSyscol $importador): array
+    {
+        $resumen = $importador->resumen();
+        if ($resumen === [] || (array_sum(array_column($resumen, 'calificaciones')) === 0
+            && ! in_array('sin_cambios', array_column($resumen, 'accion'), true))) {
+            throw ValidationException::withMessages([
+                'archivo_excel' => 'La planilla debe contener una nómina y al menos una fila de calificaciones.',
+            ]);
+        }
+
+        return $resumen;
+    }
+
     /**
      * Elimina de forma íntegra los datos importados por Excel de un curso específico
      * (calificaciones, matrículas, asignaturas asociadas al curso, estudiantes/apoderados
-     * huérfanos y registro de checksum de importación) para que no queden datos fantasma
-     * en los gráficos ni bloqueos al volver a subir el archivo.
+     * huérfanos). La relación con el curso se invalida y conserva el historial de la planilla.
      */
     public function eliminarDatosCurso(string $cursoId)
     {
@@ -198,25 +243,6 @@ class ImportController extends Controller
                 if (! empty($apoderadosHuerfanos)) {
                     DB::table('apoderados')->whereIn('id', $apoderadosHuerfanos)->delete();
                 }
-            }
-
-            // Limpiar el historial de importación (checksum) de este curso para permitir re-subir su Excel
-            $patron1 = "_{$curso->nivel}M{$curso->letra}";
-            $patron2 = "_{$curso->nivel}{$curso->letra}";
-            $borradosPorNombre = DB::table('importacion_excels')
-                ->where('archivoOriginal', 'like', "%{$patron1}%")
-                ->orWhere('archivoOriginal', 'like', "%{$patron2}%")
-                ->delete();
-
-            if ($borradosPorNombre === 0 && $calificacionesBorradas > 0) {
-                DB::table('importacion_excels')
-                    ->where('filasProcesadas', $calificacionesBorradas)
-                    ->delete();
-            }
-
-            // Si ya no quedan cursos en la BD, limpiamos cualquier registro remanente en importacion_excels
-            if (DB::table('cursos')->count() === 0) {
-                DB::table('importacion_excels')->delete();
             }
 
             DB::commit();

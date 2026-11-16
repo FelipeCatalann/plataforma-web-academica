@@ -52,26 +52,28 @@ class ConfiguracionIAService
         ],
     ];
 
+    public const MODELO_PREDETERMINADO = 'openai/gpt-oss-120b';
+
     public const MODELOS_SISTEMA = [
         [
-            'id' => 'llama-3.3-70b-versatile',
-            'model_id' => 'llama-3.3-70b-versatile',
-            'nombre' => 'Llama 3.3 70B',
-            'subtitulo' => 'Groq · Equilibrado y veloz',
-            'proveedor' => 'groq',
-            'proveedor_nombre' => 'Groq Cloud',
-            'origen' => 'sistema',
-            'recomendado_para' => 'Chat e Informes',
-        ],
-        [
-            'id' => 'openai/gpt-oss-120b',
-            'model_id' => 'openai/gpt-oss-120b',
+            'id' => self::MODELO_PREDETERMINADO,
+            'model_id' => self::MODELO_PREDETERMINADO,
             'nombre' => 'GPT-OSS 120B',
             'subtitulo' => 'Groq · Razonamiento profundo',
             'proveedor' => 'groq',
             'proveedor_nombre' => 'Groq Cloud',
             'origen' => 'sistema',
             'recomendado_para' => 'Copiloto Pedagógico',
+        ],
+        [
+            'id' => 'openai/gpt-oss-20b',
+            'model_id' => 'openai/gpt-oss-20b',
+            'nombre' => 'GPT-OSS 20B',
+            'subtitulo' => 'Groq · Equilibrado y veloz',
+            'proveedor' => 'groq',
+            'proveedor_nombre' => 'Groq Cloud',
+            'origen' => 'sistema',
+            'recomendado_para' => 'Chat e Informes',
         ],
         [
             'id' => 'qwen/qwen3.8-27b',
@@ -88,9 +90,9 @@ class ConfiguracionIAService
     public function configuracionPorDefecto(): array
     {
         return [
-            'modelo_activo_id' => 'llama-3.3-70b-versatile',
+            'modelo_activo_id' => self::MODELO_PREDETERMINADO,
             'usar_mismo_modelo_agentes' => true,
-            'modelo_chat_id' => 'openai/gpt-oss-120b',
+            'modelo_chat_id' => self::MODELO_PREDETERMINADO,
             'modelo_informes_id' => 'qwen/qwen3.8-27b',
             'tono_ia' => 'formal_decreto67',
             'extension_ia' => 'equilibrada',
@@ -125,7 +127,14 @@ class ConfiguracionIAService
                 return $defecto;
             }
 
-            return array_merge($defecto, $guardada);
+            $configuracion = array_merge($defecto, $guardada);
+            foreach (['modelo_activo_id', 'modelo_chat_id', 'modelo_informes_id'] as $campo) {
+                if ($configuracion[$campo] === 'llama-3.3-70b-versatile') {
+                    $configuracion[$campo] = self::MODELO_PREDETERMINADO;
+                }
+            }
+
+            return $configuracion;
         } catch (\Throwable) {
             return $defecto;
         }
@@ -177,11 +186,11 @@ class ConfiguracionIAService
 
         $modeloActivoId = in_array($cruda['modelo_activo_id'], $idsDisponibles, true)
             ? $cruda['modelo_activo_id']
-            : 'llama-3.3-70b-versatile';
+            : self::MODELO_PREDETERMINADO;
 
         $modeloChatId = in_array($cruda['modelo_chat_id'], $idsDisponibles, true)
             ? $cruda['modelo_chat_id']
-            : 'openai/gpt-oss-120b';
+            : self::MODELO_PREDETERMINADO;
 
         $modeloInformesId = in_array($cruda['modelo_informes_id'], $idsDisponibles, true)
             ? $cruda['modelo_informes_id']
@@ -224,19 +233,38 @@ class ConfiguracionIAService
         ];
     }
 
+    public function credencialesModeloPersonalizado(array $datos): array
+    {
+        $proveedorId = $datos['proveedor'] ?? 'groq';
+        $proveedorInfo = self::PROVEEDORES[$proveedorId] ?? self::PROVEEDORES['custom'];
+        $apiKey = trim((string) ($datos['api_key'] ?? ''));
+        $headers = [
+            'Authorization' => 'Bearer '.$apiKey,
+            'Content-Type' => 'application/json',
+        ];
+        if ($proveedorId === 'anthropic') {
+            $headers['x-api-key'] = $apiKey;
+            $headers['anthropic-version'] = '2023-06-01';
+        }
+
+        return [
+            'proveedor' => $proveedorInfo['id'],
+            'proveedor_nombre' => $proveedorInfo['nombre'],
+            'model' => trim((string) $datos['model_id']),
+            'base_url' => ConexionIA::validarBaseUrl(($datos['base_url'] ?? '') ?: $proveedorInfo['base_url']),
+            'api_key' => $apiKey,
+            'headers' => $headers,
+        ];
+    }
+
     public function agregarModeloPersonalizado(User $user, array $datos): array
     {
         $cruda = $this->obtenerConfiguracionCruda($user);
-        $proveedorId = array_key_exists($datos['proveedor'] ?? '', self::PROVEEDORES)
-            ? $datos['proveedor']
-            : 'groq';
-        $proveedorInfo = self::PROVEEDORES[$proveedorId];
-
-        $modelId = trim((string) $datos['model_id']);
+        $credenciales = $this->credencialesModeloPersonalizado($datos);
+        $proveedorId = $credenciales['proveedor'];
+        $modelId = $credenciales['model'];
         $nombre = trim((string) ($datos['nombre'] ?? '')) ?: $modelId;
-        $subtitulo = trim((string) ($datos['subtitulo'] ?? '')) ?: ($proveedorInfo['nombre'].' · API Key propia');
-        $baseUrl = ConexionIA::validarBaseUrl(($datos['base_url'] ?? '') ?: $proveedorInfo['base_url']);
-        $apiKey = trim((string) $datos['api_key']);
+        $subtitulo = trim((string) ($datos['subtitulo'] ?? '')) ?: ($credenciales['proveedor_nombre'].' · API Key propia');
 
         $personalizados = is_array($cruda['modelos_personalizados'] ?? null)
             ? $cruda['modelos_personalizados']
@@ -261,8 +289,8 @@ class ConfiguracionIAService
             'nombre' => Str::limit($nombre, 48, ''),
             'subtitulo' => Str::limit($subtitulo, 48, ''),
             'proveedor' => $proveedorId,
-            'base_url' => $baseUrl,
-            'api_key' => $apiKey,
+            'base_url' => $credenciales['base_url'],
+            'api_key' => $credenciales['api_key'],
         ];
 
         if ($existenteIdx !== null) {
@@ -297,10 +325,10 @@ class ConfiguracionIAService
         $cruda['modelos_personalizados'] = array_values($personalizados);
 
         if (($cruda['modelo_activo_id'] ?? '') === $modeloId) {
-            $cruda['modelo_activo_id'] = 'llama-3.3-70b-versatile';
+            $cruda['modelo_activo_id'] = self::MODELO_PREDETERMINADO;
         }
         if (($cruda['modelo_chat_id'] ?? '') === $modeloId) {
-            $cruda['modelo_chat_id'] = 'openai/gpt-oss-120b';
+            $cruda['modelo_chat_id'] = self::MODELO_PREDETERMINADO;
         }
         if (($cruda['modelo_informes_id'] ?? '') === $modeloId) {
             $cruda['modelo_informes_id'] = 'qwen/qwen3.8-27b';
@@ -361,12 +389,12 @@ class ConfiguracionIAService
                 if ($tieneConfigUsuario) {
                     $idSeleccionado = $cruda['modelo_activo_id'];
                 } else {
-                    $idSeleccionado = $agente === 'informes' ? 'qwen/qwen3.8-27b' : 'openai/gpt-oss-120b';
+                    $idSeleccionado = $agente === 'informes' ? 'qwen/qwen3.8-27b' : self::MODELO_PREDETERMINADO;
                 }
             } else {
                 $idSeleccionado = $agente === 'informes'
                     ? ($cruda['modelo_informes_id'] ?? 'qwen/qwen3.8-27b')
-                    : ($cruda['modelo_chat_id'] ?? 'openai/gpt-oss-120b');
+                    : ($cruda['modelo_chat_id'] ?? self::MODELO_PREDETERMINADO);
             }
         }
 
@@ -380,33 +408,20 @@ class ConfiguracionIAService
         }
 
         if ($modeloPersonalizado && ! empty($modeloPersonalizado['api_key'])) {
-            $proveedorId = $modeloPersonalizado['proveedor'] ?? 'groq';
-            $proveedorInfo = self::PROVEEDORES[$proveedorId] ?? self::PROVEEDORES['custom'];
-            $baseUrl = ConexionIA::validarBaseUrl(($modeloPersonalizado['base_url'] ?? '') ?: $proveedorInfo['base_url']);
-            $apiKey = trim((string) $modeloPersonalizado['api_key']);
-            $modelId = (string) $modeloPersonalizado['model_id'];
+            $credenciales = $this->credencialesModeloPersonalizado($modeloPersonalizado);
             $modeloIdInterno = (string) $modeloPersonalizado['id'];
-            $modeloNombre = (string) ($modeloPersonalizado['nombre'] ?? $modelId);
-            $proveedorNombre = $proveedorInfo['nombre'];
+            $modeloNombre = (string) ($modeloPersonalizado['nombre'] ?? $credenciales['model']);
         } else {
             // Fallback seguro al motor institucional predeterminado (Groq .env)
-            $proveedorId = 'groq';
             $modeloSistema = collect(self::MODELOS_SISTEMA)->firstWhere('id', $idSeleccionado);
-            $modelId = $modeloSistema ? $modeloSistema['model_id'] : ($agente === 'informes' ? 'qwen/qwen3.8-27b' : 'openai/gpt-oss-120b');
+            $modelId = $modeloSistema ? $modeloSistema['model_id'] : ($agente === 'informes' ? 'qwen/qwen3.8-27b' : self::MODELO_PREDETERMINADO);
             $modeloIdInterno = $modeloSistema ? $modeloSistema['id'] : $modelId;
             $modeloNombre = $modeloSistema ? $modeloSistema['nombre'] : ($modelId === 'qwen/qwen3.8-27b' ? 'Qwen 3.8 27B' : 'GPT-OSS 120B');
-            $baseUrl = 'https://api.groq.com/openai/v1';
-            $apiKey = trim((string) env('GROQ_API_KEY', ''));
-            $proveedorNombre = 'Groq Cloud';
-        }
-
-        $headers = [
-            'Authorization' => 'Bearer '.$apiKey,
-            'Content-Type' => 'application/json',
-        ];
-        if ($proveedorId === 'anthropic') {
-            $headers['x-api-key'] = $apiKey;
-            $headers['anthropic-version'] = '2023-06-01';
+            $credenciales = $this->credencialesModeloPersonalizado([
+                'proveedor' => 'groq',
+                'model_id' => $modelId,
+                'api_key' => env('GROQ_API_KEY', ''),
+            ]);
         }
 
         $tono = $overrides['tono_ia'] ?? ($cruda['tono_ia'] ?? 'formal_decreto67');
@@ -439,15 +454,9 @@ class ConfiguracionIAService
             default => 'Mantén una extensión equilibrada y clara.',
         };
 
-        return [
-            'model' => $modelId,
+        return $credenciales + [
             'modelo_id' => $modeloIdInterno,
             'modelo_nombre' => $modeloNombre,
-            'proveedor' => $proveedorId,
-            'base_url' => $baseUrl,
-            'api_key' => $apiKey,
-            'headers' => $headers,
-            'proveedor_nombre' => $proveedorNombre,
             'temperature' => $temperature,
             'max_tokens' => $maxTokens,
             'tono' => $tono,

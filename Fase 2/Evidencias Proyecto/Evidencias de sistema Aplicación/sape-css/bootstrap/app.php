@@ -5,6 +5,9 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Spatie\Permission\Exceptions\UnauthorizedException;
 use Spatie\Permission\Middleware\PermissionMiddleware;
 use Spatie\Permission\Middleware\RoleMiddleware;
 use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
@@ -29,5 +32,15 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (UnauthorizedException $exception, Request $request) {
+            if ($request->routeIs('profesor.jefe', 'profesor.asignatura') && ! $request->expectsJson()) {
+                $mensaje = $request->routeIs('profesor.asignatura')
+                    ? 'Pídele al administrador que te asigne las asignaturas que impartes.'
+                    : 'Dirección debe habilitarte como Profesor Jefe para entrar a Mi jefatura.';
+
+                return Inertia::render('Profesor/AccesoRestringido', ['mensaje' => $mensaje])
+                    ->toResponse($request)
+                    ->setStatusCode(403);
+            }
+        });
     })->create();

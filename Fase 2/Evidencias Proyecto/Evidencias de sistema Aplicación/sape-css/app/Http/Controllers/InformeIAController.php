@@ -7,6 +7,7 @@ use App\Models\Estudiante;
 use App\Services\ConexionIA;
 use App\Services\ConfiguracionIAService;
 use App\Services\PrivacidadService;
+use App\Services\RendimientoAcademico;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -33,7 +34,8 @@ class InformeIAController extends Controller
         $request->validate([
             'estudiante_id' => 'required|uuid',
             'curso_id' => 'required|uuid',
-            'destinatario' => ['required', 'string', Rule::in(self::DESTINATARIOS)],
+            'modo' => 'nullable|in:informe,apoyo',
+            'destinatario' => [Rule::requiredIf($request->input('modo') !== 'apoyo'), 'nullable', 'string', Rule::in(self::DESTINATARIOS)],
             'palabras_clave' => 'nullable|string|max:500',
             'modelo_id' => 'nullable|string|max:120',
             'tono_ia' => 'nullable|string|in:formal_decreto67,cercano_familia,ejecutivo_breve',
@@ -44,7 +46,8 @@ class InformeIAController extends Controller
         $estudiante = Estudiante::find($request->estudiante_id);
         $curso = Curso::find($request->curso_id);
         abort_if(! $estudiante || ! $curso, 404, 'No se encontró el estudiante o el curso.');
-        Gate::authorize('generarInforme', [$estudiante, $curso]);
+        $esApoyo = $request->input('modo') === 'apoyo';
+        Gate::authorize($esApoyo ? 'acompanarEstudiante' : 'generarInforme', [$estudiante, $curso]);
 
         try {
             $cursoTexto = "{$curso->nivel}° Medio {$curso->letra}";
@@ -55,20 +58,34 @@ class InformeIAController extends Controller
                 $asignaturasPermitidas->where('profesor_id', $request->user()->id);
             }
 
-            $notas = $estudiante->calificaciones()
+            $calificaciones = $estudiante->calificaciones()
+                ->join('asignatura_curso', 'asignatura_curso.id', '=', 'calificaciones.asignatura_curso_id')
+                ->join('asignaturas', 'asignaturas.id', '=', 'asignatura_curso.asignatura_id')
                 ->where('matriculas.curso_id', $curso->id)
                 ->where('matriculas.vigente', true)
                 ->whereIn('calificaciones.asignatura_curso_id', $asignaturasPermitidas->select('id'))
-                ->pluck('calificaciones.valor')
-                ->toArray();
+                ->orderBy('calificaciones.semestre')
+                ->orderBy('calificaciones.fecha')
+                ->get(['calificaciones.valor', 'calificaciones.semestre', 'calificaciones.asignatura_curso_id', 'asignaturas.nombre as asignatura_nombre']);
+
+            $rendimiento = RendimientoAcademico::resumir($calificaciones);
 
             // 2. ENMASCARAMIENTO (Ley 19.628)
             $nombreReal = trim($estudiante->nombres.' '.$estudiante->apellidos);
             $runReal = $estudiante->identificadorInterno ?? $estudiante->run ?? 'Sin Registro';
 
-            $promedio = count($notas) > 0 ? array_sum($notas) / count($notas) : 0;
-            $promedioFmt = number_format($promedio, 1);
-            $listaNotas = count($notas) > 0 ? implode(', ', $notas) : 'Sin notas registradas';
+            $promedioFmt = $rendimiento['promedio'] === null
+                ? 'Sin calificaciones numéricas'
+                : number_format($rendimiento['promedio'], 1);
+            $listaNotas = $rendimiento['notas'] === []
+                ? 'Sin notas registradas'
+                : implode(', ', array_map(fn ($nota) => number_format($nota, 2, '.', ''), $rendimiento['notas']));
+
+            if ($esApoyo && $rendimiento['alertas'] === []) {
+                throw ValidationException::withMessages([
+                    'estudiante_id' => 'El estudiante no registra asignaturas bajo 4,0 que permitan generar una sugerencia.',
+                ]);
+            }
 
             // 3. Resolver credenciales y preferencias de IA del usuario (o fallback a Groq del sistema)
             $credenciales = $iaService->resolverCredencialesAgente(
@@ -101,7 +118,7 @@ class InformeIAController extends Controller
 
             // 4. Prompt de usuario ocultando la identidad
             $prompt = "Redacta un informe pedagógico formal y respetuoso dirigido a: {$destinatario}.
-            El estudiante [ESTUDIANTE] (RUT: [RUN]), perteneciente a [CURSO], tiene un promedio de {$promedioFmt} en las calificaciones autorizadas para este docente.
+            El estudiante [ESTUDIANTE] (RUT: [RUN]), perteneciente a [CURSO]. Promedio de las calificaciones autorizadas para este docente: {$promedioFmt}.
             Sus calificaciones recientes son: {$listaNotas}.
             
             {$textoPalabrasClave}
@@ -115,6 +132,21 @@ class InformeIAController extends Controller
             3. Sugerencias de mejora pedagógica o derivación.
             
             IMPORTANTE: No uses formato Markdown (ni asteriscos, ni negritas, ni tablas). Escribe solo en texto plano con saltos de línea.";
+
+            if ($esApoyo) {
+                $evidencia = collect($rendimiento['alertas'])->map(function (array $alerta): string {
+                    $porSemestre = collect($alerta['notas'])->groupBy('semestre')
+                        ->map(fn ($notas, $semestre) => "Semestre {$semestre}: ".implode(', ', $notas->pluck('valor')->all()));
+
+                    return "{$alerta['asignatura']} (promedio {$alerta['promedio']}). ".$porSemestre->implode('; ');
+                })->implode("\n");
+
+                $prompt = 'Prepara un borrador de apoyo breve para que un profesor jefe lo revise. '
+                    .'Propón una acción de refuerzo concreta y cómo evaluar su avance en la próxima revisión. '
+                    .'Indica la asignatura, el semestre y las notas que justifican la sugerencia. '
+                    .'Usa solo esta evidencia. No infieras causas, diagnósticos, asistencia ni situación familiar. '
+                    ."No decidas la promoción. Escribe en español y en texto plano.\n{$evidencia}";
+            }
 
             if (mb_strlen($prompt) > 32000) {
                 return response()->json(['error' => 'El contexto es demasiado extenso para generar el informe.'], 422);
@@ -131,7 +163,9 @@ class InformeIAController extends Controller
                     'messages' => [
                         [
                             'role' => 'system',
-                            'content' => 'Eres un profesor jefe y orientador experto en redacción de informes pedagógicos formales.',
+                            'content' => $esApoyo
+                                ? 'Apoyas al profesor jefe con sugerencias verificables, que el docente revisará antes de usar.'
+                                : 'Eres un profesor jefe y orientador experto en redacción de informes pedagógicos formales.',
                         ],
                         [
                             'role' => 'user',
@@ -144,10 +178,13 @@ class InformeIAController extends Controller
 
             if ($response->successful()) {
                 $iaService->registrarConsumoYCuota($request->user(), $credenciales, $response);
-                $informeTokenizado = $response->json('choices.0.message.content') ?? 'No se pudo generar el contenido.';
+                $informeTokenizado = trim((string) $response->json('choices.0.message.content'));
+                if ($informeTokenizado === '') {
+                    return response()->json(['error' => 'El proveedor de IA devolvió una respuesta vacía.'], 502);
+                }
 
                 // 6. RESTAURACIÓN DE DATOS (Des-enmascaramiento)
-                $informeFinal = str_replace(
+                $informeFinal = $esApoyo ? mb_substr($informeTokenizado, 0, 4000) : str_replace(
                     ['[ESTUDIANTE]', '[RUN]', '[CURSO]'],
                     [$nombreReal, $runReal, $cursoTexto],
                     $informeTokenizado
@@ -172,7 +209,10 @@ class InformeIAController extends Controller
         } catch (ConnectionException) {
             Log::warning('No fue posible conectar con el proveedor de informes.');
 
-            return response()->json(['error' => 'No fue posible conectar con el proveedor de IA.'], 503);
+            return response()->json([
+                'error' => 'No fue posible conectar con el proveedor de IA.',
+                'codigo' => 'IA_PROVEEDOR_SIN_CONEXION',
+            ], 503);
         } catch (\Throwable $e) {
             Log::error('No se pudo generar el informe.', ['tipo' => $e::class]);
 

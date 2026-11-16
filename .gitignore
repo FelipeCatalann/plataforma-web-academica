@@ -1,5 +1,6 @@
 *.md
 !README.md
+!/Fase 2/Evidencias Proyecto/Evidencias de sistema Aplicación/sape-css/docs/mejoras-seguimiento-e-importacion.md
 !/Fase 2/Evidencias Proyecto/sape-css/AGENTS.md
 
 node_modules/

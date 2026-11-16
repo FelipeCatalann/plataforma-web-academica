@@ -3,11 +3,13 @@ import { Link } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
+import { formatearCursoConAnio } from '@/utils/formatearCurso';
 import {
     leerPreferenciasSape,
     guardarPreferenciasSape,
     sincronizarPreferenciasDesdeServidor,
     MODELOS_GROQ_SISTEMA,
+    PREFERENCIAS_DEFAULT,
 } from '@/utils/preferenciasSape';
 
 const SUGERENCIAS_RAPIDAS = [
@@ -26,7 +28,7 @@ const SUGERENCIAS_RAPIDAS = [
 ];
 
 const DESCRIPCION_CLARA_MODELOS = {
-    'llama-3.3-70b-versatile': {
+    'openai/gpt-oss-20b': {
         rolCorto: 'Equilibrado y veloz',
     },
     'openai/gpt-oss-120b': {
@@ -37,11 +39,11 @@ const DESCRIPCION_CLARA_MODELOS = {
     },
 };
 
-const construirMensajeBienvenida = (cursoContexto, nombreModelo = 'Llama 3.3 70B') => ({
+const construirMensajeBienvenida = (cursoContexto, nombreModelo = PREFERENCIAS_DEFAULT.modeloActivoNombre) => ({
     role: 'ai',
     modeloNombre: nombreModelo,
     content: cursoContexto
-        ? `¡Hola! Soy tu **Copiloto Pedagógico S.A.P.E**. Estoy analizando en tiempo real el **${cursoContexto.nivel}° Medio ${cursoContexto.letra}**. ¿En qué puedo apoyarte hoy?`
+        ? `¡Hola! Soy tu **Copiloto Pedagógico S.A.P.E**. Estoy analizando en tiempo real el **${formatearCursoConAnio(cursoContexto)}**. ¿En qué puedo apoyarte hoy?`
         : '¡Hola! Soy tu **Copiloto Pedagógico S.A.P.E**. Selecciona un curso para comenzar el análisis.',
 });
 
@@ -624,7 +626,7 @@ export default function ChatbotPedagogico({
                     </div>
                     <div className="min-w-0">
                         <h3 className="font-bold text-white text-sm sm:text-base truncate">
-                            Copiloto Pedagógico IA · {cursoContexto.nivel}° Medio {cursoContexto.letra}
+                            Copiloto Pedagógico IA · {formatearCursoConAnio(cursoContexto)}
                         </h3>
                     </div>
                 </div>
@@ -643,7 +645,7 @@ export default function ChatbotPedagogico({
                             <span className="w-2 h-2 rounded-full bg-sape-amarillo shrink-0" />
                             <div className="text-left">
                                 <span className="font-extrabold block leading-tight">
-                                    {modeloActivoObj?.nombre || 'Llama 3.3 70B'}
+                                    {modeloActivoObj?.nombre || PREFERENCIAS_DEFAULT.modeloActivoNombre}
                                 </span>
                                 <span className="text-[10px] text-sape-amarillo block leading-tight">
                                     {infoModeloActivo.rolCorto}
@@ -760,7 +762,7 @@ export default function ChatbotPedagogico({
                                 Chats Guardados
                             </span>
                             <span className="block text-[11px] text-slate-500">
-                                {cursoContexto.nivel}° Medio {cursoContexto.letra}
+                                {formatearCursoConAnio(cursoContexto)}
                             </span>
                         </div>
                         {panelHistorialMovil && (
@@ -1030,7 +1032,7 @@ export default function ChatbotPedagogico({
                                                                                         disabled={cargando}
                                                                                         onClick={() =>
                                                                                             procesarEnvio(
-                                                                                                `Diseña un plan de acción concreto y una pauta de entrevista con el apoderado para ${metricas.nombreCompleto}.`,
+                                                                                                `Propón un plan de apoyo breve para ${metricas.nombreCompleto}.`,
                                                                                                 true
                                                                                             )
                                                                                         }

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import SearchableSelect from '@/Components/SearchableSelect';
 import { mensajeRevision, revisarImportacion } from '@/utils/revisarImportacion';
+import ResumenImportacion from '@/Components/ResumenImportacion';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -274,11 +275,11 @@ export default function PanelDirector({
     const manejarImportacion = async () => {
         if (!dataImp.archivo_excel || procImp || revisandoArchivo) return;
         setErrorArchivoLocal('');
-        if (archivoRevisado !== dataImp.archivo_excel) {
+        if (archivoRevisado?.archivo !== dataImp.archivo_excel) {
             setRevisandoArchivo(true);
             try {
-                await revisarImportacion(dataImp.archivo_excel);
-                setArchivoRevisado(dataImp.archivo_excel);
+                const { data: revision } = await revisarImportacion(dataImp.archivo_excel);
+                setArchivoRevisado({ archivo: dataImp.archivo_excel, cursos: revision.cursos });
             } catch (error) {
                 setErrorArchivoLocal(mensajeRevision(error));
             } finally {
@@ -402,7 +403,6 @@ export default function PanelDirector({
             { id: 'mayuscula', texto: 'Al menos 1 mayúscula (A-Z)', cumplido: /[A-ZÁÉÍÓÚÑ]/.test(pwd) },
             { id: 'minuscula', texto: 'Al menos 1 minúscula (a-z)', cumplido: /[a-záéíóúñ]/.test(pwd) },
             { id: 'numero', texto: 'Al menos 1 número (0-9)', cumplido: /[0-9]/.test(pwd) },
-            { id: 'especial', texto: 'Al menos 1 signo especial (@, #, $, ., *, !)', cumplido: /[^A-Za-z0-9\s]/.test(pwd) },
         ];
     }, [dataNuevoProf.password]);
 
@@ -2514,14 +2514,14 @@ export default function PanelDirector({
                                             </button>
                                         </div>
 
-                                        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-2.5 border-t border-white/15">
+                                        <div className="grid grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))] gap-2 pt-2.5 border-t border-white/15">
                                             {[
-                                                ...cursosSubidos.map((c) => ({ codigo: `${c.nivel}°${c.letra} · ${c.anioEscolar}`, ok: true })),
+                                                ...cursosSubidos.map((c) => ({ codigo: `${c.nivel}°${c.letra} ${c.anioEscolar}`, ok: true })),
                                                 ...cursosDisponibles.map((c) => ({ codigo: `${c.nivel}°${c.letra}`, ok: false })),
                                             ].map((item) => (
                                                 <div
                                                     key={item.codigo}
-                                                    className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold tabular-nums flex items-center justify-center gap-1.5 shadow-sm transition-transform ${
+                                                    className={`px-2 py-1.5 rounded-xl text-xs font-extrabold tabular-nums flex items-center justify-center gap-1.5 shadow-sm transition-transform ${
                                                         item.ok
                                                             ? 'bg-emerald-600 text-white border border-emerald-400/70'
                                                             : 'bg-white/10 text-white/70 border border-white/15'
@@ -2534,7 +2534,7 @@ export default function PanelDirector({
                                                     ) : (
                                                         <span className="w-1.5 h-1.5 rounded-full bg-amber-300/70 shrink-0" />
                                                     )}
-                                                    <span>{item.codigo}</span>
+                                                    <span className="whitespace-nowrap">{item.codigo}</span>
                                                 </div>
                                             ))}
                                         </div>
@@ -2903,6 +2903,9 @@ export default function PanelDirector({
                                         )}
                                     </motion.div>
 
+                                    {archivoRevisado?.archivo === dataImp.archivo_excel && (
+                                        <ResumenImportacion cursos={archivoRevisado.cursos} />
+                                    )}
                                     <div className="flex justify-end">
                                         <button
                                             type="button"
@@ -2911,7 +2914,7 @@ export default function PanelDirector({
                                             className="bg-sape-burdeo text-sape-amarillo px-8 py-3 rounded-xl font-bold shadow-md hover:bg-sape-burdeo-hover transition-all hover:-translate-y-0.5 disabled:opacity-50"
                                         >
                                             {procImp ? 'Importando…' : revisandoArchivo ? 'Revisando…' :
-                                                archivoRevisado === dataImp.archivo_excel && archivoRevisado ? 'Confirmar importación' : 'Revisar planilla'}
+                                                archivoRevisado?.archivo === dataImp.archivo_excel ? 'Confirmar importación' : 'Revisar planilla'}
                                         </button>
                                     </div>
                                 </div>
@@ -2941,14 +2944,14 @@ export default function PanelDirector({
                                         </button>
                                     </div>
 
-                                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-2.5 border-t border-white/15">
+                                    <div className="grid grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))] gap-2 pt-2.5 border-t border-white/15">
                                         {[
-                                            ...cursosSubidos.map((c) => ({ codigo: `${c.nivel}°${c.letra} · ${c.anioEscolar}`, ok: true })),
+                                            ...cursosSubidos.map((c) => ({ codigo: `${c.nivel}°${c.letra} ${c.anioEscolar}`, ok: true })),
                                             ...cursosDisponibles.map((c) => ({ codigo: `${c.nivel}°${c.letra}`, ok: false })),
                                         ].map((item) => (
                                             <div
                                                 key={item.codigo}
-                                                className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold tabular-nums flex items-center justify-center gap-1.5 shadow-sm transition-transform ${
+                                                className={`px-2 py-1.5 rounded-xl text-xs font-extrabold tabular-nums flex items-center justify-center gap-1.5 shadow-sm transition-transform ${
                                                     item.ok
                                                         ? 'bg-emerald-600 text-white border border-emerald-400/70'
                                                         : 'bg-white/10 text-white/70 border border-white/15'
@@ -2961,7 +2964,7 @@ export default function PanelDirector({
                                                 ) : (
                                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-300/70 shrink-0" />
                                                 )}
-                                                <span>{item.codigo}</span>
+                                                <span className="whitespace-nowrap">{item.codigo}</span>
                                             </div>
                                         ))}
                                     </div>

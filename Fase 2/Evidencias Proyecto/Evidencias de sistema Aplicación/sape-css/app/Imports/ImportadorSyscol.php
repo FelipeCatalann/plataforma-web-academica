@@ -10,13 +10,23 @@ class ImportadorSyscol implements Import, WithMultipleSheets
 {
     use Importable;
 
+    private NominaSheetImport $nomina;
+
+    public function __construct(array $cursosConfirmados = [])
+    {
+        $this->nomina = new NominaSheetImport($cursosConfirmados);
+    }
+
+    public function resumen(): array
+    {
+        return $this->nomina->resumen();
+    }
+
     public function sheets(): array
     {
-        $nomina = new NominaSheetImport;
-
         return [
-            'NOMINA' => $nomina,
-            'CALIFICACIONES' => new CalificacionesSheetImport($nomina),
+            'NOMINA' => $this->nomina,
+            'CALIFICACIONES' => new CalificacionesSheetImport($this->nomina),
         ];
     }
 }

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import axios from 'axios';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,8 +17,19 @@ import {
 import ChatbotPedagogico from '@/Components/ChatbotPedagogico';
 import ModalInformeIA from '@/Components/ModalInformeIA';
 import ModalWhatsAppApoderado from '@/Components/ModalWhatsAppApoderado';
+import SeguimientoEstudiante from '@/Components/SeguimientoEstudiante';
 
-export default function PanelJefe({ auth, curso }) {
+const formatoPromedio = new Intl.NumberFormat('es-CL', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+});
+
+const mostrarPromedio = (promedio) => promedio == null
+    ? 'Sin calificaciones'
+    : formatoPromedio.format(promedio);
+
+export default function PanelJefe({ auth, curso, funciones }) {
+    const whatsappHabilitado = funciones?.whatsapp === true;
     const [vistaActiva, setVistaActiva] = useState('resumen');
     const [estudianteActivo, setEstudianteActivo] = useState(null);
     const [busqueda, setBusqueda] = useState('');
@@ -29,6 +41,10 @@ export default function PanelJefe({ auth, curso }) {
     const [modalWhatsAppOpen, setModalWhatsAppOpen] = useState(false);
     const [estudianteParaWhatsApp, setEstudianteParaWhatsApp] = useState(null);
     const [seguimientoLocal, setSeguimientoLocal] = useState({});
+    const [confirmandoContacto, setConfirmandoContacto] = useState(false);
+    const [errorContacto, setErrorContacto] = useState('');
+    const [acuerdosGuardados, setAcuerdosGuardados] = useState({});
+    const ultimoEnlace = seguimientoLocal[estudianteActivo?.id]?.ultimo ?? estudianteActivo?.ultimo_whatsapp;
 
     const { asignaturas, datosGrafico, kpisCurso } = useMemo(() => {
         if (!curso || !curso.estudiantes) {
@@ -39,106 +55,23 @@ export default function PanelJefe({ auth, curso }) {
             };
         }
 
-        const asignaturasMap = new Map();
-        let sumaGlobal = 0;
-        let countGlobal = 0;
-        let alumnosConRojas = 0;
-
-        curso.estudiantes.forEach((est) => {
-            const porAsigEst = new Map();
-
-            est.calificaciones?.forEach((cal) => {
-                if (cal.asignatura_nombre) {
-                    if (!asignaturasMap.has(cal.asignatura_nombre)) {
-                        asignaturasMap.set(cal.asignatura_nombre, { total: 0, count: 0 });
-                    }
-                    const valor = parseFloat(cal.valor || cal.evaluacion || cal.evaluación);
-                    if (!isNaN(valor) && valor > 0) {
-                        const data = asignaturasMap.get(cal.asignatura_nombre);
-                        data.total += valor;
-                        data.count++;
-
-                        sumaGlobal += valor;
-                        countGlobal++;
-
-                        if (!porAsigEst.has(cal.asignatura_nombre)) {
-                            porAsigEst.set(cal.asignatura_nombre, { suma: 0, count: 0 });
-                        }
-                        const dEst = porAsigEst.get(cal.asignatura_nombre);
-                        dEst.suma += valor;
-                        dEst.count++;
-                    }
-                }
-            });
-
-            let tieneRoja = false;
-            porAsigEst.forEach((d) => {
-                if (d.count > 0 && d.suma / d.count < 4.0) {
-                    tieneRoja = true;
-                }
-            });
-            if (tieneRoja) alumnosConRojas += 1;
-        });
-
-        const arrayAsignaturas = [];
-        const arrayGrafico = [];
-
-        asignaturasMap.forEach((data, nombre) => {
-            arrayAsignaturas.push(nombre);
-            if (data.count > 0) {
-                arrayGrafico.push({
-                    nombre,
-                    promedio: parseFloat((data.total / data.count).toFixed(1)),
-                });
-            }
-        });
-
-        const ordenadas = [...arrayGrafico].sort((a, b) => b.promedio - a.promedio);
+        const nombres = curso.estudiantes.flatMap(
+            (estudiante) => estudiante.calificaciones.map((nota) => nota.asignatura_nombre).filter(Boolean)
+        );
+        const grafico = curso.promedios_asignaturas ?? [];
+        const ordenadas = [...grafico].sort((a, b) => b.promedio - a.promedio);
 
         return {
-            asignaturas: arrayAsignaturas,
-            datosGrafico: arrayGrafico,
+            asignaturas: [...new Set(nombres)],
+            datosGrafico: grafico,
             kpisCurso: {
-                promedioGeneral: countGlobal > 0 ? (sumaGlobal / countGlobal).toFixed(1) : '-',
-                enAlerta: alumnosConRojas,
+                promedioGeneral: mostrarPromedio(curso.promedio_general),
+                enAlerta: curso.estudiantes.filter((estudiante) => estudiante.rendimiento.alertas.length > 0).length,
                 mejorAsig: ordenadas.length > 0 ? ordenadas[0] : null,
                 criticaAsig: ordenadas.length > 0 ? ordenadas[ordenadas.length - 1] : null,
             },
         };
     }, [curso]);
-
-    const calcularPromedio = (notas) => {
-        if (!Array.isArray(notas)) return '-';
-        const valores = notas
-            .map((n) => parseFloat(n.valor || n.evaluacion || n.evaluación))
-            .filter((v) => !isNaN(v) && v > 0);
-        if (valores.length === 0) return '-';
-        const suma = valores.reduce((a, b) => a + b, 0);
-        return (suma / valores.length).toFixed(1);
-    };
-
-    const contarAsignaturasBajo40 = (estudiante) => {
-        if (!estudiante?.calificaciones) return 0;
-        const porAsig = new Map();
-        estudiante.calificaciones.forEach((cal) => {
-            const valor = parseFloat(cal.valor || cal.evaluacion || cal.evaluación);
-            if (!isNaN(valor) && valor > 0 && cal.asignatura_nombre) {
-                if (!porAsig.has(cal.asignatura_nombre)) {
-                    porAsig.set(cal.asignatura_nombre, { suma: 0, count: 0 });
-                }
-                const item = porAsig.get(cal.asignatura_nombre);
-                item.suma += valor;
-                item.count += 1;
-            }
-        });
-        let criticas = 0;
-        porAsig.forEach((datos) => {
-            if (datos.count > 0 && datos.suma / datos.count < 4.0) {
-                criticas += 1;
-            }
-        });
-        return criticas;
-    };
 
     const abrirModalInforme = (estudiante) => {
         setEstudianteParaInforme(estudiante);
@@ -166,6 +99,25 @@ export default function PanelJefe({ auth, curso }) {
         }));
     };
 
+    const confirmarContacto = async () => {
+        const idEstudiante = estudianteActivo.id;
+        const enlace = ultimoEnlace;
+        setConfirmandoContacto(true);
+        setErrorContacto('');
+        try {
+            const { data } = await axios.patch(route('whatsapp.confirmar', { enlace: enlace.id }));
+            setSeguimientoLocal((prev) => {
+                const actual = prev[idEstudiante];
+                if (actual?.ultimo && actual.ultimo.id !== enlace.id) return prev;
+                return { ...prev, [idEstudiante]: { ...actual, ultimo: { ...enlace, estado: data.estado } } };
+            });
+        } catch {
+            setErrorContacto('No se pudo registrar el contacto. Intenta nuevamente.');
+        } finally {
+            setConfirmandoContacto(false);
+        }
+    };
+
     const estudiantesFiltrados = useMemo(() => {
         if (!curso || !curso.estudiantes) return [];
         const termino = busqueda.trim().toLowerCase();
@@ -177,11 +129,11 @@ export default function PanelJefe({ auth, curso }) {
 
             if (!coincideTexto) return false;
 
-            const rojas = contarAsignaturasBajo40(est);
+            const rojas = est.rendimiento.alertas.length;
             const contactos = (est.total_whatsapps || 0) + (seguimientoLocal[est.id]?.total || 0);
 
             if (filtroNomina === 'riesgo') return rojas > 0;
-            if (filtroNomina === 'contactados') return contactos > 0;
+            if (filtroNomina === 'preparados') return contactos > 0;
             return true;
         });
     }, [curso, busqueda, filtroNomina, seguimientoLocal]);
@@ -368,14 +320,14 @@ export default function PanelJefe({ auth, curso }) {
                                         className="text-left bg-white p-5 rounded-2xl border border-red-200 shadow-sm cursor-pointer hover:border-red-400 hover:bg-red-50/20 transition-colors"
                                     >
                                         <span className="text-xs font-bold uppercase text-red-700 tracking-wider">
-                                            Alerta Decreto 67
+                                            Alerta de calificaciones
                                         </span>
                                         <p className="text-3xl font-extrabold text-red-600 mt-1">
                                             {kpisCurso.enAlerta}{' '}
                                             <span className="text-sm font-semibold text-slate-500">alumnos</span>
                                         </p>
                                         <p className="text-xs text-red-700 font-bold mt-1">
-                                            Ver alumnos con 1+ asig. bajo 4.0 →
+                                            Ver alumnos con 1+ asig. bajo 4,0 →
                                         </p>
                                     </button>
 
@@ -504,7 +456,7 @@ export default function PanelJefe({ auth, curso }) {
                                                 Nómina de Estudiantes — {curso.nivel}° Medio {curso.letra}
                                             </h1>
                                             <p className="text-slate-600 text-sm mt-1">
-                                                Filtra por situación académica (Decreto 67), busca por nombre o RUT y registra el seguimiento con apoderados.
+                                                    Busca por nombre o RUT y revisa las alertas académicas.
                                             </p>
                                         </div>
 
@@ -563,28 +515,30 @@ export default function PanelJefe({ auth, curso }) {
                                                     : 'bg-red-50 text-red-700 hover:bg-red-100'
                                             }`}
                                         >
-                                            En Alerta &lt; 4.0 ({kpisCurso.enAlerta})
+                                            En alerta ({kpisCurso.enAlerta})
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setFiltroNomina('contactados')}
-                                            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors ${
-                                                filtroNomina === 'contactados'
-                                                    ? 'bg-emerald-600 text-white shadow-sm'
-                                                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                            }`}
-                                        >
-                                            Apoderados Contactados (
-                                            {
-                                                curso.estudiantes.filter(
-                                                    (est) =>
-                                                        (est.total_whatsapps || 0) +
-                                                            (seguimientoLocal[est.id]?.total || 0) >
-                                                        0
-                                                ).length
-                                            }
-                                            )
-                                        </button>
+                                        {whatsappHabilitado && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setFiltroNomina('preparados')}
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                                                    filtroNomina === 'preparados'
+                                                        ? 'bg-emerald-600 text-white shadow-sm'
+                                                        : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                }`}
+                                            >
+                                                Mensajes preparados (
+                                                {
+                                                    curso.estudiantes.filter(
+                                                        (est) =>
+                                                            (est.total_whatsapps || 0) +
+                                                                (seguimientoLocal[est.id]?.total || 0) >
+                                                            0
+                                                    ).length
+                                                }
+                                                )
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 
@@ -596,15 +550,16 @@ export default function PanelJefe({ auth, curso }) {
                                                     <th className="px-6 py-4 font-bold tracking-wider">Estudiante</th>
                                                     <th className="px-4 py-4 font-bold tracking-wider text-center">RUT</th>
                                                     <th className="px-4 py-4 font-bold tracking-wider text-center">Prom. General</th>
-                                                    <th className="px-4 py-4 font-bold tracking-wider text-center">Contacto Apoderado</th>
+                                                    {whatsappHabilitado && (
+                                                        <th className="px-4 py-4 font-bold tracking-wider text-center">Contacto apoderado</th>
+                                                    )}
                                                     <th className="px-6 py-4 font-bold tracking-wider text-right">Acciones</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-200/70">
                                                 {estudiantesFiltrados.map((estudiante) => {
-                                                    const asigRojas = contarAsignaturasBajo40(estudiante);
-                                                    const promEst = calcularPromedio(estudiante.calificaciones);
-                                                    const promNum = parseFloat(promEst);
+                                                    const asigRojas = estudiante.rendimiento.alertas.length;
+                                                    const promNum = estudiante.rendimiento.promedio;
                                                     const totalContactos =
                                                         (estudiante.total_whatsapps || 0) +
                                                         (seguimientoLocal[estudiante.id]?.total || 0);
@@ -626,7 +581,7 @@ export default function PanelJefe({ auth, curso }) {
                                                                         </span>
                                                                         {asigRojas > 0 && (
                                                                             <span className="inline-flex items-center gap-1 mt-0.5 text-[11px] font-bold px-2 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-200">
-                                                                                {asigRojas} {asigRojas === 1 ? 'asignatura' : 'asignaturas'} bajo 4.0
+                                                                                {asigRojas} {asigRojas === 1 ? 'asignatura' : 'asignaturas'} bajo 4,0
                                                                             </span>
                                                                         )}
                                                                     </div>
@@ -638,7 +593,7 @@ export default function PanelJefe({ auth, curso }) {
                                                             <td className="px-4 py-4 text-center">
                                                                 <span
                                                                     className={`inline-block px-2.5 py-1 rounded-lg font-extrabold text-xs border ${
-                                                                        isNaN(promNum)
+                                                                        promNum === null
                                                                             ? 'bg-slate-100 text-slate-500 border-slate-200'
                                                                             : promNum < 4.0
                                                                               ? 'bg-red-50 text-red-700 border-red-200'
@@ -647,38 +602,42 @@ export default function PanelJefe({ auth, curso }) {
                                                                                 : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                                                     }`}
                                                                 >
-                                                                    {promEst}
+                                                                    {mostrarPromedio(promNum)}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-4 py-4 text-center">
-                                                                <div className="flex flex-col items-center gap-1">
-                                                                    <span className="text-xs font-mono text-slate-600">
-                                                                        {telefonoApoderado || 'Sin teléfono'}
-                                                                    </span>
-                                                                    {totalContactos > 0 ? (
-                                                                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                                                            Contactado ({totalContactos})
+                                                            {whatsappHabilitado && (
+                                                                <td className="px-4 py-4 text-center">
+                                                                    <div className="flex flex-col items-center gap-1">
+                                                                        <span className="text-xs font-mono text-slate-600">
+                                                                            {telefonoApoderado || 'Sin teléfono'}
                                                                         </span>
-                                                                    ) : (
-                                                                        <span className="text-[11px] text-slate-400">
-                                                                            Sin mensajes previos
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </td>
+                                                                        {totalContactos > 0 ? (
+                                                                            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                                Preparado ({totalContactos})
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-[11px] text-slate-400">
+                                                                                Sin mensajes previos
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                            )}
                                                             <td className="px-6 py-4 text-right">
                                                                 <div className="flex flex-wrap justify-end gap-2">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => abrirModalWhatsApp(estudiante)}
-                                                                        className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
-                                                                        title="Preparar mensaje de WhatsApp para el apoderado"
-                                                                    >
-                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                                                        </svg>
-                                                                        WhatsApp
-                                                                    </button>
+                                                                    {whatsappHabilitado && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => abrirModalWhatsApp(estudiante)}
+                                                                            className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
+                                                                            title="Preparar mensaje de WhatsApp para el apoderado"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                                            </svg>
+                                                                            WhatsApp
+                                                                        </button>
+                                                                    )}
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => abrirModalInforme(estudiante)}
@@ -694,7 +653,7 @@ export default function PanelJefe({ auth, curso }) {
                                                                         onClick={() => setEstudianteActivo(estudiante)}
                                                                         className="inline-flex items-center gap-1.5 bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold hover:border-sape-burdeo hover:text-sape-burdeo transition-colors"
                                                                     >
-                                                                        Ver Notas
+                                                                        Ver ficha
                                                                     </button>
                                                                 </div>
                                                             </td>
@@ -703,7 +662,7 @@ export default function PanelJefe({ auth, curso }) {
                                                 })}
                                                 {estudiantesFiltrados.length === 0 && (
                                                     <tr>
-                                                        <td colSpan={5} className="px-6 py-12 text-center text-slate-500 space-y-2">
+                                                        <td colSpan={whatsappHabilitado ? 5 : 4} className="px-6 py-12 text-center text-slate-500 space-y-2">
                                                             <p className="font-bold text-slate-700">
                                                                 No se encontraron estudiantes con el filtro o búsqueda aplicada.
                                                             </p>
@@ -762,22 +721,24 @@ export default function PanelJefe({ auth, curso }) {
                                             <p className="text-slate-600 text-sm tabular-nums">
                                                 Ficha Académica Anual — {curso.nivel}° Medio {curso.letra} • Promedio General:{' '}
                                                 <strong className="text-sape-burdeo">
-                                                    {calcularPromedio(estudianteActivo.calificaciones)}
+                                                    {mostrarPromedio(estudianteActivo.rendimiento.promedio)}
                                                 </strong>
                                             </p>
                                         </div>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => abrirModalWhatsApp(estudianteActivo)}
-                                            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                            </svg>
-                                            Contactar Apoderado (WhatsApp)
-                                        </button>
+                                        {whatsappHabilitado && (
+                                            <button
+                                                type="button"
+                                                onClick={() => abrirModalWhatsApp(estudianteActivo)}
+                                                className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                </svg>
+                                                Preparar WhatsApp
+                                            </button>
+                                        )}
                                         <button
                                             type="button"
                                             onClick={() => abrirModalInforme(estudianteActivo)}
@@ -790,6 +751,33 @@ export default function PanelJefe({ auth, curso }) {
                                         </button>
                                     </div>
                                 </div>
+
+                                {whatsappHabilitado && ultimoEnlace && (
+                                    <div className="flex flex-wrap items-center gap-3 text-sm">
+                                        <p className="font-semibold text-slate-700" role="status">
+                                            {ultimoEnlace.estado === 'CONTACTO_CONFIRMADO' ? 'Contacto confirmado' : 'Mensaje preparado'}
+                                        </p>
+                                        {ultimoEnlace.confirmable && ultimoEnlace.estado !== 'CONTACTO_CONFIRMADO' && (
+                                            <button
+                                                type="button"
+                                                onClick={confirmarContacto}
+                                                disabled={confirmandoContacto}
+                                                className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2 font-bold text-slate-800 hover:bg-slate-100 disabled:opacity-60"
+                                            >
+                                                {confirmandoContacto ? 'Guardando…' : 'Confirmar contacto realizado'}
+                                            </button>
+                                        )}
+                                        {errorContacto && <p className="text-red-700" role="alert">{errorContacto}</p>}
+                                    </div>
+                                )}
+
+                                <SeguimientoEstudiante
+                                    key={estudianteActivo.id}
+                                    estudiante={estudianteActivo}
+                                    cursoId={curso.id}
+                                    seguimiento={acuerdosGuardados[estudianteActivo.id] ?? estudianteActivo.seguimiento}
+                                    onGuardar={(acuerdo) => setAcuerdosGuardados((prev) => ({ ...prev, [estudianteActivo.id]: acuerdo }))}
+                                />
 
                                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
                                     <div className="overflow-x-auto">
@@ -812,9 +800,12 @@ export default function PanelJefe({ auth, curso }) {
                                                         ) || [];
                                                     const notasS1 = notas.filter((c) => Number(c.semestre) === 1);
                                                     const notasS2 = notas.filter((c) => Number(c.semestre) === 2);
-                                                    const promS1 = calcularPromedio(notasS1);
-                                                    const promS2 = calcularPromedio(notasS2);
-                                                    const promAnual = calcularPromedio(notas);
+                                                    const resumen = estudianteActivo.rendimiento.asignaturas.find(
+                                                        (item) => item.id === notas[0]?.asignatura_curso_id
+                                                    );
+                                                    const promS1 = resumen?.promedios_semestre?.[1] ?? null;
+                                                    const promS2 = resumen?.promedios_semestre?.[2] ?? null;
+                                                    const promAnual = resumen?.promedio ?? null;
 
                                                     return (
                                                         <tr key={asig} className="hover:bg-slate-50/70">
@@ -849,8 +840,8 @@ export default function PanelJefe({ auth, curso }) {
                                                                 </div>
                                                             </td>
                                                             <td className="px-4 py-4 text-center font-extrabold text-slate-800 bg-slate-50/80">
-                                                                <span className={parseFloat(promS1) < 4.0 ? 'text-red-600' : ''}>
-                                                                    {promS1}
+                                                                <span className={promS1 !== null && promS1 < 4.0 ? 'text-red-600' : ''}>
+                                                                    {mostrarPromedio(promS1)}
                                                                 </span>
                                                             </td>
                                                             <td className="px-4 py-4 border-l border-slate-100">
@@ -881,21 +872,21 @@ export default function PanelJefe({ auth, curso }) {
                                                                 </div>
                                                             </td>
                                                             <td className="px-4 py-4 text-center font-extrabold text-slate-800 bg-slate-50/80">
-                                                                <span className={parseFloat(promS2) < 4.0 ? 'text-red-600' : ''}>
-                                                                    {promS2}
+                                                                <span className={promS2 !== null && promS2 < 4.0 ? 'text-red-600' : ''}>
+                                                                    {mostrarPromedio(promS2)}
                                                                 </span>
                                                             </td>
                                                             <td className="px-4 py-4 text-center font-extrabold bg-slate-100/70 border-l border-slate-200">
                                                                 <span
                                                                     className={`inline-block px-2.5 py-1 rounded-lg text-xs border ${
-                                                                        isNaN(parseFloat(promAnual))
+                                                                        promAnual === null
                                                                             ? 'text-slate-500 border-transparent'
-                                                                            : parseFloat(promAnual) < 4.0
+                                                                            : promAnual < 4.0
                                                                               ? 'bg-red-50 text-red-700 border-red-200'
                                                                               : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                                                     }`}
                                                                 >
-                                                                    {promAnual}
+                                                                    {mostrarPromedio(promAnual)}
                                                                 </span>
                                                             </td>
                                                         </tr>
@@ -919,7 +910,7 @@ export default function PanelJefe({ auth, curso }) {
                                 <ChatbotPedagogico
                                     cursoContexto={curso}
                                     onAbrirInforme={(est) => abrirModalInforme(est)}
-                                    onAbrirWhatsApp={(est) => abrirModalWhatsApp(est)}
+                                    onAbrirWhatsApp={whatsappHabilitado ? abrirModalWhatsApp : undefined}
                                     onVerFicha={(est) => {
                                         setEstudianteActivo(est);
                                         setVistaActiva('tabla');
@@ -939,14 +930,16 @@ export default function PanelJefe({ auth, curso }) {
                 cursoNombre={`${curso.nivel}° Medio ${curso.letra}`}
             />
 
-            <ModalWhatsAppApoderado
-                isOpen={modalWhatsAppOpen}
-                onClose={() => setModalWhatsAppOpen(false)}
-                estudiante={estudianteParaWhatsApp}
-                curso={curso}
-                profesorNombre={auth?.user?.name}
-                onEnlaceGenerado={registrarEnlaceGenerado}
-            />
+            {whatsappHabilitado && (
+                <ModalWhatsAppApoderado
+                    isOpen={modalWhatsAppOpen}
+                    onClose={() => setModalWhatsAppOpen(false)}
+                    estudiante={estudianteParaWhatsApp}
+                    curso={curso}
+                    profesorNombre={auth?.user?.name}
+                    onEnlaceGenerado={registrarEnlaceGenerado}
+                />
+            )}
         </AuthenticatedLayout>
     );
 }

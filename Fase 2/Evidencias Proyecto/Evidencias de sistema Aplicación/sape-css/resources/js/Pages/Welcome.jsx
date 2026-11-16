@@ -57,7 +57,7 @@ export default function Welcome({ auth }) {
                     <ul className="welcome-direct-capabilities">
                         <li>Rendimiento por curso</li>
                         <li>Alertas académicas</li>
-                        <li>Informes y contacto con apoderados</li>
+                            <li>Informes y seguimiento pedagógico</li>
                     </ul>
                 </main>
 

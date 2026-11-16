@@ -26,6 +26,9 @@ class CalificacionesSheetImport implements ToCollection, WithHeadingRow
             if (! $this->nomina->incluyeMatricula($identidad)) {
                 IdentidadSyscol::rechazar('CALIFICACIONES', $numero, 'La matrícula de ese curso y año debe aparecer en la nómina de la planilla.');
             }
+            if ($this->nomina->omiteCurso($identidad['curso'])) {
+                continue;
+            }
             $curso = IdentidadSyscol::curso($identidad['curso'], 'CALIFICACIONES', $numero);
             $estudiante = DB::table('estudiantes')->where('identificadorInterno', $identidad['run'])->first();
             $matriculas = $curso && $estudiante
@@ -133,6 +136,7 @@ class CalificacionesSheetImport implements ToCollection, WithHeadingRow
                 'fecha' => $now,
                 'created_at' => $now, 'updated_at' => $now,
             ]);
+            $this->nomina->registrarCalificacion($identidad['curso']);
         }
     }
 }

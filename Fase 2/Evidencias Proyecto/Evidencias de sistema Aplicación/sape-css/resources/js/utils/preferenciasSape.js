@@ -90,10 +90,9 @@ export const PROVEEDORES_IA = [
         subtitulo: 'Inferencia ultrarrápida',
         placeholderKey: 'gsk_...',
         modelosSugeridos: [
-            { id: 'llama-3.3-70b-versatile', nombre: 'Llama 3.3 70B' },
             { id: 'openai/gpt-oss-120b', nombre: 'GPT-OSS 120B' },
+            { id: 'openai/gpt-oss-20b', nombre: 'GPT-OSS 20B' },
             { id: 'qwen/qwen3.8-27b', nombre: 'Qwen 3.8 27B' },
-            { id: 'deepseek-r1-distill-llama-70b', nombre: 'DeepSeek R1 70B' },
         ],
     },
     {
@@ -142,19 +141,19 @@ export const PROVEEDORES_IA = [
 
 export const MODELOS_GROQ_SISTEMA = [
     {
-        id: 'llama-3.3-70b-versatile',
-        model_id: 'llama-3.3-70b-versatile',
-        nombre: 'Llama 3.3 70B',
-        subtitulo: 'Groq · Equilibrado y veloz',
+        id: 'openai/gpt-oss-120b',
+        model_id: 'openai/gpt-oss-120b',
+        nombre: 'GPT-OSS 120B',
+        subtitulo: 'Groq · Razonamiento profundo',
         proveedor: 'groq',
         proveedor_nombre: 'Groq Cloud',
         origen: 'sistema',
     },
     {
-        id: 'openai/gpt-oss-120b',
-        model_id: 'openai/gpt-oss-120b',
-        nombre: 'GPT-OSS 120B',
-        subtitulo: 'Groq · Razonamiento profundo',
+        id: 'openai/gpt-oss-20b',
+        model_id: 'openai/gpt-oss-20b',
+        nombre: 'GPT-OSS 20B',
+        subtitulo: 'Groq · Equilibrado y veloz',
         proveedor: 'groq',
         proveedor_nombre: 'Groq Cloud',
         origen: 'sistema',
@@ -256,8 +255,8 @@ export const PREFERENCIAS_DEFAULT = {
     incluirFirmaWhatsapp: true,
     firmaWhatsapp: 'Colegio San Sebastián de Melipilla',
     criterioDefaultWhatsapp: 'auto', // 'auto' | 'alerta_academica' | 'citacion_entrevista' | 'reporte_avance' | 'reconocimiento'
-    modeloActivoId: 'llama-3.3-70b-versatile',
-    modeloActivoNombre: 'Llama 3.3 70B',
+    modeloActivoId: 'openai/gpt-oss-120b',
+    modeloActivoNombre: 'GPT-OSS 120B',
     modeloActivoProveedor: 'Groq Cloud',
     usarMismoModeloAgentes: true,
     modeloChatId: 'openai/gpt-oss-120b',

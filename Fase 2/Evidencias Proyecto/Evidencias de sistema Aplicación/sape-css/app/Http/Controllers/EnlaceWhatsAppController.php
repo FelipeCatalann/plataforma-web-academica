@@ -43,6 +43,37 @@ class EnlaceWhatsAppController extends Controller
         return DB::transaction(fn () => $this->registrarEnlace($request, $validated, $telefonoNormalizado));
     }
 
+    public function confirmarContacto(Request $request, EnlaceWhatsApp $enlace): JsonResponse
+    {
+        abort_unless((string) $enlace->user_id === (string) $request->user()->id, 403);
+
+        return DB::transaction(function () use ($request, $enlace): JsonResponse {
+            $matricula = $enlace->matricula()->firstOrFail();
+            $curso = Curso::query()->lockForUpdate()->findOrFail($matricula->curso_id);
+            Gate::authorize('verCursoCompleto', $curso);
+            $matricula = Matricula::where('vigente', true)->lockForUpdate()->findOrFail($matricula->id);
+            $enlace = EnlaceWhatsApp::where('matricula_id', $matricula->id)->lockForUpdate()->findOrFail($enlace->id);
+
+            if ($enlace->estado !== 'CONTACTO_CONFIRMADO') {
+                $ahora = now();
+                $metadatos = ['curso_id' => $curso->id, 'matricula_id' => $matricula->id];
+                $enlace->update(['estado' => 'CONTACTO_CONFIRMADO']);
+                RegistroBitacora::create([
+                    'id' => (string) Str::uuid(),
+                    'user_id' => $request->user()->id,
+                    'accion' => 'CONFIRMAR_CONTACTO_WHATSAPP',
+                    'recursoTipo' => 'EnlaceWhatsApp',
+                    'recursoId' => $enlace->id,
+                    'metadatos' => $metadatos,
+                    'hashIntegridad' => hash('sha256', json_encode($metadatos).'|'.$ahora->toIso8601String()),
+                    'creadoEn' => $ahora,
+                ]);
+            }
+
+            return response()->json(['estado' => $enlace->estado])->header('Cache-Control', 'no-store');
+        });
+    }
+
     private function registrarEnlace(Request $request, array $validated, string $telefonoNormalizado): JsonResponse
     {
         $curso = Curso::query()->lockForUpdate()->find($validated['curso_id']);
@@ -95,7 +126,7 @@ class EnlaceWhatsAppController extends Controller
             'url' => Str::limit($urlCompleta, 495, ''),
             'mensajePrellenado' => $mensajeLimpio,
             'telefonoDestinoSnapshot' => $telefonoConMas,
-            'estado' => 'ABIERTO_POR_DOCENTE',
+            'estado' => 'PREPARADO',
             'generadoEn' => $now,
         ]);
 
@@ -124,6 +155,7 @@ class EnlaceWhatsAppController extends Controller
             'enlace' => [
                 'id' => $enlace->id,
                 'estado' => $enlace->estado,
+                'confirmable' => true,
                 'telefonoDestinoSnapshot' => $enlace->telefonoDestinoSnapshot,
                 'mensajePrellenado' => $enlace->mensajePrellenado,
                 'generadoEn' => $enlace->generadoEn?->toIso8601String(),

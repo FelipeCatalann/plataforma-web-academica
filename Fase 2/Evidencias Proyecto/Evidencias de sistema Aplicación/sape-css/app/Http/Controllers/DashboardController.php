@@ -231,7 +231,6 @@ class DashboardController extends Controller
                     'regex:/[A-ZÁÉÍÓÚÑ]/',
                     'regex:/[a-záéíóúñ]/',
                     'regex:/[0-9]/',
-                    'regex:/[^A-Za-z0-9\s]/',
                 ],
             ],
             [
@@ -248,7 +247,7 @@ class DashboardController extends Controller
                 'email.unique' => 'Ya existe un usuario registrado con este correo electrónico.',
                 'password.required' => 'Ingresa una contraseña de acceso para el profesor.',
                 'password.min' => 'La contraseña debe tener al menos 6 caracteres.',
-                'password.regex' => 'La contraseña debe incluir mayúsculas, minúsculas, números y al menos un signo especial.',
+                'password.regex' => 'La contraseña debe incluir una mayúscula, una minúscula y un número.',
             ]
         );
 
@@ -263,10 +262,11 @@ class DashboardController extends Controller
             'email' => trim($validated['email']),
             'password' => Hash::make($validated['password']),
         ]);
-        $profesor->save();
-
-        Role::firstOrCreate(['name' => $validated['rol_inicial']]);
-        $profesor->assignRole($validated['rol_inicial']);
+        $profesor->alta_docente_administrativa = $validated['rol_inicial'] === 'Profesor de Asignatura';
+        DB::transaction(function () use ($profesor, $validated): void {
+            $profesor->save();
+            $profesor->assignRole(Role::findOrCreate($validated['rol_inicial'], 'web'));
+        });
 
         return back()->with(
             'success',
