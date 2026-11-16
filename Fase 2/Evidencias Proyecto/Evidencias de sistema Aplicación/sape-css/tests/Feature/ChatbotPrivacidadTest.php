@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Imports\ImportadorSyscol;
+use App\Models\SesionChat;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Maatwebsite\Excel\Facades\Excel;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
@@ -18,48 +20,146 @@ class ChatbotPrivacidadTest extends TestCase
 {
     use RefreshDatabase;
 
-    private string $archivo;
-
     private string $cursoId;
+
+    private User $docente;
 
     private array $nombresReales = [];
 
     protected function setUp(): void
     {
         parent::setUp();
-        // El controlador lee env() directo; con Http::fake la key nunca sale.
-        // $_SERVER primero: el .env del CI trae GROQ_API_KEY vacía y Laravel
-        // prioriza $_SERVER/$_ENV por sobre putenv().
-        $_SERVER['GROQ_API_KEY'] = 'test-fake-key';
-        putenv('GROQ_API_KEY=test-fake-key');
-        $this->archivo = tempnam(sys_get_temp_dir(), 'sape_chat').'.xlsx';
+
+        Http::preventStrayRequests();
+        $archivo = $this->archivoExcelTemporal();
         $this->artisan('sape:generar-sinteticos', [
             'grado' => '1', 'letra' => 'B', 'ano' => '2026',
-            '--alumnos' => '10', '--seed' => '1601', '--salida' => $this->archivo,
+            '--alumnos' => '10', '--seed' => '1601', '--salida' => $archivo,
         ])->assertSuccessful();
-        Excel::import(new ImportadorSyscol, $this->archivo);
+        Excel::import(new ImportadorSyscol, $archivo);
 
         $curso = DB::table('cursos')->first();
         $this->cursoId = $curso->id;
-        $this->nombresReales = DB::table('estudiantes')->limit(2)->pluck('nombres')
-            ->merge(DB::table('estudiantes')->limit(2)->pluck('apellidos'))
+        $this->docente = User::factory()->create();
+        $this->docente->assignRole(Role::findOrCreate('Profesor Jefe', 'web'));
+        DB::table('cursos')->where('id', $this->cursoId)->update(['profesor_jefe_id' => $this->docente->id]);
+        $activos = DB::table('estudiantes')->join('matriculas', 'matriculas.estudiante_id', '=', 'estudiantes.id')
+            ->where('matriculas.vigente', true)->orderBy('estudiantes.identificadorInterno')->limit(2)->get();
+        $this->nombresReales = $activos->pluck('nombres')
+            ->merge($activos->pluck('apellidos'))
             ->all();
-    }
-
-    protected function tearDown(): void
-    {
-        @unlink($this->archivo);
-        unset($_SERVER['GROQ_API_KEY']);
-        putenv('GROQ_API_KEY');
-        parent::tearDown();
     }
 
     private function mensajeConNombres(): string
     {
-        [$n1, $n2] = DB::table('estudiantes')->limit(2)->pluck('nombres')->all();
-        [$a1] = DB::table('estudiantes')->limit(1)->pluck('apellidos')->all();
+        [$n1, $n2, $a1] = $this->nombresReales;
 
         return "¿Cómo ayudo a {$n1} {$a1} y a {$n2}? Van mal en matemática.";
+    }
+
+    public function test_chat_deniega_el_acceso_a_un_usuario_sin_carga_docente(): void
+    {
+        Http::fake();
+        $this->actingAs(User::factory()->create());
+
+        $this->postJson(route('chat.pedagogico'), [
+            'mensaje' => 'Resumen académico',
+            'curso_id' => $this->cursoId,
+        ])->assertForbidden();
+        $this->getJson(route('chat.sesiones', ['curso_id' => $this->cursoId]))->assertForbidden();
+        Http::assertNothingSent();
+    }
+
+    public function test_chat_limita_consultas_por_cuenta_antes_de_contactar_al_proveedor(): void
+    {
+        Http::fake(['api.groq.com*' => Http::response(['choices' => [['message' => ['content' => 'Resumen']]]])]);
+        $this->actingAs($this->docente);
+        $datos = ['mensaje' => 'Resumen académico', 'curso_id' => $this->cursoId];
+        for ($i = 0; $i < 10; $i++) {
+            $this->postJson(route('chat.pedagogico'), $datos)->assertOk();
+        }
+        $this->postJson(route('chat.pedagogico'), $datos)->assertStatus(429);
+        Http::assertSentCount(10);
+    }
+
+    public function test_historial_vencido_no_se_lista_ni_se_puede_continuar(): void
+    {
+        Http::fake(['api.groq.com*' => Http::response(['choices' => [['message' => ['content' => 'Resumen']]]])]);
+        $this->actingAs($this->docente);
+        $datos = ['mensaje' => 'Resumen académico', 'curso_id' => $this->cursoId];
+        $sesion = $this->postJson(route('chat.pedagogico'), $datos)->assertOk()->json('sesion_id');
+        DB::table('sesion_chats')->where('id', $sesion)->update(['expiraEn' => now()->subMinute()]);
+        $this->getJson(route('chat.sesiones', ['curso_id' => $this->cursoId]))
+            ->assertOk()->assertJsonCount(0, 'sesiones');
+        $this->postJson(route('chat.pedagogico'), $datos + ['sesion_id' => $sesion])->assertNotFound();
+        Http::assertSentCount(1);
+    }
+
+    public function test_chat_rechaza_curso_invalido_o_inexistente_sin_llamar_al_proveedor(): void
+    {
+        Http::fake();
+        $this->actingAs($this->docente);
+
+        $this->postJson(route('chat.pedagogico'), [
+            'mensaje' => 'Resumen académico',
+            'curso_id' => 'curso-invalido',
+        ])->assertUnprocessable()->assertJsonValidationErrors('curso_id');
+        $this->postJson(route('chat.pedagogico'), [
+            'mensaje' => 'Resumen académico',
+            'curso_id' => 'f0000000-0000-4000-8000-000000000001',
+        ])->assertNotFound();
+        Http::assertNothingSent();
+    }
+
+    public function test_historial_respeta_cuenta_curso_y_permisos_vigentes(): void
+    {
+        Http::fake(['api.groq.com*' => Http::response(['choices' => [['message' => ['content' => 'Resumen de prueba']]]])]);
+        $this->actingAs($this->docente);
+        $datos = ['mensaje' => 'Resumen académico', 'curso_id' => $this->cursoId];
+        $sesion = $this->postJson(route('chat.pedagogico'), $datos)->assertOk()->json('sesion_id');
+        $rutaHistorial = route('chat.sesiones', ['curso_id' => $this->cursoId]);
+        $this->getJson($rutaHistorial)->assertJsonPath('sesiones.0.id', $sesion);
+
+        $otraCuenta = User::factory()->create();
+        $otraCuenta->assignRole(Role::findOrCreate('Administrador', 'web'));
+        $this->actingAs($otraCuenta)->getJson($rutaHistorial)->assertJsonCount(0, 'sesiones');
+        $this->postJson(route('chat.pedagogico'), $datos + ['sesion_id' => $sesion])->assertNotFound();
+
+        $otroCurso = 'f0000000-0000-4000-8000-000000000001';
+        DB::table('cursos')->insert(['id' => $otroCurso, 'nivel' => '2', 'letra' => 'B', 'anioEscolar' => 2026, 'profesor_jefe_id' => $this->docente->id]);
+        $this->actingAs($this->docente)->postJson(route('chat.pedagogico'), [
+            ...$datos, 'curso_id' => $otroCurso, 'sesion_id' => $sesion,
+        ])->assertNotFound();
+
+        SesionChat::create(['user_id' => $this->docente->id, 'curso_id' => $this->cursoId, 'estado' => 'ACTIVA']);
+        DB::table('cursos')->where('id', $this->cursoId)->update(['profesor_jefe_id' => null]);
+        $asignatura = DB::table('asignatura_curso')->where('curso_id', $this->cursoId)->first();
+        DB::table('asignatura_curso')->where('id', $asignatura->id)->update(['profesor_id' => $this->docente->id]);
+        $this->docente->assignRole(Role::findOrCreate('Profesor de Asignatura', 'web'));
+
+        $this->getJson($rutaHistorial)->assertOk()->assertJsonCount(0, 'sesiones');
+        $this->postJson(route('chat.pedagogico'), $datos + ['sesion_id' => $sesion])->assertNotFound();
+        Http::assertSentCount(1);
+        $this->postJson(route('chat.pedagogico'), $datos + ['tipo_profesor' => 'Administrador'])->assertOk();
+        $prompt = Http::recorded()[1][0]['messages'][0]['content'];
+        $nombreRamo = DB::table('asignaturas')->where('id', $asignatura->asignatura_id)->value('nombre');
+        $this->assertStringContainsString('Profesor de Asignatura', $prompt);
+        $this->assertStringContainsString($nombreRamo.': promedio', $prompt);
+        $otrosRamos = DB::table('asignaturas')->where('id', '!=', $asignatura->asignatura_id)->pluck('nombre');
+        foreach ($otrosRamos as $otroRamo) {
+            $this->assertStringNotContainsString($otroRamo.': promedio', $prompt);
+        }
+    }
+
+    public function test_error_del_proveedor_no_devuelve_detalles_ni_persiste_historial(): void
+    {
+        Http::fake(['api.groq.com*' => Http::response(['error' => ['message' => 'detalle-interno-de-prueba']], 500)]);
+
+        $this->actingAs($this->docente)->postJson(route('chat.pedagogico'), [
+            'mensaje' => 'Resumen académico',
+            'curso_id' => $this->cursoId,
+        ])->assertStatus(502)->assertDontSee('detalle-interno-de-prueba');
+        $this->assertDatabaseCount('sesion_chats', 0);
     }
 
     public function test_nombres_no_llegan_a_groq_y_respuesta_restaurada(): void
@@ -73,7 +173,7 @@ class ChatbotPrivacidadTest extends TestCase
                 ]],
             ], 200),
         ]);
-        $this->actingAs(User::factory()->create());
+        $this->actingAs($this->docente);
 
         $respuesta = $this->postJson(route('chat.pedagogico'), [
             'mensaje' => $this->mensajeConNombres(),
@@ -93,8 +193,9 @@ class ChatbotPrivacidadTest extends TestCase
         }
 
         // CA-1: al payload enviado a Groq no va ningún nombre real.
+        Http::assertSentCount(1);
         Http::assertSent(function ($request) {
-            $enviado = json_encode($request['messages'] ?? null);
+            $enviado = implode("\n", array_column($request['messages'] ?? [], 'content'));
             foreach ($this->nombresReales as $nombre) {
                 foreach (preg_split('/\s+/u', $nombre) as $parte) {
                     if (mb_strlen($parte) >= 4 && str_contains($enviado, $parte)) {
@@ -103,7 +204,7 @@ class ChatbotPrivacidadTest extends TestCase
                 }
             }
 
-            return $enviado !== 'null';
+            return $enviado !== '';
         });
     }
 
@@ -116,14 +217,21 @@ class ChatbotPrivacidadTest extends TestCase
                 ]],
             ], 200),
         ]);
-        $this->actingAs(User::factory()->create());
+        $this->actingAs($this->docente);
 
+        $mensaje = 'Dame estrategias para un curso con bajo promedio.';
         $respuesta = $this->postJson(route('chat.pedagogico'), [
-            'mensaje' => 'Dame estrategias para un curso con bajo promedio.',
+            'mensaje' => $mensaje,
             'curso_id' => $this->cursoId,
             'tipo_profesor' => 'Profesor Jefe',
         ]);
         $this->assertEquals(200, $respuesta->getStatusCode(), 'Chatbot 500: '.$respuesta->getContent());
         $respuesta->assertOk()->assertJson(['respuesta' => 'OK']);
+        Http::assertSentCount(1);
+        Http::assertSent(function ($request) use ($mensaje) {
+            $mensajes = $request['messages'] ?? [];
+
+            return end($mensajes) === ['role' => 'user', 'content' => $mensaje];
+        });
     }
 }

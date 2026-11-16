@@ -5,22 +5,22 @@ namespace Database\Seeders;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 
 class AsignarProfesoresSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1. Crear a los docentes
-        $profeJefe = User::firstOrCreate(
-            ['email' => 'jefe1ma@colegio.cl'],
-            ['name' => 'Carlos (Profe Jefe 1MA)', 'password' => Hash::make('password')]
-        );
+        if (! app()->environment('local', 'testing')) {
+            return;
+        }
 
-        $profeMate = User::firstOrCreate(
-            ['email' => 'ana@colegio.cl'],
-            ['name' => 'Ana (Profe Matemáticas)', 'password' => Hash::make('password')]
-        );
+        $profeJefe = User::where('email', 'jefe1ma@colegio.cl')->first();
+        $profeMate = User::where('email', 'ana@colegio.cl')->first();
+        if (! $profeJefe?->hasRole('Profesor Jefe') || ! $profeMate?->hasRole('Profesor de Asignatura')) {
+            $this->command->warn('Primero crea las cuentas de demostración.');
+
+            return;
+        }
 
         // 2. Buscar los cursos 1°A y 1°B usando tu columna 'nivel'
         $curso1MA = DB::table('cursos')->where('nivel', 1)->where('letra', 'A')->first();

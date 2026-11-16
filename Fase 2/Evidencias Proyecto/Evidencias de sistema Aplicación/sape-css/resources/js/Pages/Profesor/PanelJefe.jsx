@@ -918,7 +918,6 @@ export default function PanelJefe({ auth, curso }) {
                             >
                                 <ChatbotPedagogico
                                     cursoContexto={curso}
-                                    tipoProfesor="Jefe"
                                     onAbrirInforme={(est) => abrirModalInforme(est)}
                                     onAbrirWhatsApp={(est) => abrirModalWhatsApp(est)}
                                     onVerFicha={(est) => {
@@ -936,6 +935,7 @@ export default function PanelJefe({ auth, curso }) {
                 isOpen={modalInformeOpen}
                 onClose={() => setModalInformeOpen(false)}
                 estudiante={estudianteParaInforme}
+                cursoId={curso.id}
                 cursoNombre={`${curso.nivel}° Medio ${curso.letra}`}
             />
 

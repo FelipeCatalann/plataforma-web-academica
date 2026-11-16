@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Integration;
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -24,15 +24,8 @@ class GeneradorSinteticosTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->salidaA = tempnam(sys_get_temp_dir(), 'sape_a').'.xlsx';
-        $this->salidaB = tempnam(sys_get_temp_dir(), 'sape_b').'.xlsx';
-    }
-
-    protected function tearDown(): void
-    {
-        @unlink($this->salidaA);
-        @unlink($this->salidaB);
-        parent::tearDown();
+        $this->salidaA = $this->archivoExcelTemporal();
+        $this->salidaB = $this->archivoExcelTemporal();
     }
 
     private function generar(string $salida, int $seed = 1601, string $grado = '1'): void
@@ -44,13 +37,12 @@ class GeneradorSinteticosTest extends TestCase
         $this->assertFileExists($salida);
     }
 
-    /** Hoja CALIFICACIONES completa, sin recorte de rango. */
-    private function calificacionesCompletas(Spreadsheet $libro): array
+    private function filasDeDatos(Spreadsheet $libro, string $nombreHoja, string $ultimaColumna): array
     {
-        $hoja = $libro->getSheetByName('CALIFICACIONES');
-        $ultima = $hoja->getHighestRow();
+        $hoja = $libro->getSheetByName($nombreHoja);
+        $ultima = $hoja->getHighestDataRow();
 
-        return $hoja->rangeToArray("A2:L{$ultima}");
+        return array_slice($hoja->rangeToArray("A1:{$ultimaColumna}{$ultima}"), 1);
     }
 
     /** CA-1: columnas exactas del formato v1.0 en ambas hojas. */
@@ -72,10 +64,11 @@ class GeneradorSinteticosTest extends TestCase
             $libro->getSheetByName('CALIFICACIONES')->rangeToArray('A1:L1')[0]
         );
         // 10 alumnos x 7 subsectores x 2 semestres x notas parciales (D10).
-        $nomina = $libro->getSheetByName('NOMINA')->rangeToArray('A2:K11');
+        $nomina = $this->filasDeDatos($libro, 'NOMINA', 'K');
         $runsNomina = array_column($nomina, 4);
         $this->assertCount(10, $nomina);
-        $cal = $this->calificacionesCompletas($libro);
+        $this->assertCount(10, array_unique(array_filter($runsNomina)), 'La nómina tiene un RUN por alumno.');
+        $cal = $this->filasDeDatos($libro, 'CALIFICACIONES', 'L');
         $this->assertGreaterThanOrEqual(140, count($cal), 'Base 1 fila por celda + parciales');
         foreach ($cal as $f) {
             $this->assertCount(12, $f, '12 columnas por fila');
@@ -88,8 +81,8 @@ class GeneradorSinteticosTest extends TestCase
     {
         $this->generar($this->salidaA);
         $libro = IOFactory::load($this->salidaA);
-        $nomina = $libro->getSheetByName('NOMINA')->rangeToArray('A2:K11');
-        $cal = $this->calificacionesCompletas($libro);
+        $nomina = $this->filasDeDatos($libro, 'NOMINA', 'K');
+        $cal = $this->filasDeDatos($libro, 'CALIFICACIONES', 'L');
 
         // Retirado con fecha.
         $this->assertNotEmpty(array_filter($nomina, fn ($f) => ! empty($f[8])));
@@ -98,7 +91,7 @@ class GeneradorSinteticosTest extends TestCase
         $bajo40 = array_filter($notasMat, fn ($f) => (float) str_replace(',', '.', $f[8]) < 4.0);
         $this->assertGreaterThanOrEqual(2, count($bajo40), 'Cuello de botella MAT-01');
 
-        $this->assertNotEmpty(array_filter($cal, fn ($f) => $f[5] === 'REL-01' && $f[9] !== ''));
+        $this->assertNotEmpty(array_filter($cal, fn ($f) => $f[5] === 'REL-01' && ! empty($f[9])));
         $this->assertNotEmpty(array_filter($cal, fn ($f) => $f[5] === 'EFI-01' && $f[10] === 'EX'));
 
         // Excluyentes: ninguna fila combina NOTA + CONCEPTUAL + EX.
@@ -111,7 +104,7 @@ class GeneradorSinteticosTest extends TestCase
     public function test_datos_verificablemente_ficticios(): void
     {
         $this->generar($this->salidaA);
-        $nomina = IOFactory::load($this->salidaA)->getSheetByName('NOMINA')->rangeToArray('A2:K11');
+        $nomina = $this->filasDeDatos(IOFactory::load($this->salidaA), 'NOMINA', 'K');
 
         // Bloque del seed 1601: 22000000 + 1601*100 + índice (10 alumnos).
         $baseBloque = 22000000 + 1601 * 100;
@@ -133,13 +126,13 @@ class GeneradorSinteticosTest extends TestCase
         $a = IOFactory::load($this->salidaA);
         $b = IOFactory::load($this->salidaB);
         $this->assertSame(
-            $a->getSheetByName('NOMINA')->rangeToArray('A1:K11'),
-            $b->getSheetByName('NOMINA')->rangeToArray('A1:K11'),
+            $this->filasDeDatos($a, 'NOMINA', 'K'),
+            $this->filasDeDatos($b, 'NOMINA', 'K'),
             'Contenido idéntico en NOMINA con mismo seed'
         );
         $this->assertSame(
-            $this->calificacionesCompletas($a),
-            $this->calificacionesCompletas($b),
+            $this->filasDeDatos($a, 'CALIFICACIONES', 'L'),
+            $this->filasDeDatos($b, 'CALIFICACIONES', 'L'),
             'Contenido idéntico en CALIFICACIONES con mismo seed'
         );
     }
@@ -148,7 +141,7 @@ class GeneradorSinteticosTest extends TestCase
     public function test_catalogo_tercero_medio(): void
     {
         $this->generar($this->salidaA, 1601, '3');
-        $cal = $this->calificacionesCompletas(IOFactory::load($this->salidaA));
+        $cal = $this->filasDeDatos(IOFactory::load($this->salidaA), 'CALIFICACIONES', 'L');
         // 10 alumnos x 10 subsectores x 2 semestres x parciales (D10).
         $this->assertGreaterThanOrEqual(200, count($cal));
 
@@ -178,7 +171,7 @@ class GeneradorSinteticosTest extends TestCase
         // Bordes del nivel: MAT-03 bajo 4.0, REL-03 conceptual, EFI-03 EX.
         $this->assertNotEmpty(array_filter($cal, fn ($f) => $f[5] === 'MAT-03'
             && is_string($f[8]) && (float) str_replace(',', '.', $f[8]) < 4.0));
-        $this->assertNotEmpty(array_filter($cal, fn ($f) => $f[5] === 'REL-03' && $f[9] !== ''));
+        $this->assertNotEmpty(array_filter($cal, fn ($f) => $f[5] === 'REL-03' && ! empty($f[9])));
         $this->assertNotEmpty(array_filter($cal, fn ($f) => $f[5] === 'EFI-03' && $f[10] === 'EX'));
     }
 
@@ -188,8 +181,8 @@ class GeneradorSinteticosTest extends TestCase
         $this->generar($this->salidaA, 1601, '4');
         $this->generar($this->salidaB, 1601, '4');
 
-        $a = $this->calificacionesCompletas(IOFactory::load($this->salidaA));
-        $b = $this->calificacionesCompletas(IOFactory::load($this->salidaB));
+        $a = $this->filasDeDatos(IOFactory::load($this->salidaA), 'CALIFICACIONES', 'L');
+        $b = $this->filasDeDatos(IOFactory::load($this->salidaB), 'CALIFICACIONES', 'L');
         $cods = fn ($filas) => array_map(fn ($f) => [$f[4], $f[5], $f[11]], $filas);
         $this->assertSame($cods($a), $cods($b));
     }

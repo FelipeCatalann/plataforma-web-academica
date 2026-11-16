@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { leerPreferenciasSape } from '@/utils/preferenciasSape';
 
-export default function ModalInformeIA({ estudiante, cursoNombre, isOpen, onClose }) {
+export default function ModalInformeIA({ estudiante, cursoId, cursoNombre, isOpen, onClose }) {
     const [destinatario, setDestinatario] = useState('Apoderado');
     const [palabrasClave, setPalabrasClave] = useState('');
     const [informe, setInforme] = useState('');
@@ -78,7 +78,7 @@ export default function ModalInformeIA({ estudiante, cursoNombre, isOpen, onClos
         setCargando(false);
         setError('');
         setCopiado(false);
-    }, [estudiante?.id, isOpen]);
+    }, [estudiante?.id, cursoId, isOpen]);
 
     // Cerrar con tecla Escape
     useEffect(() => {
@@ -99,6 +99,9 @@ export default function ModalInformeIA({ estudiante, cursoNombre, isOpen, onClos
         if (status === 401 || status === 419) {
             return 'Tu sesión ha expirado. Recarga la página e inicia sesión nuevamente para generar el informe.';
         }
+        if (status === 403) {
+            return 'No tienes permiso para generar el informe de este estudiante en el curso seleccionado.';
+        }
         if (status === 422) {
             return backendError || 'Los datos enviados para el informe no son válidos. Revisa los campos e intenta de nuevo.';
         }
@@ -112,7 +115,7 @@ export default function ModalInformeIA({ estudiante, cursoNombre, isOpen, onClos
     };
 
     const generarInforme = async () => {
-        if (!estudiante?.id || cargando) return;
+        if (!estudiante?.id || !cursoId || cargando) return;
 
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -130,7 +133,7 @@ export default function ModalInformeIA({ estudiante, cursoNombre, isOpen, onClos
                 '/generar-informe-ia',
                 {
                     estudiante_id: estudiante.id,
-                    curso_nombre: cursoNombre,
+                    curso_id: cursoId,
                     destinatario: destinatario,
                     palabras_clave: palabrasClave.trim(),
                     modelo_id: prefs.modeloActivoId,
@@ -320,7 +323,7 @@ export default function ModalInformeIA({ estudiante, cursoNombre, isOpen, onClos
                                     className="w-full border-slate-300 rounded-lg focus:ring-sape-burdeo focus:border-sape-burdeo shadow-sm resize-none h-24 text-sm text-slate-800 leading-relaxed"
                                 />
                                 <p className="text-xs text-slate-500 mt-1">
-                                    La IA combinará estas observaciones con las calificaciones reales del estudiante.
+                                    Describe solo el desempeño académico. Evita nombres, contactos y antecedentes sensibles.
                                 </p>
                             </div>
 

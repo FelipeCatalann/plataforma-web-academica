@@ -14,6 +14,16 @@ return [
     |
     */
 
+    'ia' => [
+        'solicitudes_diarias' => env('IA_SOLICITUDES_DIARIAS', 2000),
+        'dias_historial' => env('IA_DIAS_HISTORIAL', 30),
+        'purgar_historial' => env('IA_PURGAR_HISTORIAL', false),
+        'bases_aprobadas' => array_values(array_filter(array_map(
+            fn (string $url) => rtrim(trim($url), '/'),
+            explode(',', (string) env('IA_BASES_HTTPS_APROBADAS', ''))
+        ))),
+    ],
+
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],

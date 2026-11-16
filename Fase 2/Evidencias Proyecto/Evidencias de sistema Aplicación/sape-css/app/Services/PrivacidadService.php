@@ -20,6 +20,15 @@ namespace App\Services;
  */
 class PrivacidadService
 {
+    public function ocultarContactos(string $texto): string
+    {
+        return preg_replace([
+            '/[\w.+%\-]+@[\w.\-]+\.[a-z]{2,}/iu',
+            '/(?<!\w)(?:\d{1,2}(?:\.\d{3}){2}|\d{7,8})\s*-\s*[\dkK](?!\w)/u',
+            '/(?<!\w)(?:\+56[\s.-]*)?(?:9[\s.-]*)\d(?:[\s.-]*\d){7}(?!\w)/u',
+        ], ['[CORREO]', '[IDENTIFICADOR]', '[TELÉFONO]'], $texto) ?? '';
+    }
+
     public function anonimizar(string $texto, iterable $personas): array
     {
         $mapa = [];

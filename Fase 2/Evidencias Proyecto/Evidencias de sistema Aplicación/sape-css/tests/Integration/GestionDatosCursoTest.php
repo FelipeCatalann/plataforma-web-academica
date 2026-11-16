@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Integration;
 
 use App\Imports\ImportadorSyscol;
 use App\Models\User;
@@ -8,6 +8,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class GestionDatosCursoTest extends TestCase
@@ -21,8 +24,8 @@ class GestionDatosCursoTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->excel1A = tempnam(sys_get_temp_dir(), 'sape_1MA').'_1MA.xlsx';
-        $this->excel1B = tempnam(sys_get_temp_dir(), 'sape_1MB').'_1MB.xlsx';
+        $this->excel1A = $this->archivoExcelTemporal();
+        $this->excel1B = $this->archivoExcelTemporal();
 
         $this->artisan('sape:generar-sinteticos', [
             'grado' => '1', 'letra' => 'A', 'ano' => '2026',
@@ -35,17 +38,58 @@ class GestionDatosCursoTest extends TestCase
         ])->assertSuccessful();
     }
 
-    protected function tearDown(): void
+    public function test_revision_rechaza_calificaciones_de_otro_anio_y_no_escribe_datos(): void
     {
-        @unlink($this->excel1A);
-        @unlink($this->excel1B);
-        parent::tearDown();
+        Excel::import(new ImportadorSyscol, $this->excel1A);
+        $antes = DB::table('calificaciones')->count();
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('Administrador', 'web'));
+        $libro = IOFactory::load($this->excel1A);
+        $libro->getSheetByName('CALIFICACIONES')->setCellValue('A2', 2025);
+        (new Xlsx($libro))->save($this->excel1B);
+        $archivo = new UploadedFile($this->excel1B, 'planilla.xlsx', null, null, true);
+
+        $this->actingAs($admin)->postJson(route('admin.importar.store'), ['archivo_excel' => $archivo])
+            ->assertUnprocessable()->assertJsonValidationErrors('archivo_excel');
+        $respuesta = $this->postJson(route('admin.importar.revisar'), ['archivo_excel' => $archivo]);
+        $respuesta->assertUnprocessable()->assertJsonValidationErrors('archivo_excel');
+        $this->assertStringContainsString('CALIFICACIONES, fila 2', $respuesta->json('errors.archivo_excel.0'));
+        $this->assertDatabaseCount('cursos', 1);
+        $this->assertDatabaseCount('calificaciones', $antes);
+        $this->assertDatabaseCount('importacion_excels', 0);
+    }
+
+    public function test_importar_mismo_curso_de_otro_anio_conserva_notas_historicas(): void
+    {
+        Excel::import(new ImportadorSyscol, $this->excel1A);
+        $curso = DB::table('cursos')->where('anioEscolar', 2026)->first();
+        $notasAntes = DB::table('calificaciones')->orderBy('id')->get()->all();
+        $libro = IOFactory::load($this->excel1A);
+        foreach ($libro->getWorksheetIterator() as $hoja) {
+            for ($fila = 2; $fila <= $hoja->getHighestDataRow(); $fila++) {
+                $hoja->setCellValue('A'.$fila, 2025);
+            }
+        }
+        (new Xlsx($libro))->save($this->excel1B);
+        Excel::import(new ImportadorSyscol, $this->excel1B);
+
+        $this->assertDatabaseHas('cursos', ['anioEscolar' => 2025, 'nivel' => '1', 'letra' => 'A']);
+        $this->assertDatabaseHas('cursos', ['id' => $curso->id, 'anioEscolar' => 2026]);
+        $notasOriginales = DB::table('calificaciones')
+            ->whereIn('matricula_id', DB::table('matriculas')->where('curso_id', $curso->id)->select('id'))
+            ->orderBy('id')->get()->all();
+        $this->assertEquals($notasAntes, $notasOriginales);
     }
 
     public function test_borrar_excel_de_curso_limpia_graficos_sin_afectar_otros_cursos_y_permite_resubir(): void
     {
         $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('Administrador', 'web'));
         $profesor = User::factory()->create();
+        $profesor->assignRole(
+            Role::findOrCreate('Profesor Jefe', 'web'),
+            Role::findOrCreate('Profesor de Asignatura', 'web')
+        );
 
         Excel::import(new ImportadorSyscol, $this->excel1A);
         Excel::import(new ImportadorSyscol, $this->excel1B);
@@ -119,7 +163,11 @@ class GestionDatosCursoTest extends TestCase
             true
         );
 
-        $respReimport = $this->actingAs($admin)->post(route('admin.importar.store'), [
+        $this->actingAs($admin)->postJson(route('admin.importar.revisar'), [
+            'archivo_excel' => $uploadedFile,
+        ])->assertOk();
+        $this->assertNull(DB::table('cursos')->where('nivel', '1')->where('letra', 'B')->first());
+        $respReimport = $this->post(route('admin.importar.store'), [
             'archivo_excel' => $uploadedFile,
         ]);
         $respReimport->assertRedirect();

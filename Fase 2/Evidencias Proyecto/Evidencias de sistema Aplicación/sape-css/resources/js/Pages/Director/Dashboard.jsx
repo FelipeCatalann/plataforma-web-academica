@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import SearchableSelect from '@/Components/SearchableSelect';
+import { mensajeRevision, revisarImportacion } from '@/utils/revisarImportacion';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -220,16 +221,18 @@ export default function PanelDirector({
         archivo_excel: null,
     });
     const fileInputRef = useRef(null);
+    const [archivoRevisado, setArchivoRevisado] = useState(null);
+    const [revisandoArchivo, setRevisandoArchivo] = useState(false);
 
     const validarYGuardarArchivo = (file) => {
         if (!file) return;
         const nombre = (file.name || '').toLowerCase();
         const extensionValida =
-            nombre.endsWith('.xlsx') || nombre.endsWith('.xls') || nombre.endsWith('.csv');
+            nombre.endsWith('.xlsx') || nombre.endsWith('.xls');
 
         if (!extensionValida) {
             setErrorArchivoLocal(
-                `El archivo "${file.name}" no tiene un formato compatible. Selecciona una planilla .xlsx, .xls o .csv exportada de Syscol.`
+                'Selecciona una planilla .xlsx o .xls exportada de Syscol.'
             );
             resetImp('archivo_excel');
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -256,7 +259,7 @@ export default function PanelDirector({
         e.preventDefault();
         e.stopPropagation();
         setArrastrandoArchivo(false);
-        if (procImp) return;
+        if (procImp || revisandoArchivo) return;
         const file = e.dataTransfer?.files?.[0];
         if (file) validarYGuardarArchivo(file);
     };
@@ -268,11 +271,25 @@ export default function PanelDirector({
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const manejarImportacion = () => {
-        if (!dataImp.archivo_excel || procImp) return;
+    const manejarImportacion = async () => {
+        if (!dataImp.archivo_excel || procImp || revisandoArchivo) return;
         setErrorArchivoLocal('');
+        if (archivoRevisado !== dataImp.archivo_excel) {
+            setRevisandoArchivo(true);
+            try {
+                await revisarImportacion(dataImp.archivo_excel);
+                setArchivoRevisado(dataImp.archivo_excel);
+            } catch (error) {
+                setErrorArchivoLocal(mensajeRevision(error));
+            } finally {
+                setRevisandoArchivo(false);
+            }
+            return;
+        }
+
         postImp(route('admin.importar.store'), {
             preserveScroll: true,
+            onFinish: () => setArchivoRevisado(null),
             onSuccess: () => {
                 resetImp('archivo_excel');
                 setCursoSugeridoImportacion(null);
@@ -460,7 +477,7 @@ export default function PanelDirector({
     const cursosOpciones = useMemo(() => {
         return (cursos || []).map((curso) => ({
             id: curso.id,
-            nombre: `${curso.nivel}° Medio ${curso.letra}`,
+            nombre: `${curso.nivel}° Medio ${curso.letra} (${curso.anioEscolar})`,
             detalle: `${curso.anioEscolar ? `Año ${curso.anioEscolar} • ` : ''}${
                 curso.profesor_jefe_nombre
                     ? `Profesor Jefe: ${curso.profesor_jefe_nombre}`
@@ -2499,7 +2516,7 @@ export default function PanelDirector({
 
                                         <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-2.5 border-t border-white/15">
                                             {[
-                                                ...cursosSubidos.map((c) => ({ codigo: `${c.nivel}°${c.letra}`, ok: true })),
+                                                ...cursosSubidos.map((c) => ({ codigo: `${c.nivel}°${c.letra} · ${c.anioEscolar}`, ok: true })),
                                                 ...cursosDisponibles.map((c) => ({ codigo: `${c.nivel}°${c.letra}`, ok: false })),
                                             ].map((item) => (
                                                 <div
@@ -2755,7 +2772,7 @@ export default function PanelDirector({
                                             Importación de Planillas Syscol
                                         </h1>
                                         <p className="text-slate-600 text-sm mt-1">
-                                            Carga planillas oficiales de Nómina y Calificaciones (.xlsx, .xls, .csv).
+                                            Carga planillas oficiales de Nómina y Calificaciones (.xlsx o .xls).
                                         </p>
                                     </div>
                                     <button
@@ -2811,7 +2828,7 @@ export default function PanelDirector({
                                         ref={fileInputRef}
                                         onChange={manejarSeleccionArchivo}
                                         className="hidden"
-                                        accept=".csv, .xls, .xlsx"
+                                        accept=".xls, .xlsx"
                                     />
                                     <motion.div
                                         whileHover={{ scale: 1.005 }}
@@ -2880,7 +2897,7 @@ export default function PanelDirector({
                                                         : 'Arrastra tu archivo Excel aquí o haz clic para seleccionarlo'}
                                                 </p>
                                                 <p className="text-xs text-slate-500">
-                                                    Formatos soportados: .xlsx, .xls, .csv (máx. 10 MB • Hojas NOMINA y CALIFICACIONES)
+                                                    Excel de hasta 10 MB con hojas NOMINA y CALIFICACIONES
                                                 </p>
                                             </div>
                                         )}
@@ -2890,10 +2907,11 @@ export default function PanelDirector({
                                         <button
                                             type="button"
                                             onClick={manejarImportacion}
-                                            disabled={!dataImp.archivo_excel || procImp}
+                                            disabled={!dataImp.archivo_excel || procImp || revisandoArchivo}
                                             className="bg-sape-burdeo text-sape-amarillo px-8 py-3 rounded-xl font-bold shadow-md hover:bg-sape-burdeo-hover transition-all hover:-translate-y-0.5 disabled:opacity-50"
                                         >
-                                            {procImp ? 'Procesando e importando...' : 'Importar Archivo'}
+                                            {procImp ? 'Importando…' : revisandoArchivo ? 'Revisando…' :
+                                                archivoRevisado === dataImp.archivo_excel && archivoRevisado ? 'Confirmar importación' : 'Revisar planilla'}
                                         </button>
                                     </div>
                                 </div>
@@ -2925,7 +2943,7 @@ export default function PanelDirector({
 
                                     <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-2.5 border-t border-white/15">
                                         {[
-                                            ...cursosSubidos.map((c) => ({ codigo: `${c.nivel}°${c.letra}`, ok: true })),
+                                            ...cursosSubidos.map((c) => ({ codigo: `${c.nivel}°${c.letra} · ${c.anioEscolar}`, ok: true })),
                                             ...cursosDisponibles.map((c) => ({ codigo: `${c.nivel}°${c.letra}`, ok: false })),
                                         ].map((item) => (
                                             <div
@@ -2964,7 +2982,7 @@ export default function PanelDirector({
                                         <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 space-y-1">
                                             <p className="font-bold text-slate-800">2. Identificación del Curso</p>
                                             <p>
-                                                El sistema detecta automáticamente el nivel y letra desde el sufijo del archivo (ej. <code className="font-mono text-slate-800">_1MA.xlsx</code> para 1° Medio A) o el encabezado interno.
+                                                La revisión usa el año, grado y curso de cada fila de la planilla.
                                             </p>
                                         </div>
                                         <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 space-y-1">

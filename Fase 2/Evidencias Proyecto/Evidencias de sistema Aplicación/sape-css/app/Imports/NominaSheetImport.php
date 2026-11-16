@@ -12,36 +12,47 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 class NominaSheetImport implements ToCollection, WithHeadingRow
 {
+    private array $matriculasPlanilla = [];
+
+    public function incluyeMatricula(array $identidad): bool
+    {
+        return isset($this->matriculasPlanilla[$this->clave($identidad)]);
+    }
+
+    private function clave(array $identidad): string
+    {
+        return implode(':', $identidad['curso']).':'.$identidad['run'];
+    }
+
     public function collection(Collection $rows): void
     {
-        foreach ($rows as $row) {
-            // 0. Ignorar filas totalmente vacías
-            if (empty($row['run_token']) || empty($row['nombres'])) {
+        $this->matriculasPlanilla = [];
+        foreach ($rows as $indice => $row) {
+            if ($row->filter(fn ($valor) => $valor !== null && $valor !== '')->isEmpty()) {
                 continue;
             }
 
+            $numero = $indice + 2;
+            $identidad = IdentidadSyscol::datos($row, 'NOMINA', $numero);
+            $runToken = $identidad['run'];
+            if ($this->incluyeMatricula($identidad) || trim((string) ($row['nombres'] ?? '')) === '') {
+                IdentidadSyscol::rechazar('NOMINA', $numero, 'Falta el nombre o la matrícula está repetida en la planilla.');
+            }
+            $this->matriculasPlanilla[$this->clave($identidad)] = true;
             $now = now();
 
             // Limpieza básica de texto
-            $grado = trim((string) $row['grado']);
-            $cursoLetra = trim((string) $row['curso']);
-            $runToken = trim((string) $row['run_token']);
             $telefonoApoderado = ! empty($row['telefono_apoderado']) ? trim((string) $row['telefono_apoderado']) : null;
 
             // 1. Buscar o crear el Curso
-            $curso = DB::table('cursos')
-                ->where('nivel', $grado)
-                ->where('letra', $cursoLetra)
-                ->first();
+            $curso = IdentidadSyscol::curso($identidad['curso'], 'NOMINA', $numero);
 
             $cursoId = $curso ? $curso->id : (string) Str::uuid();
 
             if (! $curso) {
                 DB::table('cursos')->insert([
                     'id' => $cursoId,
-                    'nivel' => $grado,
-                    'letra' => $cursoLetra,
-                    'anioEscolar' => $now->year,
+                    ...$identidad['curso'],
                     'created_at' => $now,
                     'updated_at' => $now,
                 ]);
@@ -80,14 +91,19 @@ class NominaSheetImport implements ToCollection, WithHeadingRow
             }
 
             // 4. Conectar todo en la Matrícula
-            $matriculaExistente = DB::table('matriculas')
+            $matriculas = DB::table('matriculas')
                 ->where('estudiante_id', $estudianteId)
                 ->where('curso_id', $cursoId)
-                ->first();
+                ->limit(2)->get();
+            if ($matriculas->count() > 1) {
+                IdentidadSyscol::rechazar('NOMINA', $numero, 'El estudiante tiene más de una matrícula en ese curso.');
+            }
+            $matriculaExistente = $matriculas->first();
+            $retirado = ! empty($row['fecha_retiro']);
 
             if (! $matriculaExistente) {
                 // Formatear correctamente la fecha desde Excel
-                $fechaIngreso = $now->toDateString();
+                $fechaIngreso = $identidad['curso']['anioEscolar'].'-01-01';
                 if (! empty($row['fecha_incorporacion'])) {
                     if (is_numeric($row['fecha_incorporacion'])) {
                         $fechaIngreso = Carbon::instance(ExcelDate::excelToDateTimeObject($row['fecha_incorporacion']))->toDateString();
@@ -102,10 +118,14 @@ class NominaSheetImport implements ToCollection, WithHeadingRow
                     'curso_id' => $cursoId,
                     'apoderado_id' => $apoderadoId,
                     'fechaIngreso' => $fechaIngreso,
-                    'estado' => 'ACTIVO',
+                    'estado' => $retirado ? 'RETIRADO' : 'ACTIVO',
+                    'vigente' => ! $retirado,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ]);
+            } elseif ($retirado && $matriculaExistente->vigente) {
+                DB::table('matriculas')->where('id', $matriculaExistente->id)
+                    ->update(['estado' => 'RETIRADO', 'vigente' => false, 'updated_at' => $now]);
             }
         }
     }

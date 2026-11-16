@@ -12,12 +12,11 @@ class ImportadorSyscol implements Import, WithMultipleSheets
 
     public function sheets(): array
     {
-        return [
-            // 1. Primero lee NOMINA para crear a los estudiantes
-            'NOMINA' => new NominaSheetImport,
+        $nomina = new NominaSheetImport;
 
-            // 2. Luego lee CALIFICACIONES para asignarles las notas
-            'CALIFICACIONES' => new CalificacionesSheetImport,
+        return [
+            'NOMINA' => $nomina,
+            'CALIFICACIONES' => new CalificacionesSheetImport($nomina),
         ];
     }
 }
