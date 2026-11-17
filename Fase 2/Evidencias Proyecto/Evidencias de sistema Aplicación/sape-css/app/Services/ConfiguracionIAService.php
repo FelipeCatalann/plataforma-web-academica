@@ -7,6 +7,12 @@ use Illuminate\Support\Str;
 
 class ConfiguracionIAService
 {
+    public const MODELO_CHAT_DEFAULT = 'openai/gpt-oss-120b';
+
+    private const MODELO_INFORMES_DEFAULT = 'qwen/qwen3.8-27b';
+
+    private const MODELO_LLAMA_RETIRADO = 'llama-3.3-70b-versatile';
+
     public const PROVEEDORES = [
         'groq' => [
             'id' => 'groq',
@@ -54,18 +60,8 @@ class ConfiguracionIAService
 
     public const MODELOS_SISTEMA = [
         [
-            'id' => 'llama-3.3-70b-versatile',
-            'model_id' => 'llama-3.3-70b-versatile',
-            'nombre' => 'Llama 3.3 70B',
-            'subtitulo' => 'Groq · Equilibrado y veloz',
-            'proveedor' => 'groq',
-            'proveedor_nombre' => 'Groq Cloud',
-            'origen' => 'sistema',
-            'recomendado_para' => 'Chat e Informes',
-        ],
-        [
-            'id' => 'openai/gpt-oss-120b',
-            'model_id' => 'openai/gpt-oss-120b',
+            'id' => self::MODELO_CHAT_DEFAULT,
+            'model_id' => self::MODELO_CHAT_DEFAULT,
             'nombre' => 'GPT-OSS 120B',
             'subtitulo' => 'Groq · Razonamiento profundo',
             'proveedor' => 'groq',
@@ -74,8 +70,8 @@ class ConfiguracionIAService
             'recomendado_para' => 'Copiloto Pedagógico',
         ],
         [
-            'id' => 'qwen/qwen3.8-27b',
-            'model_id' => 'qwen/qwen3.8-27b',
+            'id' => self::MODELO_INFORMES_DEFAULT,
+            'model_id' => self::MODELO_INFORMES_DEFAULT,
             'nombre' => 'Qwen 3.8 27B',
             'subtitulo' => 'Groq · Redacción formal',
             'proveedor' => 'groq',
@@ -83,15 +79,25 @@ class ConfiguracionIAService
             'origen' => 'sistema',
             'recomendado_para' => 'Informes Decreto 67',
         ],
+        [
+            'id' => 'openai/gpt-oss-20b',
+            'model_id' => 'openai/gpt-oss-20b',
+            'nombre' => 'GPT-OSS 20B',
+            'subtitulo' => 'Groq · Consultas rápidas',
+            'proveedor' => 'groq',
+            'proveedor_nombre' => 'Groq Cloud',
+            'origen' => 'sistema',
+            'recomendado_para' => 'Consultas rápidas',
+        ],
     ];
 
     public function configuracionPorDefecto(): array
     {
         return [
-            'modelo_activo_id' => 'llama-3.3-70b-versatile',
+            'modelo_activo_id' => self::MODELO_CHAT_DEFAULT,
             'usar_mismo_modelo_agentes' => true,
-            'modelo_chat_id' => 'openai/gpt-oss-120b',
-            'modelo_informes_id' => 'qwen/qwen3.8-27b',
+            'modelo_chat_id' => self::MODELO_CHAT_DEFAULT,
+            'modelo_informes_id' => self::MODELO_INFORMES_DEFAULT,
             'tono_ia' => 'formal_decreto67',
             'extension_ia' => 'equilibrada',
             'precision_ia' => 'balanceado',
@@ -125,7 +131,14 @@ class ConfiguracionIAService
                 return $defecto;
             }
 
-            return array_merge($defecto, $guardada);
+            $configuracion = array_merge($defecto, $guardada);
+            foreach (['modelo_activo_id', 'modelo_chat_id', 'modelo_informes_id'] as $campo) {
+                if ($configuracion[$campo] === self::MODELO_LLAMA_RETIRADO) {
+                    $configuracion[$campo] = $defecto[$campo];
+                }
+            }
+
+            return $configuracion;
         } catch (\Throwable) {
             return $defecto;
         }
@@ -177,15 +190,15 @@ class ConfiguracionIAService
 
         $modeloActivoId = in_array($cruda['modelo_activo_id'], $idsDisponibles, true)
             ? $cruda['modelo_activo_id']
-            : 'llama-3.3-70b-versatile';
+            : self::MODELO_CHAT_DEFAULT;
 
         $modeloChatId = in_array($cruda['modelo_chat_id'], $idsDisponibles, true)
             ? $cruda['modelo_chat_id']
-            : 'openai/gpt-oss-120b';
+            : self::MODELO_CHAT_DEFAULT;
 
         $modeloInformesId = in_array($cruda['modelo_informes_id'], $idsDisponibles, true)
             ? $cruda['modelo_informes_id']
-            : 'qwen/qwen3.8-27b';
+            : self::MODELO_INFORMES_DEFAULT;
 
         $modeloActivoObj = collect($todosLosModelos)->firstWhere('id', $modeloActivoId) ?? self::MODELOS_SISTEMA[0];
 
@@ -297,13 +310,13 @@ class ConfiguracionIAService
         $cruda['modelos_personalizados'] = array_values($personalizados);
 
         if (($cruda['modelo_activo_id'] ?? '') === $modeloId) {
-            $cruda['modelo_activo_id'] = 'llama-3.3-70b-versatile';
+            $cruda['modelo_activo_id'] = self::MODELO_CHAT_DEFAULT;
         }
         if (($cruda['modelo_chat_id'] ?? '') === $modeloId) {
-            $cruda['modelo_chat_id'] = 'openai/gpt-oss-120b';
+            $cruda['modelo_chat_id'] = self::MODELO_CHAT_DEFAULT;
         }
         if (($cruda['modelo_informes_id'] ?? '') === $modeloId) {
-            $cruda['modelo_informes_id'] = 'qwen/qwen3.8-27b';
+            $cruda['modelo_informes_id'] = self::MODELO_INFORMES_DEFAULT;
         }
 
         $user->configuracion_ia = $cruda;
@@ -351,6 +364,7 @@ class ConfiguracionIAService
         $cruda = $this->obtenerConfiguracionCruda($user);
 
         $usarMismo = (bool) ($cruda['usar_mismo_modelo_agentes'] ?? true);
+        $modeloPredeterminado = $agente === 'informes' ? self::MODELO_INFORMES_DEFAULT : self::MODELO_CHAT_DEFAULT;
         $idSeleccionado = $overrides['modelo_id'] ?? null;
 
         if (! $idSeleccionado) {
@@ -361,13 +375,17 @@ class ConfiguracionIAService
                 if ($tieneConfigUsuario) {
                     $idSeleccionado = $cruda['modelo_activo_id'];
                 } else {
-                    $idSeleccionado = $agente === 'informes' ? 'qwen/qwen3.8-27b' : 'openai/gpt-oss-120b';
+                    $idSeleccionado = $modeloPredeterminado;
                 }
             } else {
                 $idSeleccionado = $agente === 'informes'
-                    ? ($cruda['modelo_informes_id'] ?? 'qwen/qwen3.8-27b')
-                    : ($cruda['modelo_chat_id'] ?? 'openai/gpt-oss-120b');
+                    ? ($cruda['modelo_informes_id'] ?? self::MODELO_INFORMES_DEFAULT)
+                    : ($cruda['modelo_chat_id'] ?? self::MODELO_CHAT_DEFAULT);
             }
+        }
+
+        if ($idSeleccionado === self::MODELO_LLAMA_RETIRADO) {
+            $idSeleccionado = $modeloPredeterminado;
         }
 
         // Buscar primero en los modelos personalizados del usuario
@@ -391,10 +409,11 @@ class ConfiguracionIAService
         } else {
             // Fallback seguro al motor institucional predeterminado (Groq .env)
             $proveedorId = 'groq';
-            $modeloSistema = collect(self::MODELOS_SISTEMA)->firstWhere('id', $idSeleccionado);
-            $modelId = $modeloSistema ? $modeloSistema['model_id'] : ($agente === 'informes' ? 'qwen/qwen3.8-27b' : 'openai/gpt-oss-120b');
-            $modeloIdInterno = $modeloSistema ? $modeloSistema['id'] : $modelId;
-            $modeloNombre = $modeloSistema ? $modeloSistema['nombre'] : ($modelId === 'qwen/qwen3.8-27b' ? 'Qwen 3.8 27B' : 'GPT-OSS 120B');
+            $modelosSistema = collect(self::MODELOS_SISTEMA);
+            $modeloSistema = $modelosSistema->firstWhere('id', $idSeleccionado) ?? $modelosSistema->firstWhere('id', $modeloPredeterminado);
+            $modelId = $modeloSistema['model_id'];
+            $modeloIdInterno = $modeloSistema['id'];
+            $modeloNombre = $modeloSistema['nombre'];
             $baseUrl = 'https://api.groq.com/openai/v1';
             $apiKey = trim((string) env('GROQ_API_KEY', ''));
             $proveedorNombre = 'Groq Cloud';

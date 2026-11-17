@@ -9,7 +9,7 @@ import {
 } from '@/utils/preferenciasSape';
 
 export default function AuthenticatedLayout({ header, children }) {
-    const user = usePage().props.auth.user;
+    const { user, puedeVerJefatura, puedeVerAsignaturas } = usePage().props.auth;
     const [showingNavigationDropdown, setShowingNavigationDropdown] = useState(false);
     const [paletaActiva, setPaletaActiva] = useState(() => leerPreferenciasSape().paleta);
 
@@ -81,36 +81,36 @@ export default function AuthenticatedLayout({ header, children }) {
                                     Inicio
                                 </Link>
 
-                                {enRutaDocente && (
-                                    <>
-                                        <Link
-                                            href={route('profesor.jefe')}
-                                            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition duration-150 ease-in-out ${
-                                                route().current('profesor.jefe')
-                                                    ? 'bg-sape-burdeo-hover text-sape-amarillo shadow-inner ring-1 ring-white/15'
-                                                    : 'text-white/80 hover:text-white hover:bg-white/10'
-                                            }`}
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                                            </svg>
-                                            Mi Jefatura
-                                        </Link>
+                                {enRutaDocente && puedeVerJefatura && (
+                                    <Link
+                                        href={route('profesor.jefe')}
+                                        className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition duration-150 ease-in-out ${
+                                            route().current('profesor.jefe')
+                                                ? 'bg-sape-burdeo-hover text-sape-amarillo shadow-inner ring-1 ring-white/15'
+                                                : 'text-white/80 hover:text-white hover:bg-white/10'
+                                        }`}
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                        </svg>
+                                        Mi Jefatura
+                                    </Link>
+                                )}
 
-                                        <Link
-                                            href={route('profesor.asignatura')}
-                                            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition duration-150 ease-in-out ${
-                                                route().current('profesor.asignatura')
-                                                    ? 'bg-sape-burdeo-hover text-sape-amarillo shadow-inner ring-1 ring-white/15'
-                                                    : 'text-white/80 hover:text-white hover:bg-white/10'
-                                            }`}
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477-4.5 1.253" />
-                                            </svg>
-                                            Mis Asignaturas
-                                        </Link>
-                                    </>
+                                {enRutaDocente && puedeVerAsignaturas && (
+                                    <Link
+                                        href={route('profesor.asignatura')}
+                                        className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition duration-150 ease-in-out ${
+                                            route().current('profesor.asignatura')
+                                                ? 'bg-sape-burdeo-hover text-sape-amarillo shadow-inner ring-1 ring-white/15'
+                                                : 'text-white/80 hover:text-white hover:bg-white/10'
+                                        }`}
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477-4.5 1.253" />
+                                        </svg>
+                                        Mis Asignaturas
+                                    </Link>
                                 )}
                             </div>
                         </div>
@@ -203,11 +203,11 @@ export default function AuthenticatedLayout({ header, children }) {
                 <div className={(showingNavigationDropdown ? 'block' : 'hidden') + ' sm:hidden bg-white border-t border-slate-200/80'}>
                     <div className="space-y-1 px-2 pb-3 pt-2">
                         <ResponsiveNavLink href={route('dashboard')} active={route().current('dashboard')}>Inicio</ResponsiveNavLink>
-                        {enRutaDocente && (
-                            <>
-                                <ResponsiveNavLink href={route('profesor.jefe')} active={route().current('profesor.jefe')}>Mi Jefatura</ResponsiveNavLink>
-                                <ResponsiveNavLink href={route('profesor.asignatura')} active={route().current('profesor.asignatura')}>Mis Asignaturas</ResponsiveNavLink>
-                            </>
+                        {enRutaDocente && puedeVerJefatura && (
+                            <ResponsiveNavLink href={route('profesor.jefe')} active={route().current('profesor.jefe')}>Mi Jefatura</ResponsiveNavLink>
+                        )}
+                        {enRutaDocente && puedeVerAsignaturas && (
+                            <ResponsiveNavLink href={route('profesor.asignatura')} active={route().current('profesor.asignatura')}>Mis Asignaturas</ResponsiveNavLink>
                         )}
                     </div>
                     <div className="border-t border-slate-200 pb-2 pt-4">

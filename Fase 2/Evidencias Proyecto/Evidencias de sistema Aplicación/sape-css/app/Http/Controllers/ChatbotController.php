@@ -179,12 +179,10 @@ class ChatbotController extends Controller
             );
 
             $reglaFormato = $credenciales['formato_visual'] === 'texto_plano'
-                ? 'IMPORTANTE: No uses tablas, ni barras "|", ni negritas, ni formato Markdown. Escribe solo en texto plano usando saltos de línea y guiones simples para las listas.'
-                : 'Usa formato Markdown editorial limpio (subtítulos ### solo cuando ayuden a organizar secciones, negritas para conceptos clave y listas con viñetas o numeradas bien redactadas). No uses tablas con barras verticales ("|" o "|---|---|").';
+                ? 'Responde en texto plano, con saltos de línea y listas con guiones. Evita negritas, tablas y barras verticales.'
+                : 'Responde en Markdown con subtítulos breves, negritas y listas cuando ayuden. Evita tablas y barras verticales.';
 
-            $reglaDatosReales = 'Usa exclusivamente las cifras reales del curso entregadas en el contexto. PROHIBIDO inventar ejemplos hipotéticos, estimaciones o frases como "Resultado esperado (ejemplo)".';
-
-            $reglaIdentidad = 'REGLA DE NOMBRES Y RUT: En el contexto cada alumno está representado con su token [ALUMNO_X] y su RUT con [RUT_X]. El sistema reemplaza automáticamente [ALUMNO_X] y [RUT_X] por el nombre real y el RUT real en la pantalla del profesor. Cuando menciones a un estudiante o te pidan su nombre o RUT, escribe SIEMPRE el token exacto entre corchetes (por ejemplo: [ALUMNO_19] y [RUT_19]). NUNCA escribas "Estudiante 19" ni "Alumno 19" sin corchetes, y NUNCA digas que no puedes entregar nombres o RUT por privacidad.';
+            $reglaIdentidad = 'Al mencionar a un estudiante o su RUT, copia el token exacto del contexto con sus corchetes ([ALUMNO_X] o [RUT_X]). El sistema mostrará la identidad al docente.';
 
             $instrucciones = $privacidad->anonimizar($credenciales['instrucciones_personalizadas'], $curso->estudiantes)['texto'];
             $instrucciones = $this->anonimizarRutsEnTexto($instrucciones, $curso->estudiantes);
@@ -196,9 +194,19 @@ class ChatbotController extends Controller
                 ? 'Profesor de Asignatura'
                 : ($user->hasRole('Administrador') ? 'Administrador' : 'Profesor Jefe');
             $limiteAsignaturas = $alcance['asignaturas'] !== null
-                ? ' Los promedios incluyen solo las asignaturas impartidas por este docente.'
+                ? ' Las notas y los promedios corresponden a las asignaturas impartidas por este docente.'
                 : '';
-            $promptSistema = "Eres un asistente pedagógico experto y empático. Estás hablando con un {$rol} de Chile. El docente te consulta sobre este curso:{$limiteAsignaturas}\n{$contextoAcademico}\nDa diagnósticos claros basados en los datos reales del curso, sugerencias pedagógicas prácticas, pautas de evaluación y dinámicas según el Decreto 67. {$reglaDatosReales} {$reglaIdentidad} {$credenciales['instruccion_tono']} {$credenciales['instruccion_extension']} {$reglaFormato}{$extraInstrucciones}";
+            $promptSistema = <<<PROMPT
+                Eres un asistente pedagógico experto y empático. Ayudas a un {$rol} de Chile.{$limiteAsignaturas}
+
+                {$contextoAcademico}
+
+                Sé directo y profesional. Usa únicamente las cifras del contexto. Al proponer estrategias, considera el porcentaje de calificaciones bajo 4.0 y distínguelo de los porcentajes de estudiantes. Sugiere acciones pedagógicas concretas, pautas de evaluación o dinámicas de clase según la consulta y el Decreto 67.
+                Presenta primero lo esencial y cierra la respuesta con una idea completa dentro de la extensión elegida.
+                {$reglaIdentidad}
+                {$credenciales['instruccion_tono']} {$credenciales['instruccion_extension']}
+                {$reglaFormato}{$extraInstrucciones}
+                PROMPT;
 
             // 4. API Key (del modelo personalizado encriptado o GROQ_API_KEY por defecto)
             $apiKey = $credenciales['api_key'];
@@ -235,18 +243,38 @@ class ChatbotController extends Controller
             }
 
             // 5. Petición al proveedor OpenAI-compatible (Groq por defecto)
-            $response = ConexionIA::cliente($credenciales['base_url'], $credenciales['headers'], 30)
-                ->post('chat/completions', [
-                    'model' => $credenciales['model'],
-                    'messages' => $mensajesPayload,
-                    'temperature' => $credenciales['temperature'],
-                    'max_tokens' => $credenciales['max_tokens'],
-                ]);
+            $esGroq = $credenciales['proveedor'] === 'groq';
+            $campoLimite = $esGroq ? 'max_completion_tokens' : 'max_tokens';
+            $presupuesto = $credenciales['max_tokens'];
+            if ($esGroq && in_array($credenciales['model'], ['openai/gpt-oss-20b', 'openai/gpt-oss-120b'], true)) {
+                // GPT-OSS usa parte del presupuesto de generación para razonar.
+                $presupuesto += 500;
+            }
+
+            $peticion = [
+                'model' => $credenciales['model'],
+                'messages' => $mensajesPayload,
+                'temperature' => $credenciales['temperature'],
+                $campoLimite => $presupuesto,
+            ];
+            $cliente = ConexionIA::cliente($credenciales['base_url'], $credenciales['headers'], 30);
+            $response = $cliente->post('chat/completions', $peticion);
+
+            if ($response->successful() && $response->json('choices.0.finish_reason') === 'length') {
+                $iaService->registrarConsumoYCuota($user, $credenciales, $response);
+                $peticion[$campoLimite] = $presupuesto * 2;
+                $peticion['messages'][0]['content'] .= "\nResponde de nuevo de forma íntegra y concisa. Prioriza los puntos solicitados y omite detalles secundarios para terminar la respuesta.";
+                $response = $cliente->post('chat/completions', $peticion);
+            }
 
             // 6. Procesar respuesta y persistir en sesion_chats / mensaje_chats
             if ($response->successful()) {
                 $iaService->registrarConsumoYCuota($user, $credenciales, $response);
-                $respuestaAPI = $response->json('choices.0.message.content') ?? '';
+                $respuestaAPI = $response->json('choices.0.message.content');
+                if ($response->json('choices.0.finish_reason') === 'length' || ! is_string($respuestaAPI) || trim($respuestaAPI) === '') {
+                    return response()->json(['respuesta' => 'El modelo no logró terminar la respuesta. Reintenta la consulta o pide una parte más específica.'], 502);
+                }
+
                 $textoRestaurado = $this->restaurarIdentidadesCurso($respuestaAPI, $mapa, $privacidad);
                 $textoIA = $this->limpiarTablasMarkdown($textoRestaurado);
 
@@ -330,6 +358,8 @@ class ChatbotController extends Controller
     private function construirContextoAcademicoReal(Curso $curso, array &$mapa): string
     {
         $totalAlumnos = $curso->estudiantes->count();
+        $totalNotas = 0;
+        $notasBajo4 = 0;
         $promediosGeneralesCurso = [];
         $notasPorAsignaturaCurso = [];
 
@@ -344,6 +374,30 @@ class ChatbotController extends Controller
         $contador = 0;
 
         foreach ($curso->estudiantes as $estudiante) {
+            $valoresAlumno = [];
+            $porAsignatura = [];
+            $notasBajo4Alumno = 0;
+
+            foreach ($estudiante->calificaciones as $nota) {
+                if (! is_numeric($nota->valor)) {
+                    continue;
+                }
+                $valor = (float) $nota->valor;
+                if ($valor < 1.0 || $valor > 7.0) {
+                    continue;
+                }
+
+                $valoresAlumno[] = $valor;
+                $asignatura = trim((string) ($nota->asignatura_nombre ?? ''));
+                $porAsignatura[$asignatura === '' ? 'General' : $asignatura][] = $valor;
+                if ($valor < 4.0) {
+                    $notasBajo4Alumno++;
+                }
+            }
+
+            $totalNotas += count($valoresAlumno);
+            $notasBajo4 += $notasBajo4Alumno;
+
             $nombreCompleto = trim(($estudiante->nombres ?? '').' '.($estudiante->apellidos ?? ''));
             if ($nombreCompleto === '' || isset($vistos[$nombreCompleto])) {
                 continue;
@@ -364,24 +418,6 @@ class ChatbotController extends Controller
             $mapa[$tokenEstudianteAlt] = $nombreCompleto;
             $mapa[$tokenRut] = $rutReal;
 
-            $valoresAlumno = [];
-            $porAsignatura = [];
-
-            foreach ($estudiante->calificaciones as $nota) {
-                if (! is_numeric($nota->valor)) {
-                    continue;
-                }
-                $val = (float) $nota->valor;
-                $valoresAlumno[] = $val;
-
-                $asigNombre = trim((string) ($nota->asignatura_nombre ?? 'General'));
-                if ($asigNombre === '') {
-                    $asigNombre = 'General';
-                }
-                $porAsignatura[$asigNombre][] = $val;
-                $notasPorAsignaturaCurso[$asigNombre]['notas'][] = $val;
-            }
-
             $promedioGeneral = count($valoresAlumno) > 0
                 ? round(array_sum($valoresAlumno) / count($valoresAlumno), 1)
                 : null;
@@ -392,6 +428,7 @@ class ChatbotController extends Controller
 
             $asignaturasRojas = [];
             foreach ($porAsignatura as $asig => $listaNotas) {
+                $notasPorAsignaturaCurso[$asig]['notas'] = array_merge($notasPorAsignaturaCurso[$asig]['notas'] ?? [], $listaNotas);
                 $promAsig = round(array_sum($listaNotas) / count($listaNotas), 1);
                 if ($promAsig < 4.0) {
                     $asignaturasRojas[] = "{$asig} ({$promAsig})";
@@ -401,7 +438,6 @@ class ChatbotController extends Controller
 
             $tienePromedioRojo = $promedioGeneral !== null && $promedioGeneral < 4.0;
             $tieneAsignaturaRoja = count($asignaturasRojas) > 0;
-            $tieneNotaSueltaRoja = count(array_filter($valoresAlumno, fn ($v) => $v < 4.0)) > 0;
 
             if ($tienePromedioRojo) {
                 $alumnosPromedioBajo4++;
@@ -409,7 +445,7 @@ class ChatbotController extends Controller
             if ($tieneAsignaturaRoja) {
                 $alumnosAsignaturaPromedioBajo4++;
             }
-            if ($tieneNotaSueltaRoja) {
+            if ($notasBajo4Alumno > 0) {
                 $alumnosConNotaIndividualBajo4++;
             }
             if ($tienePromedioRojo && $tieneAsignaturaRoja) {
@@ -461,13 +497,19 @@ class ChatbotController extends Controller
         }
         usort($resumenAsignaturas, fn ($a, $b) => $a['promedio'] <=> $b['promedio']);
         $textoAsignaturas = implode('; ', array_column($resumenAsignaturas, 'texto'));
+        $resumenNotas = '- Calificaciones bajo 4.0: sin calificaciones numéricas.';
+        if ($totalNotas > 0) {
+            $pctNotasBajo4 = round(($notasBajo4 / $totalNotas) * 100);
+            $resumenNotas = "- Calificaciones bajo 4.0: {$notasBajo4} de {$totalNotas} calificaciones numéricas ({$pctNotasBajo4}%).";
+        }
 
         $lineas = [
             "- Curso: {$curso->nivel}° Medio {$curso->letra} ({$totalAlumnos} estudiantes matriculados).",
+            $resumenNotas,
             "- Promedio general del curso: {$promedioCurso}.",
             "- Estudiantes con promedio general menor a 4.0: {$alumnosPromedioBajo4} de {$totalAlumnos} ({$pctPromedioBajo4}% del curso).",
             "- Estudiantes con al menos una asignatura con promedio menor a 4.0: {$alumnosAsignaturaPromedioBajo4} de {$totalAlumnos} ({$pctAsignaturaBajo4}% del curso).",
-            "- Estudiantes con alguna calificación parcial menor a 4.0: {$alumnosConNotaIndividualBajo4} de {$totalAlumnos} ({$pctNotaIndividualBajo4}% del curso).",
+            "- Estudiantes con alguna calificación menor a 4.0: {$alumnosConNotaIndividualBajo4} de {$totalAlumnos} ({$pctNotaIndividualBajo4}% del curso).",
             "- Estudiantes que coinciden en ambos criterios (promedio general < 4.0 y asignatura < 4.0): {$alumnosAmbosCriterios} estudiantes.",
         ];
 

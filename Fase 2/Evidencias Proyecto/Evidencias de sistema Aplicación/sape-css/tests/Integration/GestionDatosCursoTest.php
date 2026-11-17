@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -79,6 +80,73 @@ class GestionDatosCursoTest extends TestCase
             ->whereIn('matricula_id', DB::table('matriculas')->where('curso_id', $curso->id)->select('id'))
             ->orderBy('id')->get()->all();
         $this->assertEquals($notasAntes, $notasOriginales);
+    }
+
+    public function test_panel_jefe_muestra_asistencia_del_curso_asignado_y_distingue_registros_ausentes(): void
+    {
+        $libro = IOFactory::load($this->excel1A);
+        $nomina = $libro->getSheetByName('NOMINA');
+        $identificadores = [];
+        foreach ([2 => '84,50%', 3 => '0', 4 => null, 5 => null] as $fila => $valor) {
+            $identificadores[$fila] = $nomina->getCell('E'.$fila)->getValue();
+            $nomina->setCellValue('I'.$fila, null);
+            $nomina->setCellValue('J'.$fila, $valor);
+        }
+        (new Xlsx($libro))->save($this->excel1A);
+        Excel::import(new ImportadorSyscol, $this->excel1A);
+        Excel::import(new ImportadorSyscol, $this->excel1B);
+
+        $profesor = User::factory()->create();
+        $profesor->assignRole(Role::findOrCreate('Profesor Jefe', 'web'));
+        $cursoId = DB::table('cursos')->where('letra', 'A')->value('id');
+        DB::table('cursos')->where('id', $cursoId)->update(['profesor_jefe_id' => $profesor->id]);
+        $matriculaId = DB::table('matriculas')->join('estudiantes', 'estudiantes.id', '=', 'matriculas.estudiante_id')
+            ->where('matriculas.curso_id', $cursoId)->where('identificadorInterno', $identificadores[4])->value('matriculas.id');
+        foreach ([
+            '2026-03-02' => 'PRESENTE',
+            '2026-03-03' => 'ATRASO',
+            '2026-03-04' => 'AUSENTE',
+            '2026-03-05' => 'JUSTIFICADA',
+            '2025-03-05' => 'PRESENTE',
+        ] as $fecha => $estado) {
+            DB::table('registro_asistencias')->insert(['id' => (string) Str::uuid(), 'matricula_id' => $matriculaId, 'fecha' => $fecha, 'estado' => $estado]);
+        }
+
+        $respuesta = $this->actingAs($profesor)->get(route('profesor.jefe'))->assertOk();
+        $curso = $respuesta->viewData('page')['props']['curso'];
+        $this->assertSame($cursoId, $curso['id']);
+        $this->assertNotEmpty($curso['asignaturas']);
+        $asistencia = collect($curso['estudiantes'])->pluck('asistencia_anual', 'identificadorInterno');
+        $this->assertEquals(84.5, $asistencia[$identificadores[2]]);
+        $this->assertEquals(0, $asistencia[$identificadores[3]]);
+        $this->assertEquals(50, $asistencia[$identificadores[4]]);
+        $this->assertNull($asistencia[$identificadores[5]]);
+        $this->assertSame([$cursoId], collect($curso['estudiantes'])->pluck('pivot.curso_id')->unique()->values()->all());
+    }
+
+    public function test_la_planilla_ya_importada_completa_asistencia_sin_reemplazar_datos_existentes(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('Administrador', 'web'));
+        $archivo = fn () => ['archivo_excel' => new UploadedFile($this->excel1A, 'planilla.xlsx', null, null, true)];
+
+        $this->actingAs($admin)->postJson(route('admin.importar.revisar'), $archivo())->assertOk();
+        $this->post(route('admin.importar.store'), $archivo())->assertRedirect()->assertSessionHasNoErrors();
+
+        $matriculas = DB::table('matriculas')->whereNotNull('asistencia_pct')->orderBy('id')->limit(2)->get();
+        $faltante = $matriculas[0];
+        DB::table('matriculas')->where('id', $faltante->id)->update(['asistencia_pct' => null]);
+        DB::table('matriculas')->where('id', $matriculas[1]->id)->update(['asistencia_pct' => 99.9]);
+        $notasAntes = DB::table('calificaciones')->orderBy('id')->get()->all();
+
+        $this->postJson(route('admin.importar.revisar'), $archivo())->assertOk();
+        $this->assertDatabaseHas('matriculas', ['id' => $faltante->id, 'asistencia_pct' => null]);
+        $this->post(route('admin.importar.store'), $archivo())->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('matriculas', ['id' => $faltante->id, 'asistencia_pct' => $faltante->asistencia_pct]);
+        $this->assertDatabaseHas('matriculas', ['id' => $matriculas[1]->id, 'asistencia_pct' => 99.9]);
+        $this->assertEquals($notasAntes, DB::table('calificaciones')->orderBy('id')->get()->all());
+        $this->assertDatabaseCount('importacion_excels', 1);
     }
 
     public function test_borrar_excel_de_curso_limpia_graficos_sin_afectar_otros_cursos_y_permite_resubir(): void

@@ -5,6 +5,7 @@ namespace Tests\Integration;
 use App\Imports\ImportadorSyscol;
 use App\Models\User;
 use App\Services\ConexionIA;
+use App\Services\ConfiguracionIAService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -55,6 +56,29 @@ class ConfiguracionIATest extends TestCase
             'api_key' => 'clave-de-prueba',
         ])->assertStatus(502);
         Http::assertSentCount(1);
+    }
+
+    public function test_catalogo_y_preferencias_usadas_por_los_agentes_reemplazan_llama_retirado(): void
+    {
+        $llamaRetirado = 'llama-3.3-70b-versatile';
+        $user = User::factory()->make(['configuracion_ia' => [
+            'modelo_activo_id' => $llamaRetirado,
+            'usar_mismo_modelo_agentes' => false,
+            'modelo_chat_id' => $llamaRetirado,
+            'modelo_informes_id' => $llamaRetirado,
+            'tono_ia' => 'ejecutivo_breve',
+        ]]);
+        $servicio = app(ConfiguracionIAService::class);
+        $publica = $servicio->obtenerConfiguracionPublica($user);
+
+        $this->assertSame(['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b'], array_column($publica['modelos_sistema'], 'id'));
+        $this->assertSame('openai/gpt-oss-120b', $publica['modelo_activo_id']);
+        $this->assertSame('openai/gpt-oss-120b', $publica['modelo_chat_id']);
+        $this->assertSame('qwen/qwen3.8-27b', $publica['modelo_informes_id']);
+        $this->assertSame('ejecutivo_breve', $publica['tono_ia']);
+        $this->assertSame('openai/gpt-oss-120b', $servicio->resolverCredencialesAgente($user, 'chat', ['modelo_id' => $llamaRetirado])['model']);
+        $this->assertSame('qwen/qwen3.8-27b', $servicio->resolverCredencialesAgente($user, 'informes')['model']);
+        $this->assertSame('openai/gpt-oss-20b', $servicio->resolverCredencialesAgente($user, 'chat', ['modelo_id' => 'openai/gpt-oss-20b'])['model']);
     }
 
     public function test_usuario_puede_agregar_modelo_con_api_key_encriptada_y_enmascarada(): void

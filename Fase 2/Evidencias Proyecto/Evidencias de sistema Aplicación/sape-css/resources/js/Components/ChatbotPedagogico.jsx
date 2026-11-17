@@ -8,6 +8,7 @@ import {
     guardarPreferenciasSape,
     sincronizarPreferenciasDesdeServidor,
     MODELOS_GROQ_SISTEMA,
+    PREFERENCIAS_DEFAULT,
 } from '@/utils/preferenciasSape';
 
 const SUGERENCIAS_RAPIDAS = [
@@ -26,8 +27,8 @@ const SUGERENCIAS_RAPIDAS = [
 ];
 
 const DESCRIPCION_CLARA_MODELOS = {
-    'llama-3.3-70b-versatile': {
-        rolCorto: 'Equilibrado y veloz',
+    'openai/gpt-oss-20b': {
+        rolCorto: 'Consultas rápidas',
     },
     'openai/gpt-oss-120b': {
         rolCorto: 'Razonamiento profundo',
@@ -37,7 +38,7 @@ const DESCRIPCION_CLARA_MODELOS = {
     },
 };
 
-const construirMensajeBienvenida = (cursoContexto, nombreModelo = 'Llama 3.3 70B') => ({
+const construirMensajeBienvenida = (cursoContexto, nombreModelo = PREFERENCIAS_DEFAULT.modeloActivoNombre) => ({
     role: 'ai',
     modeloNombre: nombreModelo,
     content: cursoContexto
@@ -643,7 +644,7 @@ export default function ChatbotPedagogico({
                             <span className="w-2 h-2 rounded-full bg-sape-amarillo shrink-0" />
                             <div className="text-left">
                                 <span className="font-extrabold block leading-tight">
-                                    {modeloActivoObj?.nombre || 'Llama 3.3 70B'}
+                                    {modeloActivoObj?.nombre || PREFERENCIAS_DEFAULT.modeloActivoNombre}
                                 </span>
                                 <span className="text-[10px] text-sape-amarillo block leading-tight">
                                     {infoModeloActivo.rolCorto}

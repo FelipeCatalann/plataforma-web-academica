@@ -80,7 +80,7 @@ const CRITERIOS_WHATSAPP = [
 export default function ConfiguracionIndex({
     iaConfigurada = false,
     iaSistemaConfigurada = false,
-    modeloIA = 'llama-3.3-70b-versatile',
+    modeloIA = PREFERENCIAS_DEFAULT.modeloActivoNombre,
     proveedorIA = 'Groq Cloud',
     configuracionIA = null,
     rolInfo = {
@@ -153,7 +153,7 @@ export default function ConfiguracionIndex({
     const [nuevoProveedor, setNuevoProveedor] = useState('groq');
     const [nuevaApiKey, setNuevaApiKey] = useState('');
     const [mostrarApiKey, setMostrarApiKey] = useState(false);
-    const [nuevoModelId, setNuevoModelId] = useState('llama-3.3-70b-versatile');
+    const [nuevoModelId, setNuevoModelId] = useState(PREFERENCIAS_DEFAULT.modeloActivoId);
     const [nuevoNombreModelo, setNuevoNombreModelo] = useState('');
     const [modelosDetectadosKey, setModelosDetectadosKey] = useState([]);
     const [guardandoIA, setGuardandoIA] = useState(false);
@@ -661,7 +661,7 @@ export default function ConfiguracionIndex({
                             <div className="flex items-center justify-between text-xs">
                                 <span className="text-slate-500 font-medium">Modelo IA</span>
                                 <span className="font-extrabold text-slate-800 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 truncate max-w-[140px]">
-                                    {modeloActivoObj?.nombre || 'Llama 3.3 70B'}
+                                    {modeloActivoObj?.nombre || PREFERENCIAS_DEFAULT.modeloActivoNombre}
                                 </span>
                             </div>
                             <button
@@ -993,7 +993,7 @@ export default function ConfiguracionIndex({
                                                         Modelo seleccionado
                                                     </span>
                                                     <span className="text-sm font-extrabold text-slate-900 mt-0.5 block">
-                                                        {modeloActivoObj?.nombre || 'Llama 3.3 70B'}
+                                                        {modeloActivoObj?.nombre || PREFERENCIAS_DEFAULT.modeloActivoNombre}
                                                     </span>
                                                 </div>
                                                 <div>
@@ -1251,7 +1251,7 @@ export default function ConfiguracionIndex({
                                                         type="text"
                                                         value={nuevoModelId}
                                                         onChange={(e) => setNuevoModelId(e.target.value)}
-                                                        placeholder="Ej: llama-3.3-70b-versatile"
+                                                        placeholder={proveedorSeleccionadoObj.modelosSugeridos?.[0]?.id || 'ID del modelo'}
                                                         className="w-full rounded-xl border-slate-300 text-sm text-slate-900 focus:border-sape-burdeo focus:ring-sape-burdeo font-mono"
                                                     />
 

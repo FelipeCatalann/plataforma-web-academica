@@ -74,16 +74,19 @@ class ImportController extends Controller
             ->where('estadoImportacion', 'PROCESADA')
             ->exists();
 
-        if ($yaProcesada && DB::table('calificaciones')->count() > 0) {
-            return back()->with('success', 'El archivo ya fue importado anteriormente (hash idéntico). No se duplicaron registros.');
-        }
-
         // Limpiar cualquier registro previo con el mismo checksum (ej. REPETIDO o curso borrado previamente)
         $importacionId = (string) Str::uuid();
         $calificacionesAntes = DB::table('calificaciones')->count();
 
         try {
             DB::beginTransaction();
+
+            if ($yaProcesada && DB::table('calificaciones')->count() > 0) {
+                Excel::import(new ImportadorSyscol(soloCompletarAsistencia: true), $archivo);
+                DB::commit();
+
+                return back()->with('success', 'El archivo ya fue importado anteriormente. Se completaron los datos de asistencia disponibles.');
+            }
 
             DB::table('importacion_excels')->where('checksum', $hash)
                 ->where('estadoImportacion', '!=', 'PROCESADA')->delete();

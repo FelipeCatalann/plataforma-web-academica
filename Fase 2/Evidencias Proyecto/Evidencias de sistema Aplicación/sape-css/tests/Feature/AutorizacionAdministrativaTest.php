@@ -7,6 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -51,6 +52,34 @@ class AutorizacionAdministrativaTest extends TestCase
         $this->actingAs($user)->get(route('profesor.jefe'))->assertOk();
         $user->removeRole($rol);
         $this->getJson(route('profesor.jefe'))->assertForbidden();
+    }
+
+    public static function rolesDocentes(): array
+    {
+        return [
+            'jefatura' => [true, false],
+            'asignatura' => [false, true],
+            'ambos' => [true, true],
+        ];
+    }
+
+    #[DataProvider('rolesDocentes')]
+    public function test_el_portal_docente_publica_los_permisos_de_sus_rutas(bool $jefatura, bool $asignatura): void
+    {
+        $user = User::factory()->create();
+        if ($jefatura) {
+            $user->assignRole(Role::findOrCreate('Profesor Jefe', 'web'));
+        }
+        if ($asignatura) {
+            $user->assignRole(Role::findOrCreate('Profesor de Asignatura', 'web'));
+        }
+
+        $this->actingAs($user)->get(route('dashboard'))->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Profesor/Dashboard')
+            ->where('auth.puedeVerJefatura', $jefatura)
+            ->where('auth.puedeVerAsignaturas', $asignatura));
+        $this->get(route('profesor.jefe'))->assertStatus($jefatura ? 200 : 403);
+        $this->get(route('profesor.asignatura'))->assertStatus($asignatura ? 200 : 403);
     }
 
     #[DataProvider('rutasAdministrativas')]

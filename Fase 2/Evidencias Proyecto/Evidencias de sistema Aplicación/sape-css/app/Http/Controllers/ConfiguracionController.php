@@ -330,7 +330,7 @@ class ConfiguracionController extends Controller
             $baseUrl = ConexionIA::validarBaseUrl(($validado['base_url'] ?? '') ?: $proveedorInfo['base_url']);
             $apiKey = $apiKeyInput;
             $proveedorNombre = $proveedorInfo['nombre'];
-            $activeModel = $validado['model_id'] ?? 'llama-3.3-70b-versatile';
+            $activeModel = $validado['model_id'] ?? ConfiguracionIAService::MODELO_CHAT_DEFAULT;
         } else {
             $credenciales = $iaService->resolverCredencialesAgente($user, 'chat', [
                 'modelo_id' => $validado['modelo_id'] ?? null,

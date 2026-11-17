@@ -83,18 +83,43 @@ export const VARIANTES_MODO_OSCURO = [
     },
 ];
 
+export const MODELOS_GROQ_SISTEMA = [
+    {
+        id: 'openai/gpt-oss-120b',
+        model_id: 'openai/gpt-oss-120b',
+        nombre: 'GPT-OSS 120B',
+        subtitulo: 'Groq · Razonamiento profundo',
+        proveedor: 'groq',
+        proveedor_nombre: 'Groq Cloud',
+        origen: 'sistema',
+    },
+    {
+        id: 'qwen/qwen3.8-27b',
+        model_id: 'qwen/qwen3.8-27b',
+        nombre: 'Qwen 3.8 27B',
+        subtitulo: 'Groq · Redacción formal',
+        proveedor: 'groq',
+        proveedor_nombre: 'Groq Cloud',
+        origen: 'sistema',
+    },
+    {
+        id: 'openai/gpt-oss-20b',
+        model_id: 'openai/gpt-oss-20b',
+        nombre: 'GPT-OSS 20B',
+        subtitulo: 'Groq · Consultas rápidas',
+        proveedor: 'groq',
+        proveedor_nombre: 'Groq Cloud',
+        origen: 'sistema',
+    },
+];
+
 export const PROVEEDORES_IA = [
     {
         id: 'groq',
         nombre: 'Groq Cloud',
         subtitulo: 'Inferencia ultrarrápida',
         placeholderKey: 'gsk_...',
-        modelosSugeridos: [
-            { id: 'llama-3.3-70b-versatile', nombre: 'Llama 3.3 70B' },
-            { id: 'openai/gpt-oss-120b', nombre: 'GPT-OSS 120B' },
-            { id: 'qwen/qwen3.8-27b', nombre: 'Qwen 3.8 27B' },
-            { id: 'deepseek-r1-distill-llama-70b', nombre: 'DeepSeek R1 70B' },
-        ],
+        modelosSugeridos: MODELOS_GROQ_SISTEMA.map(({ id, nombre }) => ({ id, nombre })),
     },
     {
         id: 'openai',
@@ -137,36 +162,6 @@ export const PROVEEDORES_IA = [
             { id: 'anthropic/claude-3.5-sonnet', nombre: 'Claude 3.5 Sonnet' },
             { id: 'deepseek/deepseek-chat', nombre: 'DeepSeek V3' },
         ],
-    },
-];
-
-export const MODELOS_GROQ_SISTEMA = [
-    {
-        id: 'llama-3.3-70b-versatile',
-        model_id: 'llama-3.3-70b-versatile',
-        nombre: 'Llama 3.3 70B',
-        subtitulo: 'Groq · Equilibrado y veloz',
-        proveedor: 'groq',
-        proveedor_nombre: 'Groq Cloud',
-        origen: 'sistema',
-    },
-    {
-        id: 'openai/gpt-oss-120b',
-        model_id: 'openai/gpt-oss-120b',
-        nombre: 'GPT-OSS 120B',
-        subtitulo: 'Groq · Razonamiento profundo',
-        proveedor: 'groq',
-        proveedor_nombre: 'Groq Cloud',
-        origen: 'sistema',
-    },
-    {
-        id: 'qwen/qwen3.8-27b',
-        model_id: 'qwen/qwen3.8-27b',
-        nombre: 'Qwen 3.8 27B',
-        subtitulo: 'Groq · Redacción formal',
-        proveedor: 'groq',
-        proveedor_nombre: 'Groq Cloud',
-        origen: 'sistema',
     },
 ];
 
@@ -256,11 +251,11 @@ export const PREFERENCIAS_DEFAULT = {
     incluirFirmaWhatsapp: true,
     firmaWhatsapp: 'Colegio San Sebastián de Melipilla',
     criterioDefaultWhatsapp: 'auto', // 'auto' | 'alerta_academica' | 'citacion_entrevista' | 'reporte_avance' | 'reconocimiento'
-    modeloActivoId: 'llama-3.3-70b-versatile',
-    modeloActivoNombre: 'Llama 3.3 70B',
-    modeloActivoProveedor: 'Groq Cloud',
+    modeloActivoId: MODELOS_GROQ_SISTEMA[0].id,
+    modeloActivoNombre: MODELOS_GROQ_SISTEMA[0].nombre,
+    modeloActivoProveedor: MODELOS_GROQ_SISTEMA[0].proveedor_nombre,
     usarMismoModeloAgentes: true,
-    modeloChatId: 'openai/gpt-oss-120b',
+    modeloChatId: MODELOS_GROQ_SISTEMA[0].id,
     modeloInformesId: 'qwen/qwen3.8-27b',
     tonoInformeIA: 'formal_decreto67', // 'formal_decreto67' | 'cercano_familia' | 'ejecutivo_breve'
     extensionIA: 'equilibrada', // 'breve' | 'equilibrada' | 'detallada'
@@ -280,10 +275,22 @@ export function leerPreferenciasSape() {
         const raw = window.localStorage.getItem(STORAGE_KEY);
         if (!raw) return { ...PREFERENCIAS_DEFAULT };
         const parsed = JSON.parse(raw);
-        return {
+        const preferencias = {
             ...PREFERENCIAS_DEFAULT,
             ...(parsed && typeof parsed === 'object' ? parsed : {}),
         };
+        const modeloRetirado = 'llama-3.3-70b-versatile';
+        if (preferencias.modeloActivoId === modeloRetirado) {
+            preferencias.modeloActivoId = PREFERENCIAS_DEFAULT.modeloActivoId;
+            preferencias.modeloActivoNombre = PREFERENCIAS_DEFAULT.modeloActivoNombre;
+            preferencias.modeloActivoProveedor = PREFERENCIAS_DEFAULT.modeloActivoProveedor;
+        }
+        for (const campo of ['modeloChatId', 'modeloInformesId']) {
+            if (preferencias[campo] === modeloRetirado) {
+                preferencias[campo] = PREFERENCIAS_DEFAULT[campo];
+            }
+        }
+        return preferencias;
     } catch {
         return { ...PREFERENCIAS_DEFAULT };
     }

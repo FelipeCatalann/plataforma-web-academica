@@ -352,6 +352,36 @@ html[data-theme="dark"] .text-blue-700 {
     color: #93c5fd !important;
 }
 
+.mapa-termico-bajo {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.mapa-termico-medio {
+    background-color: #fef3c7;
+    color: #854d0e;
+}
+
+.mapa-termico-alto {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+html[data-theme="dark"] .mapa-termico-bajo {
+    background-color: #50252d;
+    color: #fecaca;
+}
+
+html[data-theme="dark"] .mapa-termico-medio {
+    background-color: #413018;
+    color: #fde68a;
+}
+
+html[data-theme="dark"] .mapa-termico-alto {
+    background-color: #153b35;
+    color: #a7f3d0;
+}
+
 /* 10. Gráficos Recharts (Modo Claro y Modo Oscuro) */
 .recharts-wrapper,
 .recharts-wrapper *,

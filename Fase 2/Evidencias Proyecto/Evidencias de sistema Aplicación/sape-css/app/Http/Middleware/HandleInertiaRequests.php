@@ -29,9 +29,13 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $user = $request->user();
+
         return array_merge(parent::share($request), [
             'auth' => [
-                'user' => $request->user(),
+                'user' => $user,
+                'puedeVerJefatura' => fn () => $user?->hasRole('Profesor Jefe') ?? false,
+                'puedeVerAsignaturas' => fn () => $user?->hasRole('Profesor de Asignatura') ?? false,
             ],
             // Esto es lo que permite que React lea el mensaje
             'flash' => [

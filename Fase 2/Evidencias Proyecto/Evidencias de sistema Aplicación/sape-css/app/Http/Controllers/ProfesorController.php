@@ -6,6 +6,8 @@ use App\Models\Apoderado;
 use App\Models\Curso;
 use App\Models\EnlaceWhatsApp;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class ProfesorController extends Controller
@@ -22,6 +24,7 @@ class ProfesorController extends Controller
         if ($cursoBase) {
             $cursoId = $cursoBase->id;
             $curso = Curso::with([
+                'asignaturas:id,nombre',
                 'estudiantes' => fn ($query) => $query->where('matriculas.vigente', true),
                 'estudiantes.calificaciones' => function ($query) use ($cursoId) {
                     $query->select(
@@ -61,7 +64,9 @@ class ProfesorController extends Controller
                 ->get()
                 ->groupBy('matricula_id');
 
-            $curso->estudiantes->each(function ($estudiante) use ($apoderadosPorId, $enlacesPorMatricula) {
+            $asistenciaPorMatricula = $this->asistenciaAnual($matriculaIds, (int) $curso->anioEscolar);
+
+            $curso->estudiantes->each(function ($estudiante) use ($apoderadosPorId, $enlacesPorMatricula, $asistenciaPorMatricula) {
                 $apoderadoId = $estudiante->pivot?->apoderado_id;
                 $matriculaId = $estudiante->pivot?->id;
                 $apoderado = $apoderadoId ? $apoderadosPorId->get($apoderadoId) : null;
@@ -69,6 +74,7 @@ class ProfesorController extends Controller
                 $ultimoEnlace = $enlaces->first();
 
                 $estudiante->setAttribute('matricula_id', $matriculaId);
+                $estudiante->setAttribute('asistencia_anual', $asistenciaPorMatricula->get($matriculaId));
                 $estudiante->setAttribute('apoderado_nombre', $apoderado?->nombre ?? 'Apoderado Titular');
                 $estudiante->setAttribute('apoderado_telefono', $apoderado?->telefono ?? '');
                 $estudiante->setAttribute('apoderado_telefono_vigente', (bool) ($apoderado?->telefonoVigente ?? true));
@@ -86,6 +92,29 @@ class ProfesorController extends Controller
         return Inertia::render('Profesor/PanelJefe', [
             'curso' => $curso,
         ]);
+    }
+
+    private function asistenciaAnual(Collection $matriculaIds, int $anio): Collection
+    {
+        $importada = DB::table('matriculas')->whereIn('id', $matriculaIds)
+            ->whereNotNull('asistencia_pct')
+            ->pluck('asistencia_pct', 'id')
+            ->map(fn ($porcentaje) => (float) $porcentaje);
+
+        $sinAsistencia = $matriculaIds->diff($importada->keys());
+        if ($sinAsistencia->isEmpty()) {
+            return $importada;
+        }
+
+        $desdeRegistros = DB::table('registro_asistencias')->whereIn('matricula_id', $sinAsistencia)
+            ->whereBetween('fecha', ["$anio-01-01", "$anio-12-31"])
+            ->whereIn('estado', ['PRESENTE', 'ATRASO', 'AUSENTE', 'JUSTIFICADA'])
+            ->selectRaw("matricula_id, count(*) as total, sum(case when estado in ('PRESENTE', 'ATRASO') then 1 else 0 end) as presentes")
+            ->groupBy('matricula_id')
+            ->get()
+            ->mapWithKeys(fn ($registro) => [$registro->matricula_id => round(100 * $registro->presentes / $registro->total, 2)]);
+
+        return $importada->union($desdeRegistros);
     }
 
     public function panelAsignatura(Request $request)

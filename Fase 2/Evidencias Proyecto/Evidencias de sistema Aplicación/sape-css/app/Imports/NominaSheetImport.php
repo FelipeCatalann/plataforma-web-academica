@@ -14,6 +14,8 @@ class NominaSheetImport implements ToCollection, WithHeadingRow
 {
     private array $matriculasPlanilla = [];
 
+    public function __construct(private bool $soloCompletarAsistencia = false) {}
+
     public function incluyeMatricula(array $identidad): bool
     {
         return isset($this->matriculasPlanilla[$this->clave($identidad)]);
@@ -35,6 +37,7 @@ class NominaSheetImport implements ToCollection, WithHeadingRow
             $numero = $indice + 2;
             $identidad = IdentidadSyscol::datos($row, 'NOMINA', $numero);
             $runToken = $identidad['run'];
+            $asistencia = $this->asistencia($row['asistencia_pct'] ?? null);
             if ($this->incluyeMatricula($identidad) || trim((string) ($row['nombres'] ?? '')) === '') {
                 IdentidadSyscol::rechazar('NOMINA', $numero, 'Falta el nombre o la matrícula está repetida en la planilla.');
             }
@@ -46,6 +49,17 @@ class NominaSheetImport implements ToCollection, WithHeadingRow
 
             // 1. Buscar o crear el Curso
             $curso = IdentidadSyscol::curso($identidad['curso'], 'NOMINA', $numero);
+
+            if ($this->soloCompletarAsistencia) {
+                if ($curso && $asistencia !== null) {
+                    DB::table('matriculas')->where('curso_id', $curso->id)
+                        ->whereIn('estudiante_id', DB::table('estudiantes')->where('identificadorInterno', $runToken)->select('id'))
+                        ->whereNull('asistencia_pct')
+                        ->update(['asistencia_pct' => $asistencia, 'updated_at' => $now]);
+                }
+
+                continue;
+            }
 
             $cursoId = $curso ? $curso->id : (string) Str::uuid();
 
@@ -120,13 +134,35 @@ class NominaSheetImport implements ToCollection, WithHeadingRow
                     'fechaIngreso' => $fechaIngreso,
                     'estado' => $retirado ? 'RETIRADO' : 'ACTIVO',
                     'vigente' => ! $retirado,
+                    'asistencia_pct' => $asistencia,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ]);
-            } elseif ($retirado && $matriculaExistente->vigente) {
+
+                continue;
+            }
+
+            $cambios = [];
+            if ($retirado && $matriculaExistente->vigente) {
+                $cambios = ['estado' => 'RETIRADO', 'vigente' => false];
+            }
+            if ($asistencia !== null && (float) ($matriculaExistente->asistencia_pct ?? -1) !== $asistencia) {
+                $cambios['asistencia_pct'] = $asistencia;
+            }
+            if ($cambios !== []) {
                 DB::table('matriculas')->where('id', $matriculaExistente->id)
-                    ->update(['estado' => 'RETIRADO', 'vigente' => false, 'updated_at' => $now]);
+                    ->update([...$cambios, 'updated_at' => $now]);
             }
         }
+    }
+
+    private function asistencia(mixed $valor): ?float
+    {
+        $valor = str_replace(',', '.', trim(rtrim(trim((string) $valor), '%')));
+        if (! is_numeric($valor) || (float) $valor < 0 || (float) $valor > 100) {
+            return null;
+        }
+
+        return round((float) $valor, 2);
     }
 }

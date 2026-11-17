@@ -14,6 +14,7 @@ import {
     ResponsiveContainer,
 } from 'recharts';
 import ChatbotPedagogico from '@/Components/ChatbotPedagogico';
+import MapaTermicoRendimiento from '@/Components/MapaTermicoRendimiento';
 import ModalInformeIA from '@/Components/ModalInformeIA';
 import ModalWhatsAppApoderado from '@/Components/ModalWhatsAppApoderado';
 
@@ -282,6 +283,28 @@ export default function PanelJefe({ auth, curso }) {
                                     {curso.estudiantes.length}
                                 </span>
                             </button>
+
+                            <button
+                                type="button"
+                                aria-current={vistaActiva === 'mapa' ? 'true' : undefined}
+                                onClick={() => setVistaActiva('mapa')}
+                                className={`whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3.5 md:px-4 py-2.5 md:py-3 rounded-xl transition-all duration-200 flex items-center gap-2.5 md:gap-3 ${
+                                    vistaActiva === 'mapa'
+                                        ? 'bg-sape-burdeo text-sape-amarillo shadow-md font-bold'
+                                        : 'text-slate-600 hover:bg-slate-50 hover:text-sape-burdeo font-semibold'
+                                }`}
+                            >
+                                <svg
+                                    aria-hidden="true"
+                                    className={`h-5 w-5 ${vistaActiva === 'mapa' ? 'text-sape-amarillo' : 'text-slate-400'}`}
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 3v18m6-18v18M3 9h18M3 15h18M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
+                                </svg>
+                                <span className="text-xs sm:text-sm">Mapa térmico</span>
+                            </button>
                         </nav>
 
                         <h2 className="hidden md:block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-3 mt-6 px-3">
@@ -316,7 +339,7 @@ export default function PanelJefe({ auth, curso }) {
                     </div>
                 </aside>
 
-                <section aria-label="Área de trabajo de Jefatura" className="flex-1 p-4 sm:p-6 md:p-8 bg-slate-50/70 overflow-y-auto">
+                <section aria-label="Área de trabajo de Jefatura" className="min-w-0 flex-1 p-4 sm:p-6 md:p-8 bg-slate-50 overflow-y-auto">
                     <AnimatePresence mode="wait">
                         {vistaActiva === 'resumen' && (
                             <motion.div
@@ -485,6 +508,18 @@ export default function PanelJefe({ auth, curso }) {
                                         </ResponsiveContainer>
                                     </div>
                                 </div>
+                            </motion.div>
+                        )}
+
+                        {vistaActiva === 'mapa' && (
+                            <motion.div key="vista-mapa" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                                <MapaTermicoRendimiento
+                                    curso={curso}
+                                    onVerFicha={(estudiante) => {
+                                        setEstudianteActivo(estudiante);
+                                        setVistaActiva('tabla');
+                                    }}
+                                />
                             </motion.div>
                         )}
 
