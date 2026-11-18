@@ -64,7 +64,13 @@ jobs:
       - run: composer audit --locked --no-interaction
       - run: cp .env.example .env && php artisan key:generate
       - run: npm ci && npm run build
-      - run: npm audit --audit-level=moderate
+      - run: npm audit --omit=dev --audit-level=moderate
+      # Excepción temporal documentada en docs/excepciones-seguridad/Excepcion temporal de seguridad picomatch.docx.
+      - name: Auditoría completa de dependencias npm
+        shell: bash
+        run: |
+          npm audit --json --audit-level=moderate > "$RUNNER_TEMP/sape-npm-audit.json" || audit_status=$?
+          node scripts/check-npm-audit.mjs "$RUNNER_TEMP/sape-npm-audit.json" "${audit_status:-0}"
       - run: ./vendor/bin/pint --test
       - run: php artisan test
 
