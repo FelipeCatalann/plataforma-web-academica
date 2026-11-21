@@ -92,4 +92,44 @@ class PrivacidadServiceTest extends TestCase
     {
         $this->assertSame('Hola mundo.', $this->servicio->restaurar('Hola mundo.', []));
     }
+
+    /** Nombre completo de un alumno posterior debe coincidir íntegro sin partirse con nombres compartidos previos. */
+    public function test_nombre_completo_tiene_prioridad_global_sobre_nombres_compartidos_de_otros_alumnos(): void
+    {
+        $curso = [
+            ['nombres' => 'Camila Emilio', 'apellidos' => 'Contreras Núñez'],
+            ['nombres' => 'Martín Paz', 'apellidos' => 'Cifuentes Sandoval'],
+            ['nombres' => 'Martín Emilio', 'apellidos' => 'Sandoval Sandoval'],
+        ];
+
+        ['texto' => $anonimo, 'mapa' => $mapa] = $this->servicio->anonimizar(
+            'Diseña un plan de acción para Martín Emilio Sandoval Sandoval.',
+            $curso
+        );
+
+        $this->assertSame('Diseña un plan de acción para [ALUMNO_3].', $anonimo);
+        $this->assertSame(['[ALUMNO_3]' => 'Martín Emilio Sandoval Sandoval'], $mapa);
+        $this->assertSame(
+            'Diseña un plan de acción para Martín Emilio Sandoval Sandoval.',
+            $this->servicio->restaurar($anonimo, $mapa)
+        );
+    }
+
+    /** Un primer nombre compartido por varios alumnos se anonimiza sin atribuirlo a un alumno equivocado. */
+    public function test_nombre_suelto_compartido_se_oculta_sin_atribuirlo_a_otro_estudiante(): void
+    {
+        $curso = [
+            ['nombres' => 'Martín Paz', 'apellidos' => 'Cifuentes Sandoval'],
+            ['nombres' => 'Martín Emilio', 'apellidos' => 'Sandoval Sandoval'],
+        ];
+
+        ['texto' => $anonimo, 'mapa' => $mapa] = $this->servicio->anonimizar(
+            '¿Cómo va Martín este semestre?',
+            $curso
+        );
+
+        $this->assertStringNotContainsString('Martín', $anonimo);
+        $this->assertStringContainsString('[ALUMNO_SIN_ESPECIFICAR]', $anonimo);
+        $this->assertSame([], $mapa);
+    }
 }

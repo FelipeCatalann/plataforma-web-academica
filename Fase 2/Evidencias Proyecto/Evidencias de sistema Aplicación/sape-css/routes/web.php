@@ -67,7 +67,7 @@ Route::middleware(['auth', 'verified', 'role:Administrador'])->group(function ()
     Route::get('/ver-modelos-groq', function () {
         try {
             $response = ConexionIA::cliente('https://api.groq.com/openai/v1', [
-                'Authorization' => 'Bearer '.env('GROQ_API_KEY'),
+                'Authorization' => 'Bearer '.config('services.ia.groq_api_key'),
             ], 8)->get('models');
         } catch (ConnectionException) {
             return response()->json(['message' => 'No fue posible conectar con Groq.'], 503);

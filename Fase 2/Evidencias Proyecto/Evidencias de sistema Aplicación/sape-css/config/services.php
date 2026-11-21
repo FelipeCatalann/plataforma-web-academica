@@ -15,6 +15,7 @@ return [
     */
 
     'ia' => [
+        'groq_api_key' => env('GROQ_API_KEY', ''),
         'solicitudes_diarias' => env('IA_SOLICITUDES_DIARIAS', 2000),
         'dias_historial' => env('IA_DIAS_HISTORIAL', 30),
         'purgar_historial' => env('IA_PURGAR_HISTORIAL', false),

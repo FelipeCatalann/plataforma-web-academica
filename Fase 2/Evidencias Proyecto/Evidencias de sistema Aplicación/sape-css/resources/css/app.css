@@ -139,6 +139,7 @@ html[data-theme="dark"] body {
 html[data-theme="dark"] .bg-slate-50\/90,
 html[data-theme="dark"] .bg-slate-50\/80,
 html[data-theme="dark"] .bg-slate-50\/70,
+html[data-theme="dark"] .bg-slate-50\/40,
 html[data-theme="dark"] .bg-slate-50 {
     background-color: var(--dm-canvas) !important;
 }
@@ -153,7 +154,8 @@ html[data-theme="dark"] .bg-white .bg-slate-50,
 html[data-theme="dark"] .bg-white .bg-slate-50\/90,
 html[data-theme="dark"] .bg-white .bg-slate-50\/80,
 html[data-theme="dark"] .bg-white .bg-slate-50\/70,
-html[data-theme="dark"] .bg-white .bg-slate-50\/50 {
+html[data-theme="dark"] .bg-white .bg-slate-50\/50,
+html[data-theme="dark"] .bg-white .bg-slate-50\/40 {
     background-color: var(--dm-elevated) !important;
 }
 
@@ -166,14 +168,21 @@ html[data-theme="dark"] .bg-white\/80,
 html[data-theme="dark"] .bg-white\/90,
 html[data-theme="dark"] .bg-white\/95,
 html[data-theme="dark"] .hover\:bg-white:hover,
-html[data-theme="dark"] .hover\:bg-white\/60:hover {
+html[data-theme="dark"] .hover\:bg-white\/60:hover,
+html[data-theme="dark"] .focus-within\:bg-white:focus-within {
     background-color: var(--dm-inset) !important;
 }
 
 html[data-theme="dark"] .bg-slate-100,
 html[data-theme="dark"] .bg-slate-100\/90,
-html[data-theme="dark"] .bg-slate-100\/80 {
+html[data-theme="dark"] .bg-slate-100\/80,
+html[data-theme="dark"] .bg-slate-100\/70 {
     background-color: var(--dm-hover) !important;
+    color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .bg-slate-200 {
+    background-color: var(--dm-border) !important;
     color: #f8fafc !important;
 }
 
@@ -274,7 +283,17 @@ html[data-theme="dark"] .bg-sape-burdeo\/\[0\.02\] {
 }
 
 /* 8. Botones con texto o borde rojo / secundario: TEXTO BLANCO y borde rojo limpio */
-html[data-theme="dark"] button.bg-white,
+html[data-theme="dark"] button.bg-white {
+    background-color: var(--dm-elevated) !important;
+    border-color: var(--dm-input-border) !important;
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"] button.bg-white:hover {
+    background-color: var(--dm-hover) !important;
+    color: #ffffff !important;
+}
+
 html[data-theme="dark"] button.bg-slate-100,
 html[data-theme="dark"] button.text-red-700,
 html[data-theme="dark"] button.text-red-600,
@@ -286,6 +305,18 @@ html[data-theme="dark"] button.border-red-200 span,
 html[data-theme="dark"] button.text-red-700 span,
 html[data-theme="dark"] button.text-red-600 span {
     color: #ffffff !important;
+}
+
+html[data-theme="dark"] .bg-red-100,
+html[data-theme="dark"] .hover\:bg-red-100:hover {
+    background-color: rgba(239, 68, 68, 0.24) !important;
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"] .bg-emerald-100,
+html[data-theme="dark"] .hover\:bg-emerald-100:hover {
+    background-color: rgba(16, 185, 129, 0.24) !important;
+    color: #d1fae5 !important;
 }
 
 html[data-theme="dark"] button.border-red-300,

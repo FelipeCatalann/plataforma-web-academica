@@ -1,10 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     BarChart,
     Bar,
+    AreaChart,
+    Area,
+    LineChart,
+    Line,
+    LabelList,
     Cell,
     ReferenceLine,
     XAxis,
@@ -14,9 +19,62 @@ import {
     ResponsiveContainer,
 } from 'recharts';
 import ChatbotPedagogico from '@/Components/ChatbotPedagogico';
+import { redondearNotaChilena } from '@/Components/Chat/AnalizadorVisualChat';
 import MapaTermicoRendimiento from '@/Components/MapaTermicoRendimiento';
 import ModalInformeIA from '@/Components/ModalInformeIA';
 import ModalWhatsAppApoderado from '@/Components/ModalWhatsAppApoderado';
+
+const PALETAS_GRAFICO_ASIGNATURAS = [
+    {
+        id: 'burdeo',
+        nombre: 'Burdeo CSS',
+        top: '#9A2319',
+        bottom: '#58110B',
+        stroke: '#6E1710',
+        swatch: '#6E1710',
+    },
+    {
+        id: 'semaforo',
+        nombre: 'Semáforo',
+        top: '#059669',
+        bottom: '#047857',
+        stroke: '#059669',
+        swatch: 'linear-gradient(135deg, #DC2626 0%, #D97706 50%, #059669 100%)',
+        porTramo: true,
+    },
+    {
+        id: 'esmeralda',
+        nombre: 'Esmeralda',
+        top: '#10B981',
+        bottom: '#047857',
+        stroke: '#059669',
+        swatch: '#059669',
+    },
+    {
+        id: 'azul',
+        nombre: 'Azul Ejecutivo',
+        top: '#3B82F6',
+        bottom: '#1D4ED8',
+        stroke: '#2563EB',
+        swatch: '#2563EB',
+    },
+    {
+        id: 'ambar',
+        nombre: 'Ámbar Dorado',
+        top: '#F59E0B',
+        bottom: '#B45309',
+        stroke: '#D97706',
+        swatch: '#D97706',
+    },
+    {
+        id: 'pizarra',
+        nombre: 'Pizarra',
+        top: '#475569',
+        bottom: '#1E293B',
+        stroke: '#334155',
+        swatch: '#334155',
+    },
+];
 
 export default function PanelJefe({ auth, curso }) {
     const [vistaActiva, setVistaActiva] = useState('resumen');
@@ -30,6 +88,87 @@ export default function PanelJefe({ auth, curso }) {
     const [modalWhatsAppOpen, setModalWhatsAppOpen] = useState(false);
     const [estudianteParaWhatsApp, setEstudianteParaWhatsApp] = useState(null);
     const [seguimientoLocal, setSeguimientoLocal] = useState({});
+
+    const [panelPersonalizarGrafico, setPanelPersonalizarGrafico] = useState(false);
+    const [paginaGrafico, setPaginaGrafico] = useState(0);
+    const colorDebounceRef = useRef(null);
+    const colorPickerInputRef = useRef(null);
+    const [configGrafico, setConfigGrafico] = useState(() => {
+        const porDefecto = {
+            esquemaColor: 'burdeo',
+            colorPersonalizado: '#6E1710',
+            tipoGrafico: 'barras',
+            orden: 'original',
+            filtroTramo: 'todos',
+            barrasPorVista: 10,
+            mostrarValores: true,
+            mostrarPromedioCurso: false,
+            mostrarGrilla: true,
+        };
+        if (typeof window === 'undefined') return porDefecto;
+        try {
+            const guardado = window.localStorage.getItem('sape_config_grafico_jefe');
+            return guardado ? { ...porDefecto, ...JSON.parse(guardado) } : porDefecto;
+        } catch {
+            return porDefecto;
+        }
+    });
+
+    const actualizarConfigGrafico = (parcial) => {
+        setConfigGrafico((prev) => {
+            const siguiente = { ...prev, ...parcial };
+            if (typeof window !== 'undefined') {
+                try {
+                    window.localStorage.setItem('sape_config_grafico_jefe', JSON.stringify(siguiente));
+                } catch {
+                    // Ignorar error de almacenamiento
+                }
+            }
+            return siguiente;
+        });
+    };
+
+    const manejarCambioColorLibre = (e) => {
+        const nuevoColor = e.target.value;
+        if (colorDebounceRef.current) {
+            clearTimeout(colorDebounceRef.current);
+        }
+        colorDebounceRef.current = setTimeout(() => {
+            actualizarConfigGrafico({
+                esquemaColor: 'custom',
+                colorPersonalizado: nuevoColor,
+            });
+        }, 180);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (colorDebounceRef.current) clearTimeout(colorDebounceRef.current);
+        };
+    }, []);
+
+    const restablecerConfigGrafico = () => {
+        const base = {
+            esquemaColor: 'burdeo',
+            colorPersonalizado: '#6E1710',
+            tipoGrafico: 'barras',
+            orden: 'original',
+            filtroTramo: 'todos',
+            barrasPorVista: 10,
+            mostrarValores: true,
+            mostrarPromedioCurso: false,
+            mostrarGrilla: true,
+        };
+        setConfigGrafico(base);
+        setPaginaGrafico(0);
+        if (typeof window !== 'undefined') {
+            try {
+                window.localStorage.removeItem('sape_config_grafico_jefe');
+            } catch {
+                // Ignorar error
+            }
+        }
+    };
 
     const { asignaturas, datosGrafico, kpisCurso } = useMemo(() => {
         if (!curso || !curso.estudiantes) {
@@ -74,8 +213,11 @@ export default function PanelJefe({ auth, curso }) {
 
             let tieneRoja = false;
             porAsigEst.forEach((d) => {
-                if (d.count > 0 && d.suma / d.count < 4.0) {
-                    tieneRoja = true;
+                if (d.count > 0) {
+                    const promAsig = redondearNotaChilena(d.suma / d.count);
+                    if (promAsig !== null && promAsig < 4.0) {
+                        tieneRoja = true;
+                    }
                 }
             });
             if (tieneRoja) alumnosConRojas += 1;
@@ -89,7 +231,7 @@ export default function PanelJefe({ auth, curso }) {
             if (data.count > 0) {
                 arrayGrafico.push({
                     nombre,
-                    promedio: parseFloat((data.total / data.count).toFixed(1)),
+                    promedio: redondearNotaChilena(data.total / data.count),
                 });
             }
         });
@@ -100,7 +242,7 @@ export default function PanelJefe({ auth, curso }) {
             asignaturas: arrayAsignaturas,
             datosGrafico: arrayGrafico,
             kpisCurso: {
-                promedioGeneral: countGlobal > 0 ? (sumaGlobal / countGlobal).toFixed(1) : '-',
+                promedioGeneral: countGlobal > 0 ? redondearNotaChilena(sumaGlobal / countGlobal).toFixed(1) : '-',
                 enAlerta: alumnosConRojas,
                 mejorAsig: ordenadas.length > 0 ? ordenadas[0] : null,
                 criticaAsig: ordenadas.length > 0 ? ordenadas[ordenadas.length - 1] : null,
@@ -115,7 +257,7 @@ export default function PanelJefe({ auth, curso }) {
             .filter((v) => !isNaN(v) && v > 0);
         if (valores.length === 0) return '-';
         const suma = valores.reduce((a, b) => a + b, 0);
-        return (suma / valores.length).toFixed(1);
+        return redondearNotaChilena(suma / valores.length).toFixed(1);
     };
 
     const contarAsignaturasBajo40 = (estudiante) => {
@@ -134,8 +276,11 @@ export default function PanelJefe({ auth, curso }) {
         });
         let criticas = 0;
         porAsig.forEach((datos) => {
-            if (datos.count > 0 && datos.suma / datos.count < 4.0) {
-                criticas += 1;
+            if (datos.count > 0) {
+                const promAsig = redondearNotaChilena(datos.suma / datos.count);
+                if (promAsig !== null && promAsig < 4.0) {
+                    criticas += 1;
+                }
             }
         });
         return criticas;
@@ -207,6 +352,500 @@ export default function PanelJefe({ auth, curso }) {
             </AuthenticatedLayout>
         );
     }
+
+    const renderBloqueGraficoAsignaturas = (
+        idPrefijo = 'v',
+        claseContenedor = 'bg-white p-6 rounded-2xl shadow-sm border border-slate-200',
+        opciones = {}
+    ) => {
+        const {
+            alturaClase = 'h-96',
+            alturaEstilo = undefined,
+            xAxisHeight = 68,
+            bottomMargin = 12,
+            mostrarResumenTramos = false,
+            claseCabecera = '',
+        } = opciones;
+
+        const dividirNombreHorizontal = (texto, maxPorLinea = 15, maxLineas = 3) => {
+            const palabras = String(texto || '').trim().split(/\s+/);
+            const lineas = [];
+            let actual = '';
+
+            palabras.forEach((palabra) => {
+                const candidato = actual ? `${actual} ${palabra}` : palabra;
+                if (candidato.length <= maxPorLinea || !actual) {
+                    actual = candidato;
+                } else {
+                    lineas.push(actual);
+                    actual = palabra;
+                }
+            });
+            if (actual) lineas.push(actual);
+
+            if (lineas.length > maxLineas) {
+                const recortadas = lineas.slice(0, maxLineas);
+                const ultima = recortadas[maxLineas - 1];
+                recortadas[maxLineas - 1] =
+                    ultima.length > maxPorLinea - 1
+                        ? `${ultima.slice(0, maxPorLinea - 1).trim()}…`
+                        : `${ultima}…`;
+                return recortadas;
+            }
+            return lineas;
+        };
+
+        const asignaturasPorPagina = Number(configGrafico.barrasPorVista) === 15 ? 15 : 10;
+
+        const renderTickAsignatura = ({ x, y, payload }) => {
+            const texto = String(payload?.value || '');
+            const lineas = dividirNombreHorizontal(texto, asignaturasPorPagina === 15 ? 13 : 15, 3);
+            return (
+                <g transform={`translate(${x},${y})`}>
+                    <title>{texto}</title>
+                    <text
+                        x={0}
+                        y={0}
+                        textAnchor="middle"
+                        fill="#334155"
+                        fontSize={asignaturasPorPagina === 15 ? 10.5 : 11}
+                        fontWeight={700}
+                        className="recharts-text"
+                    >
+                        {lineas.map((linea, idx) => (
+                            <tspan key={idx} x={0} dy={asignaturasPorPagina === 15 ? 13 : 14}>
+                                {linea}
+                            </tspan>
+                        ))}
+                    </text>
+                </g>
+            );
+        };
+        const paletaObj =
+            configGrafico.esquemaColor === 'custom'
+                ? {
+                      id: 'custom',
+                      nombre: 'Personalizado',
+                      top: configGrafico.colorPersonalizado || '#6E1710',
+                      bottom: configGrafico.colorPersonalizado || '#6E1710',
+                      stroke: configGrafico.colorPersonalizado || '#6E1710',
+                      swatch: configGrafico.colorPersonalizado || '#6E1710',
+                  }
+                : PALETAS_GRAFICO_ASIGNATURAS.find((p) => p.id === configGrafico.esquemaColor) ||
+                  PALETAS_GRAFICO_ASIGNATURAS[0];
+
+        const obtenerColorPorPromedio = (prom) => {
+            if (prom < 4.0) return '#DC2626';
+            if (prom < 4.8) return '#D97706';
+            if (prom < 6.0) return '#059669';
+            return '#2563EB';
+        };
+
+        const datosProcesadosGrafico = [...datosGrafico]
+            .filter((item) => {
+                if (configGrafico.filtroTramo === 'critico') return item.promedio < 4.0;
+                if (configGrafico.filtroTramo === 'atencion')
+                    return item.promedio >= 4.0 && item.promedio < 4.8;
+                if (configGrafico.filtroTramo === 'adecuado') return item.promedio >= 4.8;
+                return true;
+            })
+            .sort((a, b) => {
+                if (configGrafico.orden === 'desc') return b.promedio - a.promedio;
+                if (configGrafico.orden === 'asc') return a.promedio - b.promedio;
+                return 0;
+            });
+
+        const promCursoNum = parseFloat(kpisCurso.promedioGeneral);
+        const idAreaGrad = `${idPrefijo}-jefeAreaGrad`;
+        const idBarGrad = `${idPrefijo}-jefeBarGrad`;
+
+        const totalAsignaturasFiltradas = datosProcesadosGrafico.length;
+        const totalPaginas = Math.max(1, Math.ceil(totalAsignaturasFiltradas / asignaturasPorPagina));
+        const paginaSegura = Math.min(paginaGrafico, totalPaginas - 1);
+        const indiceInicio = paginaSegura * asignaturasPorPagina;
+        const indiceFin = Math.min(indiceInicio + asignaturasPorPagina, totalAsignaturasFiltradas);
+        const datosPaginadosGrafico = datosProcesadosGrafico.slice(indiceInicio, indiceFin);
+
+        return (
+            <div className={claseContenedor}>
+                <div className={`flex flex-col lg:flex-row lg:items-center justify-between mb-4 gap-3 ${claseCabecera}`}>
+                    <div>
+                        <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                            <svg className="w-5 h-5 text-sape-burdeo shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                            Promedio del Curso por Asignatura
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                            Rendimiento académico por asignatura evaluada en {curso.nivel}° Medio {curso.letra}.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
+                        {totalAsignaturasFiltradas > asignaturasPorPagina && (
+                            <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 tabular-nums">
+                                <button
+                                    type="button"
+                                    onClick={() => setPaginaGrafico(Math.max(0, paginaSegura - 1))}
+                                    disabled={paginaSegura === 0}
+                                    aria-label={`Ver ${asignaturasPorPagina} asignaturas anteriores`}
+                                    title="Asignaturas anteriores"
+                                    className="w-7 h-7 rounded-lg flex items-center justify-center bg-white text-slate-700 border border-slate-200 hover:border-sape-burdeo hover:text-sape-burdeo disabled:opacity-40 disabled:pointer-events-none transition-colors shadow-sm"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                </button>
+                                <span className="px-2.5 text-xs font-extrabold text-slate-700">
+                                    {indiceInicio + 1}–{indiceFin} de {totalAsignaturasFiltradas}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setPaginaGrafico(Math.min(totalPaginas - 1, paginaSegura + 1))}
+                                    disabled={paginaSegura >= totalPaginas - 1}
+                                    aria-label={`Ver siguientes ${asignaturasPorPagina} asignaturas`}
+                                    title="Siguientes asignaturas"
+                                    className="w-7 h-7 rounded-lg flex items-center justify-center bg-sape-burdeo text-sape-amarillo hover:bg-sape-burdeo-hover disabled:opacity-40 disabled:pointer-events-none transition-colors shadow-sm"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </button>
+                            </div>
+                        )}
+
+                        <button
+                            type="button"
+                            onClick={() => setPanelPersonalizarGrafico((prev) => !prev)}
+                            aria-expanded={panelPersonalizarGrafico}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+                                panelPersonalizarGrafico
+                                    ? 'bg-sape-burdeo text-sape-amarillo border-sape-burdeo shadow-sm'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:border-sape-burdeo hover:text-sape-burdeo'
+                            }`}
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
+                            </svg>
+                            <span>Personalizar Gráfico</span>
+                        </button>
+
+                        <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-700 tabular-nums">
+                            {datosGrafico.length} {datosGrafico.length === 1 ? 'asignatura activa' : 'asignaturas activas'}
+                        </span>
+                    </div>
+                </div>
+
+                <AnimatePresence>
+                    {panelPersonalizarGrafico && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden mb-5"
+                        >
+                            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                                    <div>
+                                        <span className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+                                            Tipo de Visualización
+                                        </span>
+                                        <div className="grid grid-cols-3 gap-1 bg-white p-1 rounded-xl border border-slate-200">
+                                            {[
+                                                { id: 'barras', label: 'Barras' },
+                                                { id: 'area', label: 'Área' },
+                                                { id: 'linea', label: 'Línea' },
+                                            ].map((t) => (
+                                                <button
+                                                    key={t.id}
+                                                    type="button"
+                                                    onClick={() => actualizarConfigGrafico({ tipoGrafico: t.id })}
+                                                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-colors ${
+                                                        configGrafico.tipoGrafico === t.id
+                                                            ? 'bg-sape-burdeo text-sape-amarillo shadow-sm'
+                                                            : 'text-slate-600 hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    {t.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <span className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+                                            Barras por Vista
+                                        </span>
+                                        <div className="grid grid-cols-2 gap-1 bg-white p-1 rounded-xl border border-slate-200 tabular-nums">
+                                            {[
+                                                { id: 10, label: '10 barras' },
+                                                { id: 15, label: '15 barras' },
+                                            ].map((b) => (
+                                                <button
+                                                    key={b.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setPaginaGrafico(0);
+                                                        actualizarConfigGrafico({ barrasPorVista: b.id });
+                                                    }}
+                                                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-colors ${
+                                                        asignaturasPorPagina === b.id
+                                                            ? 'bg-sape-burdeo text-sape-amarillo shadow-sm'
+                                                            : 'text-slate-600 hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    {b.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <span className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+                                            Ordenar Asignaturas
+                                        </span>
+                                        <div className="grid grid-cols-3 gap-1 bg-white p-1 rounded-xl border border-slate-200">
+                                            {[
+                                                { id: 'original', label: 'Por Orden' },
+                                                { id: 'desc', label: 'Mayor nota' },
+                                                { id: 'asc', label: 'Menor nota' },
+                                            ].map((o) => (
+                                                <button
+                                                    key={o.id}
+                                                    type="button"
+                                                    onClick={() => actualizarConfigGrafico({ orden: o.id })}
+                                                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-colors ${
+                                                        configGrafico.orden === o.id
+                                                            ? 'bg-sape-burdeo text-sape-amarillo shadow-sm'
+                                                            : 'text-slate-600 hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    {o.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <span className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+                                            Filtrar Tramo
+                                        </span>
+                                        <div className="grid grid-cols-4 gap-1 bg-white p-1 rounded-xl border border-slate-200">
+                                            {[
+                                                { id: 'todos', label: 'Todas' },
+                                                { id: 'critico', label: '< 4.0' },
+                                                { id: 'atencion', label: '4.0–4.7' },
+                                                { id: 'adecuado', label: '≥ 4.8' },
+                                            ].map((tr) => (
+                                                <button
+                                                    key={tr.id}
+                                                    type="button"
+                                                    onClick={() => actualizarConfigGrafico({ filtroTramo: tr.id })}
+                                                    className={`py-1.5 px-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                                        configGrafico.filtroTramo === tr.id
+                                                            ? 'bg-sape-burdeo text-sape-amarillo shadow-sm'
+                                                            : 'text-slate-600 hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    {tr.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <span className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+                                            Paleta Cromática
+                                        </span>
+                                        <div className="flex flex-wrap items-center gap-1.5 bg-white p-1.5 rounded-xl border border-slate-200">
+                                            {PALETAS_GRAFICO_ASIGNATURAS.map((p) => (
+                                                <button
+                                                    key={p.id}
+                                                    type="button"
+                                                    onClick={() => actualizarConfigGrafico({ esquemaColor: p.id })}
+                                                    className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                                                        configGrafico.esquemaColor === p.id
+                                                            ? 'bg-slate-100 border-slate-400 text-slate-900'
+                                                            : 'border-transparent text-slate-600 hover:bg-slate-50'
+                                                    }`}
+                                                >
+                                                    <span
+                                                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                                                        style={{ background: p.swatch }}
+                                                    />
+                                                    <span>{p.nombre}</span>
+                                                </button>
+                                            ))}
+
+                                            <label
+                                                title="Elegir color personalizado"
+                                                className={`relative inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold border cursor-pointer transition-colors ${
+                                                    configGrafico.esquemaColor === 'custom'
+                                                        ? 'bg-slate-100 border-slate-400 text-slate-900'
+                                                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.098 19.902a3.75 3.75 0 0 0 5.304 0l6.401-6.402M6.75 21A3.75 3.75 0 0 1 3 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 0 0 3.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008Z" />
+                                                </svg>
+                                                <input
+                                                    type="color"
+                                                    aria-label="Selector de color libre para el gráfico"
+                                                    defaultValue={configGrafico.colorPersonalizado}
+                                                    onChange={manejarCambioColorLibre}
+                                                    className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                                                />
+                                                <span>Elegir color</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200">
+                                    <div className="flex flex-wrap items-center gap-4">
+                                        <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={configGrafico.mostrarValores}
+                                                onChange={(e) => actualizarConfigGrafico({ mostrarValores: e.target.checked })}
+                                                className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                            />
+                                            <span>Mostrar nota sobre cada asignatura</span>
+                                        </label>
+
+                                        <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={configGrafico.mostrarPromedioCurso}
+                                                onChange={(e) => actualizarConfigGrafico({ mostrarPromedioCurso: e.target.checked })}
+                                                className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                            />
+                                            <span>Línea Promedio del Curso ({kpisCurso.promedioGeneral})</span>
+                                        </label>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={restablecerConfigGrafico}
+                                        className="text-xs font-bold text-slate-500 hover:text-sape-burdeo underline transition-colors"
+                                    >
+                                        Restablecer valores por defecto
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {datosProcesadosGrafico.length > 0 ? (
+                    <>
+                        <div className={`${alturaClase} w-full`} style={alturaEstilo}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                {configGrafico.tipoGrafico === 'area' ? (
+                                    <AreaChart data={datosPaginadosGrafico} margin={{ top: 24, right: 35, left: -10, bottom: bottomMargin }}>
+                                        <defs>
+                                            <linearGradient id={idAreaGrad} x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor={paletaObj.top} stopOpacity={0.45} />
+                                                <stop offset="100%" stopColor={paletaObj.bottom} stopOpacity={0.05} />
+                                            </linearGradient>
+                                        </defs>
+                                        {configGrafico.mostrarGrilla && <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />}
+                                        <XAxis dataKey="nombre" axisLine={false} tickLine={false} interval={0} height={xAxisHeight} tick={renderTickAsignatura} />
+                                        <YAxis domain={[1, 7]} axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
+                                        <ReferenceLine y={4.0} stroke="#EF4444" strokeDasharray="4 4" label={{ value: 'Mín. 4.0', position: 'right', fill: '#DC2626', fontSize: 11, fontWeight: 700 }} />
+                                        {configGrafico.mostrarPromedioCurso && !isNaN(promCursoNum) && (
+                                            <ReferenceLine y={promCursoNum} stroke="#2563EB" strokeDasharray="3 3" label={{ value: `Prom. ${promCursoNum.toFixed(1)}`, position: 'left', fill: '#2563EB', fontSize: 11, fontWeight: 700 }} />
+                                        )}
+                                        <Tooltip cursor={false} contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)', fontWeight: 600 }} />
+                                        <Area type="monotone" dataKey="promedio" stroke={paletaObj.stroke} strokeWidth={3} fill={`url(#${idAreaGrad})`} name="Promedio Asignatura" dot={{ r: 5, fill: paletaObj.stroke, strokeWidth: 2, stroke: '#FFFFFF' }} activeDot={{ r: 7 }} animationDuration={500}>
+                                            {configGrafico.mostrarValores && <LabelList dataKey="promedio" position="top" offset={10} formatter={(v) => Number(v).toFixed(1)} style={{ fill: '#334155', fontSize: 12, fontWeight: 800 }} />}
+                                        </Area>
+                                    </AreaChart>
+                                ) : configGrafico.tipoGrafico === 'linea' ? (
+                                    <LineChart data={datosPaginadosGrafico} margin={{ top: 24, right: 35, left: -10, bottom: bottomMargin }}>
+                                        {configGrafico.mostrarGrilla && <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />}
+                                        <XAxis dataKey="nombre" axisLine={false} tickLine={false} interval={0} height={xAxisHeight} tick={renderTickAsignatura} />
+                                        <YAxis domain={[1, 7]} axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
+                                        <ReferenceLine y={4.0} stroke="#EF4444" strokeDasharray="4 4" label={{ value: 'Mín. 4.0', position: 'right', fill: '#DC2626', fontSize: 11, fontWeight: 700 }} />
+                                        {configGrafico.mostrarPromedioCurso && !isNaN(promCursoNum) && (
+                                            <ReferenceLine y={promCursoNum} stroke="#2563EB" strokeDasharray="3 3" label={{ value: `Prom. ${promCursoNum.toFixed(1)}`, position: 'left', fill: '#2563EB', fontSize: 11, fontWeight: 700 }} />
+                                        )}
+                                        <Tooltip cursor={false} contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)', fontWeight: 600 }} />
+                                        <Line type="monotone" dataKey="promedio" stroke={paletaObj.stroke} strokeWidth={3} name="Promedio Asignatura" dot={{ r: 5, fill: paletaObj.stroke, strokeWidth: 2, stroke: '#FFFFFF' }} activeDot={{ r: 7 }} animationDuration={500}>
+                                            {configGrafico.mostrarValores && <LabelList dataKey="promedio" position="top" offset={10} formatter={(v) => Number(v).toFixed(1)} style={{ fill: '#334155', fontSize: 12, fontWeight: 800 }} />}
+                                        </Line>
+                                    </LineChart>
+                                ) : (
+                                    <BarChart data={datosPaginadosGrafico} margin={{ top: 24, right: 35, left: -10, bottom: bottomMargin }}>
+                                        <defs>
+                                            <linearGradient id={idBarGrad} x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor={paletaObj.top} stopOpacity={1} />
+                                                <stop offset="100%" stopColor={paletaObj.bottom} stopOpacity={0.95} />
+                                            </linearGradient>
+                                        </defs>
+                                        {configGrafico.mostrarGrilla && <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />}
+                                        <XAxis dataKey="nombre" axisLine={false} tickLine={false} interval={0} height={xAxisHeight} tick={renderTickAsignatura} />
+                                        <YAxis domain={[1, 7]} axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
+                                        <ReferenceLine y={4.0} stroke="#EF4444" strokeDasharray="4 4" label={{ value: 'Mín. 4.0', position: 'right', fill: '#DC2626', fontSize: 11, fontWeight: 700 }} />
+                                        {configGrafico.mostrarPromedioCurso && !isNaN(promCursoNum) && (
+                                            <ReferenceLine y={promCursoNum} stroke="#2563EB" strokeDasharray="3 3" label={{ value: `Prom. ${promCursoNum.toFixed(1)}`, position: 'left', fill: '#2563EB', fontSize: 11, fontWeight: 700 }} />
+                                        )}
+                                        <Tooltip cursor={false} contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)', fontWeight: 600 }} />
+                                        <Bar dataKey="promedio" fill={`url(#${idBarGrad})`} radius={[8, 8, 0, 0]} barSize={asignaturasPorPagina === 15 ? 34 : 44} name="Promedio Asignatura" animationDuration={500}>
+                                            {paletaObj.porTramo &&
+                                                datosPaginadosGrafico.map((entry, idx) => (
+                                                    <Cell key={`cell-bar-${idx}`} fill={obtenerColorPorPromedio(entry.promedio)} />
+                                                ))}
+                                            {configGrafico.mostrarValores && <LabelList dataKey="promedio" position="top" offset={8} formatter={(v) => Number(v).toFixed(1)} style={{ fill: '#334155', fontSize: 12, fontWeight: 800 }} />}
+                                        </Bar>
+                                    </BarChart>
+                                )}
+                            </ResponsiveContainer>
+                        </div>
+                        {mostrarResumenTramos && (
+                            <div className="g-footer-tramos mt-4 pt-3.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs tabular-nums">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                                        Adecuado (≥ 4.8): {datosGrafico.filter((d) => d.promedio >= 4.8).length}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-bold">
+                                        <span className="w-2 h-2 rounded-full bg-amber-600" />
+                                        Atención (4.0–4.7): {datosGrafico.filter((d) => d.promedio >= 4.0 && d.promedio < 4.8).length}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-50 text-red-700 border border-red-200 font-bold">
+                                        <span className="w-2 h-2 rounded-full bg-red-600" />
+                                        Crítico (&lt; 4.0): {datosGrafico.filter((d) => d.promedio < 4.0).length}
+                                    </span>
+                                </div>
+                                <span className="text-slate-500 font-semibold">
+                                    Escala 1.0 a 7.0 · Mínimo de aprobación 4.0
+                                </span>
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <div className="py-14 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+                        <p className="text-slate-700 font-bold text-base">
+                            No hay asignaturas en el tramo de notas seleccionado.
+                        </p>
+                        <p className="text-slate-500 text-sm mt-1">
+                            Cambia el filtro de tramo para visualizar todas las asignaturas del curso.
+                        </p>
+                        {configGrafico.filtroTramo !== 'todos' && (
+                            <button
+                                type="button"
+                                onClick={() => actualizarConfigGrafico({ filtroTramo: 'todos' })}
+                                className="mt-4 bg-sape-burdeo text-sape-amarillo px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-sape-burdeo-hover transition-all"
+                            >
+                                Mostrar todas las asignaturas
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     return (
         <AuthenticatedLayout user={auth.user}>
@@ -348,166 +987,101 @@ export default function PanelJefe({ auth, curso }) {
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: -20 }}
                                 transition={{ duration: 0.25 }}
-                                className="space-y-6"
+                                className="flex flex-col gap-5"
                             >
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                    <div>
-                                        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-                                            Radiografía del Curso — {curso.nivel}° Medio {curso.letra}
-                                        </h1>
-                                        <p className="text-slate-600 text-sm mt-1">
-                                            Indicadores clave, alertas tempranas (Decreto 67) y rendimiento segmentado por asignatura.
-                                        </p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setVistaActiva('tabla')}
-                                        className="bg-sape-burdeo text-sape-amarillo px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-sape-burdeo-hover transition-colors self-start sm:self-auto"
-                                    >
-                                        Abrir Libro de Clases ({curso.estudiantes.length})
-                                    </button>
-                                </div>
-
-                                {/* 4 TARJETAS KPI DEL CURSO */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 tabular-nums">
-                                    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-                                        <span className="text-xs font-bold uppercase text-slate-500 tracking-wider">
-                                            Promedio del Curso
-                                        </span>
-                                        <p className="text-3xl font-extrabold text-sape-burdeo mt-1">
-                                            {kpisCurso.promedioGeneral}
-                                        </p>
-                                        <p className="text-xs text-slate-500 mt-1">
-                                            Escala 1.0 a 7.0 (Mínimo 4.0)
-                                        </p>
+                                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden tabular-nums">
+                                    <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors">
+                                        <div>
+                                            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                                                Radiografía del Curso — {curso.nivel}° Medio {curso.letra}
+                                            </h1>
+                                            <p className="text-slate-600 text-sm mt-1">
+                                                Síntesis curricular unificada y alertas de promoción escolar (Decreto 67).
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setVistaActiva('tabla')}
+                                            className="bg-sape-burdeo text-sape-amarillo px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-sape-burdeo-hover transition-colors self-start sm:self-auto shrink-0"
+                                        >
+                                            Abrir Libro de Clases ({curso.estudiantes.length})
+                                        </button>
                                     </div>
 
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setFiltroNomina('riesgo');
-                                            setVistaActiva('tabla');
-                                        }}
-                                        className="text-left bg-white p-5 rounded-2xl border border-red-200 shadow-sm cursor-pointer hover:border-red-400 hover:bg-red-50/20 transition-colors"
-                                    >
-                                        <span className="text-xs font-bold uppercase text-red-700 tracking-wider">
-                                            Alerta Decreto 67
-                                        </span>
-                                        <p className="text-3xl font-extrabold text-red-600 mt-1">
-                                            {kpisCurso.enAlerta}{' '}
-                                            <span className="text-sm font-semibold text-slate-500">alumnos</span>
-                                        </p>
-                                        <p className="text-xs text-red-700 font-bold mt-1">
-                                            Ver alumnos con 1+ asig. bajo 4.0 →
-                                        </p>
-                                    </button>
-
-                                    <div className="bg-white p-5 rounded-2xl border border-emerald-200 shadow-sm">
-                                        <span className="text-xs font-bold uppercase text-emerald-700 tracking-wider">
-                                            Mayor Rendimiento
-                                        </span>
-                                        <p className="text-xl font-extrabold text-slate-900 mt-1 truncate">
-                                            {kpisCurso.mejorAsig ? kpisCurso.mejorAsig.nombre : '-'}
-                                        </p>
-                                        <p className="text-xs text-emerald-700 font-bold mt-1">
-                                            Promedio: {kpisCurso.mejorAsig ? kpisCurso.mejorAsig.promedio : '-'}
-                                        </p>
-                                    </div>
-
-                                    <div className="bg-white p-5 rounded-2xl border border-amber-200 shadow-sm">
-                                        <span className="text-xs font-bold uppercase text-amber-700 tracking-wider">
-                                            Foco de Refuerzo
-                                        </span>
-                                        <p className="text-xl font-extrabold text-slate-900 mt-1 truncate">
-                                            {kpisCurso.criticaAsig ? kpisCurso.criticaAsig.nombre : '-'}
-                                        </p>
-                                        <p className="text-xs text-amber-700 font-bold mt-1">
-                                            Promedio: {kpisCurso.criticaAsig ? kpisCurso.criticaAsig.promedio : '-'}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-2">
-                                        <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                                            <svg className="w-5 h-5 text-sape-burdeo" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                                            </svg>
-                                            Promedio del Curso por Asignatura
-                                        </h3>
-                                        <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 font-medium">
-                                            <span className="flex items-center gap-1.5">
-                                                <span className="w-3 h-3 rounded-sm bg-sape-burdeo inline-block"></span>
-                                                Adecuado (≥ 4.8)
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
+                                        <div className="p-5">
+                                            <span className="text-xs font-bold uppercase text-slate-500">
+                                                Promedio del Curso
                                             </span>
-                                            <span className="flex items-center gap-1.5">
-                                                <span className="w-3 h-3 rounded-sm bg-amber-600 inline-block"></span>
-                                                Atención (4.0–4.7)
+                                            <div className="mt-2 flex items-baseline gap-2">
+                                                <span className="text-3xl font-extrabold text-sape-burdeo">
+                                                    {kpisCurso.promedioGeneral}
+                                                </span>
+                                                <span className="text-xs font-semibold text-slate-500">
+                                                    / 7.0
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-500 mt-1">
+                                                Umbral de aprobación: 4.0
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFiltroNomina('riesgo');
+                                                setVistaActiva('tabla');
+                                            }}
+                                            className="p-5 text-left hover:bg-slate-50 transition-colors"
+                                        >
+                                            <span className="text-xs font-bold uppercase text-red-700">
+                                                Alerta Decreto 67
                                             </span>
-                                            <span className="flex items-center gap-1.5">
-                                                <span className="w-3 h-3 rounded-sm bg-red-600 inline-block"></span>
-                                                Crítico (&lt; 4.0)
+                                            <div className="mt-2 flex items-baseline gap-2">
+                                                <span className="text-3xl font-extrabold text-red-600">
+                                                    {kpisCurso.enAlerta}
+                                                </span>
+                                                <span className="text-xs font-semibold text-slate-500">
+                                                    de {curso.estudiantes.length} alumnos
+                                                </span>
+                                            </div>
+                                            <p className="text-xs font-bold text-red-700 mt-1">
+                                                Filtrar nómina en riesgo →
+                                            </p>
+                                        </button>
+
+                                        <div className="p-5">
+                                            <span className="text-xs font-bold uppercase text-emerald-700">
+                                                Mayor Rendimiento
                                             </span>
+                                            <p className="text-base font-extrabold text-slate-900 mt-2 truncate">
+                                                {kpisCurso.mejorAsig ? kpisCurso.mejorAsig.nombre : '-'}
+                                            </p>
+                                            <p className="text-xs font-bold text-emerald-700 mt-1">
+                                                Promedio {kpisCurso.mejorAsig ? kpisCurso.mejorAsig.promedio : '-'}
+                                            </p>
+                                        </div>
+
+                                        <div className="p-5">
+                                            <span className="text-xs font-bold uppercase text-amber-700">
+                                                Foco de Refuerzo
+                                            </span>
+                                            <p className="text-base font-extrabold text-slate-900 mt-2 truncate">
+                                                {kpisCurso.criticaAsig ? kpisCurso.criticaAsig.nombre : '-'}
+                                            </p>
+                                            <p className="text-xs font-bold text-amber-700 mt-1">
+                                                Promedio {kpisCurso.criticaAsig ? kpisCurso.criticaAsig.promedio : '-'}
+                                            </p>
                                         </div>
                                     </div>
-                                    <div className="h-80 w-full">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={datosGrafico} margin={{ top: 10, right: 30, left: -20, bottom: 40 }}>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                                                <XAxis
-                                                    dataKey="nombre"
-                                                    axisLine={false}
-                                                    tickLine={false}
-                                                    tick={{ fill: '#334155', fontSize: 11, fontWeight: 600 }}
-                                                    angle={-35}
-                                                    textAnchor="end"
-                                                />
-                                                <YAxis
-                                                    domain={[1, 7]}
-                                                    axisLine={false}
-                                                    tickLine={false}
-                                                    tick={{ fill: '#64748B', fontSize: 12 }}
-                                                />
-                                                <Tooltip
-                                                    cursor={{ fill: '#F8FAFC' }}
-                                                    contentStyle={{
-                                                        borderRadius: '12px',
-                                                        border: '1px solid #E2E8F0',
-                                                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)',
-                                                        fontWeight: 600,
-                                                    }}
-                                                />
-                                                <ReferenceLine
-                                                    y={4.0}
-                                                    stroke="#DC2626"
-                                                    strokeDasharray="4 4"
-                                                    strokeWidth={1.5}
-                                                    label={{
-                                                        value: 'Mín. 4.0',
-                                                        position: 'right',
-                                                        fill: '#DC2626',
-                                                        fontSize: 11,
-                                                        fontWeight: 700,
-                                                    }}
-                                                />
-                                                <Bar dataKey="promedio" radius={[6, 6, 0, 0]} barSize={32} name="Promedio Asignatura">
-                                                    {datosGrafico.map((entry, idx) => (
-                                                        <Cell
-                                                            key={`cell-${idx}`}
-                                                            fill={
-                                                                entry.promedio < 4.0
-                                                                    ? '#DC2626'
-                                                                    : entry.promedio < 4.8
-                                                                      ? '#D97706'
-                                                                      : '#6E1710'
-                                                            }
-                                                        />
-                                                    ))}
-                                                </Bar>
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    </div>
                                 </div>
+
+                                {renderBloqueGraficoAsignaturas('jefe', 'bg-white p-6 rounded-2xl shadow-sm border border-slate-200', {
+                                    alturaClase: 'h-96',
+                                    xAxisHeight: 68,
+                                    bottomMargin: 12,
+                                    mostrarResumenTramos: false,
+                                })}
                             </motion.div>
                         )}
 

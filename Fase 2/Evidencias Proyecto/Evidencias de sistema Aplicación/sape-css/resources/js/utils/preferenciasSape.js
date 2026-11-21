@@ -117,50 +117,66 @@ export const PROVEEDORES_IA = [
     {
         id: 'groq',
         nombre: 'Groq Cloud',
-        subtitulo: 'Inferencia ultrarrápida',
+        subtitulo: 'Free Key y Developer',
         placeholderKey: 'gsk_...',
-        modelosSugeridos: MODELOS_GROQ_SISTEMA.map(({ id, nombre }) => ({ id, nombre })),
+        consoleUrl: 'https://console.groq.com/keys',
+        consoleLabel: 'Groq Console',
+        modelosSugeridos: [
+            { id: 'openai/gpt-oss-120b', nombre: 'GPT-OSS 120B', etiqueta: 'Recomendado · $' },
+            { id: 'openai/gpt-oss-20b', nombre: 'GPT-OSS 20B', etiqueta: 'Ultrarrápido · $' },
+            { id: 'qwen/qwen3.8-27b', nombre: 'Qwen 3.8 27B', etiqueta: 'Informes · $$' },
+        ],
     },
     {
         id: 'openai',
-        nombre: 'OpenAI',
+        nombre: 'OpenAI (ChatGPT)',
         subtitulo: 'Modelos GPT oficiales',
         placeholderKey: 'sk-...',
+        consoleUrl: 'https://platform.openai.com/api-keys',
+        consoleLabel: 'OpenAI Platform',
         modelosSugeridos: [
-            { id: 'gpt-4o-mini', nombre: 'GPT-4o Mini' },
-            { id: 'gpt-4o', nombre: 'GPT-4o' },
-            { id: 'gpt-4.1-mini', nombre: 'GPT-4.1 Mini' },
+            { id: 'gpt-4.1-mini', nombre: 'GPT-4.1 Mini', etiqueta: 'Recomendado · $$' },
+            { id: 'gpt-4o-mini', nombre: 'GPT-4o Mini', etiqueta: 'Económico · $' },
+            { id: 'gpt-5-mini', nombre: 'GPT-5 Mini', etiqueta: 'Razonamiento · $$' },
+            { id: 'gpt-4o', nombre: 'GPT-4o', etiqueta: 'Avanzado · $$$' },
         ],
     },
     {
         id: 'gemini',
         nombre: 'Google Gemini',
-        subtitulo: 'Modelos Gemini rápidos',
+        subtitulo: 'Rápido · 1M contexto',
         placeholderKey: 'AIza...',
+        consoleUrl: 'https://aistudio.google.com/apikey',
+        consoleLabel: 'Google AI Studio',
         modelosSugeridos: [
-            { id: 'gemini-2.5-flash', nombre: 'Gemini 2.5 Flash' },
-            { id: 'gemini-2.5-pro', nombre: 'Gemini 2.5 Pro' },
-        ],
-    },
-    {
-        id: 'anthropic',
-        nombre: 'Anthropic Claude',
-        subtitulo: 'Modelos Claude oficiales',
-        placeholderKey: 'sk-ant-...',
-        modelosSugeridos: [
-            { id: 'claude-3-7-sonnet-latest', nombre: 'Claude 3.7 Sonnet' },
-            { id: 'claude-3-5-sonnet-latest', nombre: 'Claude 3.5 Sonnet' },
-            { id: 'claude-3-5-haiku-latest', nombre: 'Claude 3.5 Haiku' },
+            { id: 'gemini-2.5-flash', nombre: 'Gemini 2.5 Flash', etiqueta: 'Equilibrado · $$' },
+            { id: 'gemini-2.5-flash-lite', nombre: 'Gemini 2.5 Flash-Lite', etiqueta: 'Económico · $' },
+            { id: 'gemini-2.5-pro', nombre: 'Gemini 2.5 Pro', etiqueta: 'Avanzado · $$$' },
         ],
     },
     {
         id: 'openrouter',
         nombre: 'OpenRouter',
-        subtitulo: 'Claude, DeepSeek y más',
+        subtitulo: 'Prepago · Multi-modelo',
         placeholderKey: 'sk-or-...',
+        consoleUrl: 'https://openrouter.ai/keys',
+        consoleLabel: 'OpenRouter',
         modelosSugeridos: [
-            { id: 'anthropic/claude-3.5-sonnet', nombre: 'Claude 3.5 Sonnet' },
-            { id: 'deepseek/deepseek-chat', nombre: 'DeepSeek V3' },
+            { id: 'openai/gpt-4.1-mini', nombre: 'GPT-4.1 Mini', etiqueta: 'Estable · $$' },
+            { id: 'google/gemini-2.5-flash', nombre: 'Gemini 2.5 Flash', etiqueta: 'Rápido · $$' },
+            { id: 'anthropic/claude-haiku-4-5', nombre: 'Claude Haiku 4.5', etiqueta: 'Redacción · $$' },
+        ],
+    },
+    {
+        id: 'anthropic',
+        nombre: 'Anthropic Claude',
+        subtitulo: 'Redacción avanzada',
+        placeholderKey: 'sk-ant-...',
+        consoleUrl: 'https://console.anthropic.com/settings/keys',
+        consoleLabel: 'Anthropic Console',
+        modelosSugeridos: [
+            { id: 'claude-haiku-4-5', nombre: 'Claude Haiku 4.5', etiqueta: 'Rápido · $$' },
+            { id: 'claude-sonnet-4-6', nombre: 'Claude Sonnet 4.6', etiqueta: 'Premium · $$$' },
         ],
     },
 ];
@@ -244,6 +260,35 @@ export const OPCIONES_TAMANO_CHAT = [
         subtitulo: 'Letra grande en sala',
     },
 ];
+
+export function estimarCostoMensualPlan(plan, docentes = 40, consultasPorDia = 5, diasHabiles = 20) {
+    const consultasMes = Math.max(0, Number(docentes) || 0) * Math.max(0, Number(consultasPorDia) || 0) * diasHabiles;
+    if (!plan || plan.categoria === 'gratuito') {
+        return { consultasMes, usd: 0, clp: 0 };
+    }
+    const tokensEntradaMillones = (consultasMes * 2000) / 1_000_000;
+    const tokensSalidaMillones = (consultasMes * 500) / 1_000_000;
+    const usd =
+        tokensEntradaMillones * (Number(plan.entrada_por_millon) || 0) +
+        tokensSalidaMillones * (Number(plan.salida_por_millon) || 0);
+    const usdRedondeado = Math.round(usd * 100) / 100;
+    const clp = Math.round((usdRedondeado * 950) / 100) * 100;
+
+    return { consultasMes, usd: usdRedondeado, clp };
+}
+
+export function formatearUsd(valor) {
+    const num = Number(valor || 0);
+    if (num === 0) return '$0';
+    if (num < 0.01) return '< $0.01';
+    return `$${num.toFixed(2)}`;
+}
+
+export function formatearClpAprox(clp) {
+    const num = Number(clp || 0);
+    if (num === 0) return '$0 CLP';
+    return `~$${num.toLocaleString('es-CL')} CLP`;
+}
 
 export const PREFERENCIAS_DEFAULT = {
     paleta: 'css', // 'css' | 'dark'

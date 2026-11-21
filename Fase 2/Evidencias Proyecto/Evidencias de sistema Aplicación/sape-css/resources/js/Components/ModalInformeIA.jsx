@@ -106,7 +106,7 @@ export default function ModalInformeIA({ estudiante, cursoId, cursoNombre, isOpe
             return backendError || 'Los datos enviados para el informe no son válidos. Revisa los campos e intenta de nuevo.';
         }
         if (status === 429) {
-            return 'Se alcanzó el límite temporal de consultas al servicio de IA. Espera unos segundos y vuelve a intentarlo.';
+            return backendError || 'Se alcanzó el límite temporal de consultas al servicio de IA. Espera unos segundos y vuelve a intentarlo.';
         }
         if (status >= 500) {
             return backendError || 'El servicio de redacción con IA no está disponible en este momento. Intenta nuevamente en unos instantes.';

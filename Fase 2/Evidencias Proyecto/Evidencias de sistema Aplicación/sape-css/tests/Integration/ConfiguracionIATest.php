@@ -9,6 +9,7 @@ use App\Services\ConfiguracionIAService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -313,6 +314,259 @@ class ConfiguracionIATest extends TestCase
             ->assertJsonPath('configuracionIA.metricas_consumo.total_tokens', 0)
             ->assertJsonPath('configuracionIA.metricas_consumo.total_consultas', 0);
 
+    }
+
+    public function test_admin_puede_guardar_plan_institucional_openai_y_docentes_lo_usan_en_chat(): void
+    {
+        $archivo = $this->archivoExcelTemporal();
+        $this->artisan('sape:generar-sinteticos', [
+            'grado' => '1', 'letra' => 'A', 'ano' => '2026',
+            '--alumnos' => '4', '--seed' => '2027', '--salida' => $archivo,
+        ])->assertSuccessful();
+        Excel::import(new ImportadorSyscol, $archivo);
+        $curso = DB::table('cursos')->first();
+
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('Administrador', 'web'));
+
+        $claveColegio = 'sk-inst-chatgpt-colegio-9988';
+        $this->actingAs($admin)->postJson(route('configuracion.guardar-ia'), [
+            'accion' => 'guardar_institucional',
+            'plan_activo' => 'pago_openai',
+            'proveedor' => 'openai',
+            'api_key' => $claveColegio,
+            'modelo_chat' => 'gpt-4.1-mini',
+            'modelo_informes' => 'gpt-4.1-mini',
+            'presupuesto_mensual_usd' => 20,
+            'alerta_porcentaje' => 80,
+            'solicitudes_diarias_limite' => 5000,
+        ])->assertOk()
+            ->assertJsonPath('configuracionInstitucional.plan_activo', 'pago_openai')
+            ->assertJsonPath('configuracionInstitucional.api_key_masked', 'sk-i••••••9988');
+
+        $valorCrudo = DB::table('configuracion_ia_institucional')->where('clave', 'principal')->value('api_key_cifrada');
+        $this->assertNotEmpty($valorCrudo);
+        $this->assertStringNotContainsString($claveColegio, $valorCrudo);
+
+        $docente = $this->crearProfesorJefe($curso->id);
+        Http::fake([
+            'api.openai.com/v1/chat/completions' => Http::response([
+                'choices' => [['finish_reason' => 'stop', 'message' => ['content' => 'Plan pedagógico con OpenAI.']]],
+                'usage' => ['prompt_tokens' => 1200, 'completion_tokens' => 300, 'total_tokens' => 1500],
+            ], 200),
+        ]);
+
+        $this->actingAs($docente)->postJson(route('chat.pedagogico'), [
+            'mensaje' => 'Sugiere apoyo para el curso.',
+            'curso_id' => $curso->id,
+        ])->assertOk()
+            ->assertJsonPath('modelo', 'gpt-4.1-mini')
+            ->assertJsonPath('proveedor', 'OpenAI');
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.openai.com/v1/chat/completions'
+            && $request->hasHeader('Authorization', 'Bearer '.$claveColegio)
+            && ($request['model'] ?? '') === 'gpt-4.1-mini');
+
+        $inst = app(ConfiguracionIAService::class)->obtenerConfiguracionInstitucionalPublica(true);
+        $this->assertSame(1, $inst['metricas_mensuales']['total_consultas']);
+        $this->assertSame(1500, $inst['metricas_mensuales']['total_tokens']);
+        $this->assertGreaterThan(0, $inst['metricas_mensuales']['costo_estimado_usd']);
+    }
+
+    public function test_docente_no_puede_modificar_plan_institucional(): void
+    {
+        $docente = User::factory()->create();
+        $docente->assignRole(Role::findOrCreate('Profesor Jefe', 'web'));
+
+        $this->actingAs($docente)->postJson(route('configuracion.guardar-ia'), [
+            'accion' => 'guardar_institucional',
+            'plan_activo' => 'pago_groq_developer',
+            'proveedor' => 'groq',
+            'api_key' => 'gsk-intento-docente-1234',
+            'modelo_chat' => 'openai/gpt-oss-120b',
+        ])->assertForbidden();
+    }
+
+    public function test_proveedor_anthropic_usa_endpoint_messages_y_gemini_verifica_respuesta(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        Http::fake([
+            'api.anthropic.com/v1/models' => Http::response([
+                'data' => [['id' => 'claude-haiku-4-5']],
+            ], 200),
+            'api.anthropic.com/v1/messages' => Http::response([
+                'content' => [['type' => 'text', 'text' => 'OK']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 2],
+            ], 200),
+            'generativelanguage.googleapis.com/v1beta/openai/models' => Http::response([
+                'data' => [
+                    ['id' => 'models/gemini-2.5-flash'],
+                    ['id' => 'models/text-embedding-004'],
+                ],
+            ], 200),
+            'generativelanguage.googleapis.com/v1beta/openai/chat/completions' => Http::response([
+                'choices' => [['finish_reason' => 'stop', 'message' => ['content' => 'OK']]],
+            ], 200),
+        ]);
+
+        $this->postJson(route('configuracion.probar-ia'), [
+            'proveedor' => 'anthropic',
+            'api_key' => 'sk-ant-prueba-7777',
+            'model_id' => 'claude-haiku-4-5',
+            'verificar_respuesta' => true,
+        ])->assertOk()->assertJsonPath('respuestaVerificada', true);
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.anthropic.com/v1/messages'
+            && $request->hasHeader('x-api-key', 'sk-ant-prueba-7777')
+            && ! $request->hasHeader('Authorization'));
+
+        $this->postJson(route('configuracion.probar-ia'), [
+            'proveedor' => 'gemini',
+            'api_key' => 'AIza-prueba-9999',
+            'model_id' => 'gemini-2.5-flash',
+            'verificar_respuesta' => true,
+        ])->assertOk()->assertJsonPath('models', ['gemini-2.5-flash']);
+    }
+
+    public function test_evaluacion_alertas_presupuesto_mensual(): void
+    {
+        $servicio = app(ConfiguracionIAService::class);
+
+        $this->assertSame('gratuito', $servicio->evaluarEstadoPresupuesto('gratuito', 0, 0, 80)['nivel']);
+        $this->assertSame('normal', $servicio->evaluarEstadoPresupuesto('pago', 3.0, 20.0, 80)['nivel']);
+        $this->assertSame('aviso', $servicio->evaluarEstadoPresupuesto('pago', 16.5, 20.0, 80)['nivel']);
+        $this->assertSame('critico', $servicio->evaluarEstadoPresupuesto('pago', 18.5, 20.0, 80)['nivel']);
+        $this->assertSame('excedido', $servicio->evaluarEstadoPresupuesto('pago', 22.0, 20.0, 80)['nivel']);
+    }
+
+    public function test_chat_groq_aplica_respaldo_automatico_ante_429_y_usa_reasoning_effort_low(): void
+    {
+        $cursoId = (string) Str::uuid();
+        DB::table('cursos')->insert([
+            'id' => $cursoId,
+            'nivel' => '2',
+            'letra' => 'A',
+            'anioEscolar' => 2026,
+        ]);
+
+        $docente = $this->crearProfesorJefe($cursoId);
+
+        Http::fake([
+            'https://api.groq.com/openai/v1/chat/completions' => Http::sequence()
+                ->push(['error' => ['code' => 'rate_limit_exceeded', 'message' => 'Limit 8000 TPM']], 429, ['Retry-After' => '18'])
+                ->push([
+                    'choices' => [['finish_reason' => 'stop', 'message' => ['content' => 'Plan pedagógico desde respaldo automático.']]],
+                    'usage' => ['prompt_tokens' => 420, 'completion_tokens' => 95, 'total_tokens' => 515],
+                ], 200),
+        ]);
+
+        $this->actingAs($docente)->postJson(route('chat.pedagogico'), [
+            'mensaje' => 'Sugiere estrategias de estudio para el curso.',
+            'curso_id' => $cursoId,
+        ])->assertOk()
+            ->assertJsonPath('respuesta', 'Plan pedagógico desde respaldo automático.')
+            ->assertJsonPath('modelo', 'openai/gpt-oss-20b')
+            ->assertJsonPath('modelo_nombre', 'GPT-OSS 20B (respaldo)');
+
+        Http::assertSentCount(2);
+        $primera = Http::recorded()[0][0];
+        $segunda = Http::recorded()[1][0];
+        $this->assertSame('openai/gpt-oss-120b', $primera['model']);
+        $this->assertSame('low', $primera['reasoning_effort']);
+        $this->assertSame('openai/gpt-oss-20b', $segunda['model']);
+        $this->assertSame('low', $segunda['reasoning_effort']);
+    }
+
+    public function test_chat_groq_cambia_a_respaldo_en_reintento_length_si_quedan_pocos_tokens_tpm(): void
+    {
+        $cursoId = (string) Str::uuid();
+        DB::table('cursos')->insert([
+            'id' => $cursoId,
+            'nivel' => '3',
+            'letra' => 'B',
+            'anioEscolar' => 2026,
+        ]);
+
+        $docente = $this->crearProfesorJefe($cursoId);
+
+        Http::fake([
+            'https://api.groq.com/openai/v1/chat/completions' => Http::sequence()
+                ->push(
+                    ['choices' => [['finish_reason' => 'length', 'message' => ['content' => 'Corte parcial']]], 'usage' => ['total_tokens' => 5400]],
+                    200,
+                    ['x-ratelimit-remaining-tokens' => '568']
+                )
+                ->push(
+                    ['choices' => [['finish_reason' => 'stop', 'message' => ['content' => 'Respuesta íntegra completada en respaldo.']]], 'usage' => ['total_tokens' => 620]],
+                    200
+                ),
+        ]);
+
+        $this->actingAs($docente)->postJson(route('chat.pedagogico'), [
+            'mensaje' => 'Arma una pauta de reforzamiento.',
+            'curso_id' => $cursoId,
+        ])->assertOk()
+            ->assertJsonPath('respuesta', 'Respuesta íntegra completada en respaldo.')
+            ->assertJsonPath('modelo', 'openai/gpt-oss-20b');
+
+        Http::assertSentCount(2);
+        $this->assertSame('openai/gpt-oss-120b', Http::recorded()[0][0]['model']);
+        $this->assertSame('openai/gpt-oss-20b', Http::recorded()[1][0]['model']);
+    }
+
+    public function test_chat_devuelve_mensajes_claros_y_seguros_para_429_tpm_y_saldo_insuficiente(): void
+    {
+        $cursoId = (string) Str::uuid();
+        DB::table('cursos')->insert([
+            'id' => $cursoId,
+            'nivel' => '4',
+            'letra' => 'A',
+            'anioEscolar' => 2026,
+        ]);
+
+        $docente = $this->crearProfesorJefe($cursoId);
+
+        // Si ambos modelos Groq devuelven 429 con x-ratelimit-reset-tokens, informar espera estimada sin filtrar texto crudo
+        Http::fake([
+            'https://api.groq.com/openai/v1/chat/completions' => Http::sequence()
+                ->push(['error' => ['code' => 'rate_limit_exceeded', 'message' => 'secret-groq-detail']], 429, ['x-ratelimit-reset-tokens' => '22.4s'])
+                ->push(['error' => ['code' => 'rate_limit_exceeded', 'message' => 'secret-groq-detail-2']], 429, ['x-ratelimit-reset-tokens' => '19.1s']),
+        ]);
+
+        $this->actingAs($docente)->postJson(route('chat.pedagogico'), [
+            'mensaje' => 'Consulta con ambos modelos saturados.',
+            'curso_id' => $cursoId,
+        ])->assertStatus(429)
+            ->assertDontSee('secret-groq-detail')
+            ->assertJsonPath('respuesta', 'El modelo alcanzó su cuota temporal de tokens por minuto en Groq Cloud. Intenta de nuevo en ~20 segundos, cambia de modelo o activa Groq Developer / OpenAI.');
+
+        // Si OpenAI devuelve 429 insufficient_quota, avisar explícitamente falta de saldo
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('Administrador', 'web'));
+        $this->actingAs($admin)->postJson(route('configuracion.guardar-ia'), [
+            'accion' => 'guardar_institucional',
+            'plan_activo' => 'pago_openai',
+            'proveedor' => 'openai',
+            'api_key' => 'sk-proj-sin-saldo-9999',
+            'modelo_chat' => 'gpt-4o-mini',
+            'modelo_informes' => 'gpt-4o-mini',
+        ])->assertOk();
+
+        Http::fake([
+            'https://api.openai.com/v1/chat/completions' => Http::response([
+                'error' => ['code' => 'insufficient_quota', 'message' => 'You exceeded your current quota internal-text'],
+            ], 429),
+        ]);
+
+        $this->actingAs($docente)->postJson(route('chat.pedagogico'), [
+            'mensaje' => 'Prueba sin saldo OpenAI.',
+            'curso_id' => $cursoId,
+        ])->assertStatus(429)
+            ->assertDontSee('internal-text')
+            ->assertJsonPath('respuesta', 'La cuenta de OpenAI no tiene saldo o alcanzó su límite de gasto. Revisa facturación o cambia de plan.');
     }
 
     private function crearProfesorJefe(string $cursoId): User

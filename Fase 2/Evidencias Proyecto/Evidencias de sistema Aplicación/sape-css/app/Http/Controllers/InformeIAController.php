@@ -7,6 +7,7 @@ use App\Models\Estudiante;
 use App\Services\ConexionIA;
 use App\Services\ConfiguracionIAService;
 use App\Services\PrivacidadService;
+use App\Services\ProveedorIAAdapter;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -120,31 +121,100 @@ class InformeIAController extends Controller
                 return response()->json(['error' => 'El contexto es demasiado extenso para generar el informe.'], 422);
             }
 
-            // 5. Petición a la IA (Groq predeterminado o modelo personalizado del usuario)
+            // 5. Petición multi-proveedor vía ProveedorIAAdapter
             if (empty($credenciales['api_key'])) {
-                return response()->json(['error' => 'Configura una clave de IA para generar el informe.'], 422);
+                return response()->json([
+                    'error' => 'Falta configurar una API Key de IA. Activa el plan del colegio o conecta tu clave en Configuración → IA.',
+                    'requiere_configuracion' => true,
+                ], 422);
             }
 
-            $response = ConexionIA::cliente($credenciales['base_url'], $credenciales['headers'], 30)
-                ->post('chat/completions', [
-                    'model' => $credenciales['model'],
-                    'messages' => [
-                        [
-                            'role' => 'system',
-                            'content' => 'Eres un profesor jefe y orientador experto en redacción de informes pedagógicos formales.',
-                        ],
-                        [
-                            'role' => 'user',
-                            'content' => $prompt,
-                        ],
+            $proveedor = (string) ($credenciales['proveedor'] ?? 'groq');
+            $presupuesto = ProveedorIAAdapter::presupuestoTokens($proveedor, (string) $credenciales['model'], (int) $credenciales['max_tokens']);
+            $endpoint = ProveedorIAAdapter::endpointGeneracion($proveedor);
+            $peticion = ProveedorIAAdapter::prepararPeticion($proveedor, [
+                'model' => $credenciales['model'],
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'Eres un profesor jefe y orientador experto en redacción de informes pedagógicos formales.',
                     ],
-                    'temperature' => $credenciales['temperature'],
-                    'max_tokens' => $credenciales['max_tokens'],
-                ]);
+                    [
+                        'role' => 'user',
+                        'content' => $prompt,
+                    ],
+                ],
+                'temperature' => $credenciales['temperature'],
+                'max_tokens' => $presupuesto,
+            ]);
+
+            $cliente = ConexionIA::cliente($credenciales['base_url'], $credenciales['headers'], 30);
+            $response = $cliente->post($endpoint, $peticion);
+            $usoRespaldoGroq = false;
+
+            if ($proveedor === 'groq' && ProveedorIAAdapter::esErrorLimiteTemporal($response)) {
+                $respaldo = ProveedorIAAdapter::modeloRespaldoGroq((string) $credenciales['model']);
+                if ($respaldo !== null) {
+                    $usoRespaldoGroq = true;
+                    $credenciales['model'] = $respaldo['model'];
+                    $credenciales['modelo_nombre'] = $respaldo['nombre'];
+                    $peticion = ProveedorIAAdapter::prepararPeticion($proveedor, [
+                        'model' => $credenciales['model'],
+                        'messages' => [
+                            [
+                                'role' => 'system',
+                                'content' => 'Eres un profesor jefe y orientador experto en redacción de informes pedagógicos formales.',
+                            ],
+                            [
+                                'role' => 'user',
+                                'content' => $prompt,
+                            ],
+                        ],
+                        'temperature' => $credenciales['temperature'],
+                        'max_tokens' => ProveedorIAAdapter::presupuestoTokens($proveedor, (string) $credenciales['model'], (int) $credenciales['max_tokens']),
+                    ]);
+                    $response = $cliente->post($endpoint, $peticion);
+                }
+            }
+
+            $extraida = $response->successful() ? ProveedorIAAdapter::extraerRespuesta($response, $proveedor) : null;
+            if ($response->successful() && ($extraida['finish_reason'] ?? null) === 'length') {
+                $iaService->registrarConsumoYCuota($request->user(), $credenciales, $response);
+                $tokensRestantesHeader = $response->header('x-ratelimit-remaining-tokens');
+                $tokensRestantes = ($tokensRestantesHeader !== '' && is_numeric($tokensRestantesHeader))
+                    ? (int) $tokensRestantesHeader
+                    : null;
+
+                if ($proveedor === 'groq' && ! $usoRespaldoGroq && $tokensRestantes !== null && $tokensRestantes < 2500) {
+                    $respaldo = ProveedorIAAdapter::modeloRespaldoGroq((string) $credenciales['model']);
+                    if ($respaldo !== null) {
+                        $usoRespaldoGroq = true;
+                        $credenciales['model'] = $respaldo['model'];
+                        $credenciales['modelo_nombre'] = $respaldo['nombre'];
+                        $peticion['model'] = $respaldo['model'];
+                    }
+                }
+
+                ProveedorIAAdapter::ampliarParaReintento($proveedor, $peticion, "\nRedacta de forma íntegra y concisa.");
+                $response = $cliente->post($endpoint, $peticion);
+
+                if ($proveedor === 'groq' && ! $usoRespaldoGroq && ProveedorIAAdapter::esErrorLimiteTemporal($response)) {
+                    $respaldo = ProveedorIAAdapter::modeloRespaldoGroq((string) $credenciales['model']);
+                    if ($respaldo !== null) {
+                        $usoRespaldoGroq = true;
+                        $credenciales['model'] = $respaldo['model'];
+                        $credenciales['modelo_nombre'] = $respaldo['nombre'];
+                        $peticion['model'] = $respaldo['model'];
+                        $response = $cliente->post($endpoint, $peticion);
+                    }
+                }
+
+                $extraida = $response->successful() ? ProveedorIAAdapter::extraerRespuesta($response, $proveedor) : null;
+            }
 
             if ($response->successful()) {
                 $iaService->registrarConsumoYCuota($request->user(), $credenciales, $response);
-                $informeTokenizado = $response->json('choices.0.message.content') ?? 'No se pudo generar el contenido.';
+                $informeTokenizado = $extraida['content'] ?? 'No se pudo generar el contenido.';
 
                 // 6. RESTAURACIÓN DE DATOS (Des-enmascaramiento)
                 $informeFinal = str_replace(
@@ -161,10 +231,13 @@ class InformeIAController extends Controller
                 ])->header('Cache-Control', 'no-store');
             }
 
-            Log::warning('El proveedor rechazó el informe.', ['estado_http' => $response->status()]);
+            Log::warning(
+                'El proveedor rechazó el informe.',
+                ProveedorIAAdapter::metadatosErrorSeguro($response, $proveedor, (string) $credenciales['model'])
+            );
 
             return response()->json([
-                'error' => 'El proveedor de IA no pudo generar el informe.',
+                'error' => ProveedorIAAdapter::mensajeErrorSeguro($response, (string) ($credenciales['proveedor_nombre'] ?? 'IA'), (string) $credenciales['model']),
             ], $response->status() === 429 ? 429 : 502);
 
         } catch (ValidationException $e) {

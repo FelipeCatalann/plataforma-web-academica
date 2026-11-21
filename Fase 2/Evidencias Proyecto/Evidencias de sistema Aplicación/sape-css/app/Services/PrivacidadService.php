@@ -34,10 +34,12 @@ class PrivacidadService
         $mapa = [];
         $vistos = [];
         $contador = 0;
+        $candidatosPorPersona = [];
+        $frecuenciaVariante = [];
 
         foreach ($personas as $persona) {
-            $nombres = $this->campo($persona, ['nombres', 'nombre', 'name']);
-            $apellidos = $this->campo($persona, ['apellidos', 'apellido']);
+            $nombres = trim($this->campo($persona, ['nombres', 'nombre', 'name']));
+            $apellidos = trim($this->campo($persona, ['apellidos', 'apellido']));
             $completo = trim($nombres.' '.$apellidos);
             if ($completo === '' || isset($vistos[$completo])) {
                 continue;
@@ -45,37 +47,79 @@ class PrivacidadService
             $vistos[$completo] = true;
 
             $token = '[ALUMNO_'.(++$contador).']';
-
             $variantes = [$completo];
-            $partesNombre = preg_split('/\s+/u', $nombres);
-            foreach ($partesNombre as $parte) {
-                if (mb_strlen($parte) >= 4) {
-                    $variantes[] = $parte;
-                }
+
+            $partesNombre = preg_split('/\s+/u', $nombres, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $partesApellido = preg_split('/\s+/u', $apellidos, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+            // Nombres compuestos completos (ej. "Martín Emilio") antes que un solo nombre suelto
+            if (count($partesNombre) >= 2) {
+                $variantes[] = $nombres;
             }
+
             if ($apellidos !== '') {
                 $variantes[] = $apellidos;
+                if (isset($partesNombre[0])) {
+                    $variantes[] = $partesNombre[0].' '.$apellidos;
+                }
                 // Patrón típico de escritura docente: primer nombre + primer apellido.
-                $partesApellido = preg_split('/\s+/u', $apellidos);
                 if (isset($partesNombre[0], $partesApellido[0])) {
                     $variantes[] = $partesNombre[0].' '.$partesApellido[0];
                 }
             }
 
-            // Más largas primero: el nombre completo gana al parcial.
-            usort($variantes, fn ($a, $b) => mb_strlen($b) <=> mb_strlen($a));
-            $candidato = $texto;
-            foreach (array_unique($variantes) as $variante) {
-                $candidato = preg_replace(
-                    '/(?<!\p{L})'.preg_quote($variante, '/').'(?!\p{L})/u',
-                    $token,
-                    $candidato
-                );
+            foreach ($partesNombre as $parte) {
+                if (mb_strlen($parte) >= 4) {
+                    $variantes[] = $parte;
+                }
             }
-            // Solo entra al mapa si realmente apareció en el texto.
-            if ($candidato !== $texto) {
+
+            $variantesUnicas = array_values(array_unique(array_filter($variantes, fn ($v) => trim($v) !== '')));
+            foreach ($variantesUnicas as $variante) {
+                $frecuenciaVariante[$variante] = ($frecuenciaVariante[$variante] ?? 0) + 1;
+            }
+
+            $candidatosPorPersona[] = [
+                'token' => $token,
+                'completo' => $completo,
+                'variantes' => $variantesUnicas,
+            ];
+        }
+
+        // Construir reglas globales ordenadas de mayor a menor longitud entre TODOS los estudiantes.
+        // Así "Martín Emilio Sandoval Sandoval" ([ALUMNO_23]) siempre coincide completo antes que
+        // un nombre suelto compartido ("Martín" o "Emilio") de otro alumno.
+        $reglasPorVariante = [];
+        foreach ($candidatosPorPersona as $item) {
+            foreach ($item['variantes'] as $variante) {
+                if (isset($reglasPorVariante[$variante])) {
+                    continue;
+                }
+
+                $esAmbigua = ($frecuenciaVariante[$variante] ?? 0) > 1;
+                $reglasPorVariante[$variante] = [
+                    'variante' => $variante,
+                    'reemplazo' => $esAmbigua ? '[ALUMNO_SIN_ESPECIFICAR]' : $item['token'],
+                    'token' => $esAmbigua ? null : $item['token'],
+                    'completo' => $esAmbigua ? null : $item['completo'],
+                ];
+            }
+        }
+
+        $reglas = array_values($reglasPorVariante);
+        usort($reglas, fn ($a, $b) => mb_strlen($b['variante']) <=> mb_strlen($a['variante']));
+
+        foreach ($reglas as $regla) {
+            $candidato = preg_replace(
+                '/(?<!\p{L})'.preg_quote($regla['variante'], '/').'(?!\p{L})/u',
+                $regla['reemplazo'],
+                $texto
+            );
+            if ($candidato !== null && $candidato !== $texto) {
                 $texto = $candidato;
-                $mapa[$token] = $completo;
+                if ($regla['token'] !== null && $regla['completo'] !== null) {
+                    $mapa[$regla['token']] = $regla['completo'];
+                }
             }
         }
 

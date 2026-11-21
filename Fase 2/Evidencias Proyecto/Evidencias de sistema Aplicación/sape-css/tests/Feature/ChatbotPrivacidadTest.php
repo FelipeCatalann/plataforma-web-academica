@@ -318,4 +318,40 @@ class ChatbotPrivacidadTest extends TestCase
             return end($mensajes) === ['role' => 'user', 'content' => $mensaje];
         });
     }
+
+    public function test_chat_transforma_tablas_markdown_multicolumna_y_etiquetas_br_en_bloques_legibles(): void
+    {
+        $tablaCruda = implode("\n", [
+            '| Fase | Objetivo | Acciones concretas | Asignaturas <4.0 | Responsable | Tiempo estimado |',
+            '|---|---|---|---|---|---|',
+            '| 1. Diagnóstico | Identificar causas de bajo rendimiento. | • Revisión de notas por asignatura. <br>• Análisis de asistencia. <br>• Entrevista breve. | **Matemática (3.2)** | Jefe de Departamento | 1 día |',
+            '| 2. Apoyo académico | Mejorar comprensión en Matemática. | • Sesiones de tutoría 1-a-1. <br>• Material de repaso. | **Geometría 3D (3.4)** | Profesor de Matemática | 4 semanas |',
+        ]);
+
+        Http::fake([
+            'api.groq.com*' => Http::response([
+                'choices' => [[
+                    'finish_reason' => 'stop',
+                    'message' => ['content' => $tablaCruda],
+                ]],
+            ], 200),
+        ]);
+        $this->actingAs($this->docente);
+
+        $res = $this->postJson(route('chat.pedagogico'), [
+            'mensaje' => 'Sugiere un plan de acompañamiento por fases.',
+            'curso_id' => $this->cursoId,
+        ])->assertOk();
+
+        $texto = (string) $res->json('respuesta');
+
+        $this->assertStringNotContainsString('<br>', $texto);
+        $this->assertStringNotContainsString('Fase:** Objetivo — Acciones concretas', $texto);
+        $this->assertStringContainsString('### 1. Diagnóstico', $texto);
+        $this->assertStringContainsString('- **Objetivo:** Identificar causas de bajo rendimiento.', $texto);
+        $this->assertStringContainsString("- **Acciones concretas:**\n  - Revisión de notas por asignatura.\n  - Análisis de asistencia.\n  - Entrevista breve.", $texto);
+        $this->assertStringContainsString('- **Asignaturas <4.0:** **Matemática (3.2)**', $texto);
+        $this->assertStringContainsString('- **Responsable:** Jefe de Departamento', $texto);
+        $this->assertStringContainsString('- **Tiempo estimado:** 1 día', $texto);
+    }
 }

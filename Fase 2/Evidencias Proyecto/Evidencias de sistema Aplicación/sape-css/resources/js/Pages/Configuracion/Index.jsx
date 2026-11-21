@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import HubIAConfiguracion from '@/Components/Configuracion/HubIAConfiguracion';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -9,13 +10,13 @@ import {
     sincronizarPreferenciasDesdeServidor,
     PREFERENCIAS_DEFAULT,
     VARIANTES_MODO_OSCURO,
-    PROVEEDORES_IA,
     MODELOS_GROQ_SISTEMA,
     OPCIONES_TONO_IA,
     OPCIONES_EXTENSION_IA,
     OPCIONES_PRECISION_IA,
     OPCIONES_FORMATO_VISUAL_IA,
     OPCIONES_TAMANO_CHAT,
+    formatearUsd,
 } from '@/utils/preferenciasSape';
 
 const PALETAS_DISPONIBLES = [
@@ -83,6 +84,8 @@ export default function ConfiguracionIndex({
     modeloIA = PREFERENCIAS_DEFAULT.modeloActivoNombre,
     proveedorIA = 'Groq Cloud',
     configuracionIA = null,
+    configuracionInstitucional = null,
+    planesColegio = [],
     rolInfo = {
         esAdministrador: false,
         esProfesorJefe: false,
@@ -127,12 +130,23 @@ export default function ConfiguracionIndex({
     const [mensajeGuardado, setMensajeGuardado] = useState('');
     const [errorGuardado, setErrorGuardado] = useState('');
 
-    // Estado sincronizado con el servidor para modelos y configuración IA
+    // Estado sincronizado con el servidor para modelos, plan institucional y configuración IA
     const [modelosSistema] = useState(
         () => configuracionIA?.modelos_sistema || MODELOS_GROQ_SISTEMA
     );
     const [modelosPersonalizados, setModelosPersonalizados] = useState(
         () => configuracionIA?.modelos_personalizados || []
+    );
+    const [institucional, setInstitucional] = useState(() => configuracionInstitucional);
+    const [conexionActiva, setConexionActiva] = useState(
+        () =>
+            configuracionIA?.conexion_activa || {
+                configurada: iaConfigurada,
+                modelo_nombre: modeloIA,
+                proveedor_nombre: proveedorIA,
+                origen: iaSistemaConfigurada ? 'servidor_env' : 'ninguna',
+                plan_nombre: configuracionInstitucional?.plan_nombre || 'Groq Cloud · Free Key',
+            }
     );
     const [metricasConsumo, setMetricasConsumo] = useState(
         () =>
@@ -141,28 +155,13 @@ export default function ConfiguracionIndex({
                 prompt_tokens: 0,
                 completion_tokens: 0,
                 total_tokens: 0,
-                ultima_consulta_at: null,
-                ultimo_modelo_usado: null,
+                ultima_consulta: null,
                 por_modelo: {},
             }
     );
     const [consultandoCuota, setConsultandoCuota] = useState(false);
     const [reiniciandoMetricas, setReiniciandoMetricas] = useState(false);
-
-    // Formulario para agregar un nuevo modelo con API Key
-    const [nuevoProveedor, setNuevoProveedor] = useState('groq');
-    const [nuevaApiKey, setNuevaApiKey] = useState('');
-    const [mostrarApiKey, setMostrarApiKey] = useState(false);
-    const [nuevoModelId, setNuevoModelId] = useState(PREFERENCIAS_DEFAULT.modeloActivoId);
-    const [nuevoNombreModelo, setNuevoNombreModelo] = useState('');
-    const [modelosDetectadosKey, setModelosDetectadosKey] = useState([]);
     const [guardandoIA, setGuardandoIA] = useState(false);
-
-    // Estado para prueba en vivo de conexión
-    const [probandoIA, setProbandoIA] = useState(false);
-    const [resultadoIA, setResultadoIA] = useState(null);
-    const [probandoNuevaKey, setProbandoNuevaKey] = useState(false);
-    const [resultadoNuevaKey, setResultadoNuevaKey] = useState(null);
 
     useEffect(() => {
         if (configuracionIA) {
@@ -174,8 +173,17 @@ export default function ConfiguracionIndex({
             if (configuracionIA.metricas_consumo) {
                 setMetricasConsumo(configuracionIA.metricas_consumo);
             }
+            if (configuracionIA.conexion_activa) {
+                setConexionActiva(configuracionIA.conexion_activa);
+            }
         }
     }, [configuracionIA]);
+
+    useEffect(() => {
+        if (configuracionInstitucional) {
+            setInstitucional(configuracionInstitucional);
+        }
+    }, [configuracionInstitucional]);
 
     useEffect(() => {
         const sincronizar = (e) => {
@@ -209,9 +217,6 @@ export default function ConfiguracionIndex({
     const modeloActivoObj =
         todosLosModelos.find((m) => m.id === preferencias.modeloActivoId) || modelosSistema[0];
 
-    const proveedorSeleccionadoObj =
-        PROVEEDORES_IA.find((p) => p.id === nuevoProveedor) || PROVEEDORES_IA[0];
-
     const seleccionarPaleta = (idPaleta) => {
         const nuevas = guardarPreferenciasSape({ paleta: idPaleta });
         setPreferencias(nuevas);
@@ -222,7 +227,7 @@ export default function ConfiguracionIndex({
         );
     };
 
-    const aplicarRespuestaServidorIA = (configServidor, textoExito) => {
+    const aplicarRespuestaServidorIA = (configServidor, textoExito, configInstServidor = null) => {
         if (configServidor) {
             const nuevas = sincronizarPreferenciasDesdeServidor(configServidor);
             setPreferencias(nuevas);
@@ -232,6 +237,12 @@ export default function ConfiguracionIndex({
             if (configServidor.metricas_consumo) {
                 setMetricasConsumo(configServidor.metricas_consumo);
             }
+            if (configServidor.conexion_activa) {
+                setConexionActiva(configServidor.conexion_activa);
+            }
+        }
+        if (configInstServidor) {
+            setInstitucional(configInstServidor);
         }
         if (textoExito) {
             mostrarConfirmacion(textoExito);
@@ -248,7 +259,8 @@ export default function ConfiguracionIndex({
             });
             aplicarRespuestaServidorIA(
                 response.data?.configuracionIA,
-                response.data?.message || 'Cuota del modelo actualizada.'
+                response.data?.message || 'Cuota del modelo actualizada.',
+                response.data?.configuracionInstitucional
             );
         } catch (err) {
             mostrarError(
@@ -277,119 +289,6 @@ export default function ConfiguracionIndex({
             );
         } finally {
             setReiniciandoMetricas(false);
-        }
-    };
-
-    const activarModelo = async (modelo) => {
-        const nuevasLocal = guardarPreferenciasSape({
-            modeloActivoId: modelo.id,
-            modeloActivoNombre: modelo.nombre,
-            modeloActivoProveedor: modelo.proveedor_nombre || 'Groq Cloud',
-        });
-        setPreferencias(nuevasLocal);
-
-        try {
-            const response = await axios.post('/configuracion/ia', {
-                accion: 'actualizar_preferencias',
-                modelo_activo_id: modelo.id,
-            });
-            aplicarRespuestaServidorIA(
-                response.data?.configuracionIA,
-                `Modelo "${modelo.nombre}" activado.`
-            );
-        } catch {
-            mostrarConfirmacion(`Modelo "${modelo.nombre}" activado en este equipo.`);
-        }
-    };
-
-    const probarKeyYDetectarModelos = async () => {
-        if (!nuevaApiKey.trim() || probandoNuevaKey) return;
-        setProbandoNuevaKey(true);
-        setResultadoNuevaKey(null);
-
-        try {
-            const response = await axios.post('/configuracion/probar-ia', {
-                proveedor: nuevoProveedor,
-                api_key: nuevaApiKey.trim(),
-                model_id: nuevoModelId,
-            });
-            const detectados = Array.isArray(response.data?.models) ? response.data.models : [];
-            setModelosDetectadosKey(detectados);
-            if (detectados.length > 0 && !nuevoModelId.trim()) {
-                setNuevoModelId(detectados[0]);
-            }
-            setResultadoNuevaKey({
-                ok: true,
-                latencyMs: response.data?.latencyMs,
-                message: response.data?.message || 'API Key verificada correctamente.',
-            });
-        } catch (err) {
-            setResultadoNuevaKey({
-                ok: false,
-                message:
-                    err.response?.data?.message ||
-                    'No fue posible validar esta API Key con el proveedor seleccionado.',
-            });
-        } finally {
-            setProbandoNuevaKey(false);
-        }
-    };
-
-    const guardarNuevoModeloConKey = async (e) => {
-        e.preventDefault();
-        if (!nuevaApiKey.trim() || !nuevoModelId.trim() || guardandoIA) return;
-
-        setGuardandoIA(true);
-        try {
-            const nombreLimpio =
-                nuevoNombreModelo.trim() ||
-                proveedorSeleccionadoObj.modelosSugeridos?.find((m) => m.id === nuevoModelId.trim())
-                    ?.nombre ||
-                nuevoModelId.trim();
-
-            const response = await axios.post('/configuracion/ia', {
-                accion: 'agregar_modelo',
-                proveedor: nuevoProveedor,
-                model_id: nuevoModelId.trim(),
-                nombre: nombreLimpio,
-                subtitulo: `${proveedorSeleccionadoObj.nombre} · API Key propia`,
-                api_key: nuevaApiKey.trim(),
-                activar_inmediatamente: true,
-            });
-
-            setNuevaApiKey('');
-            setNuevoNombreModelo('');
-            setResultadoNuevaKey(null);
-            aplicarRespuestaServidorIA(
-                response.data?.configuracionIA,
-                `Modelo "${nombreLimpio}" agregado y activado.`
-            );
-        } catch (err) {
-            mostrarError(
-                err.response?.data?.message ||
-                    'Verifica el ID del modelo y que la API Key tenga al menos 6 caracteres.'
-            );
-        } finally {
-            setGuardandoIA(false);
-        }
-    };
-
-    const eliminarModeloUsuario = async (modelo) => {
-        if (guardandoIA) return;
-        setGuardandoIA(true);
-        try {
-            const response = await axios.post('/configuracion/ia', {
-                accion: 'eliminar_modelo',
-                modelo_id: modelo.id,
-            });
-            aplicarRespuestaServidorIA(
-                response.data?.configuracionIA,
-                `Modelo "${modelo.nombre}" eliminado.`
-            );
-        } catch {
-            mostrarError('No se pudo eliminar el modelo en este momento.');
-        } finally {
-            setGuardandoIA(false);
         }
     };
 
@@ -473,33 +372,6 @@ export default function ConfiguracionIndex({
             // Ignorar si falla sincronización remota
         }
         mostrarConfirmacion('Se restablecieron los valores predeterminados.');
-    };
-
-    const ejecutarPruebaIA = async () => {
-        if (probandoIA) return;
-        setProbandoIA(true);
-        setResultadoIA(null);
-
-        try {
-            const response = await axios.post('/configuracion/probar-ia', {
-                modelo_id: preferencias.modeloActivoId,
-            });
-            setResultadoIA({
-                ok: true,
-                latencyMs: response.data?.latencyMs,
-                modelsCount: response.data?.modelsCount,
-                message: response.data?.message || 'Conexión verificada correctamente.',
-            });
-        } catch (err) {
-            setResultadoIA({
-                ok: false,
-                message:
-                    err.response?.data?.message ||
-                    'No fue posible verificar la conexión con el servicio de IA.',
-            });
-        } finally {
-            setProbandoIA(false);
-        }
     };
 
     const paletaActivaObj =
@@ -661,7 +533,7 @@ export default function ConfiguracionIndex({
                             <div className="flex items-center justify-between text-xs">
                                 <span className="text-slate-500 font-medium">Modelo IA</span>
                                 <span className="font-extrabold text-slate-800 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 truncate max-w-[140px]">
-                                    {modeloActivoObj?.nombre || PREFERENCIAS_DEFAULT.modeloActivoNombre}
+                                    {conexionActiva?.modelo_nombre || modeloActivoObj?.nombre || PREFERENCIAS_DEFAULT.modeloActivoNombre}
                                 </span>
                             </div>
                             <button
@@ -891,17 +763,19 @@ export default function ConfiguracionIndex({
 
                                         <span
                                             className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-extrabold border self-start sm:self-auto ${
-                                                iaConfigurada
+                                                conexionActiva?.configurada
                                                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                                     : 'bg-amber-50 text-amber-800 border-amber-200'
                                             }`}
                                         >
                                             <span
                                                 className={`w-2 h-2 rounded-full ${
-                                                    iaConfigurada ? 'bg-emerald-500' : 'bg-amber-500'
+                                                    conexionActiva?.configurada ? 'bg-emerald-500' : 'bg-amber-500'
                                                 }`}
                                             />
-                                            {modeloActivoObj?.nombre || modeloIA}
+                                            {conexionActiva?.configurada
+                                                ? `${conexionActiva.proveedor_nombre} · ${conexionActiva.modelo_nombre}`
+                                                : 'Sin API Key activa'}
                                         </span>
                                     </div>
 
@@ -914,13 +788,13 @@ export default function ConfiguracionIndex({
                                         {[
                                             {
                                                 id: 'modelos',
-                                                titulo: 'Modelos y API Keys',
-                                                subtitulo: 'Groq y claves propias',
+                                                titulo: 'Conexión y Plan',
+                                                subtitulo: 'Groq, OpenAI y claves',
                                             },
                                             {
                                                 id: 'consumo_cuota',
-                                                titulo: 'Consumo y Cuota',
-                                                subtitulo: 'Tokens y límite disponible',
+                                                titulo: 'Consumo y Presupuesto',
+                                                subtitulo: 'Tokens, costo y límites',
                                             },
                                             {
                                                 id: 'respuestas_visuales',
@@ -963,365 +837,20 @@ export default function ConfiguracionIndex({
                                     </div>
                                 </div>
 
-                                {/* SUB-APARTADO 1 (PRINCIPAL): MODELOS Y API KEYS */}
+                                {/* SUB-APARTADO 1 (PRINCIPAL): HUB DE CONEXIÓN, PLAN DEL COLEGIO Y CLAVES */}
                                 {subTabIA === 'modelos' && (
-                                    <div className="space-y-6">
-                                        {/* Estado del motor activo y botón de prueba rápida */}
-                                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                                <div>
-                                                    <h3 className="text-lg font-extrabold text-slate-900">
-                                                        Motor de IA Activo
-                                                    </h3>
-                                                    <p className="text-xs text-slate-500">
-                                                        Incluye IA predeterminada de Groq lista para usar.
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={ejecutarPruebaIA}
-                                                    disabled={probandoIA}
-                                                    className="bg-sape-burdeo hover:bg-sape-burdeo-hover text-sape-amarillo font-bold text-xs px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 self-start sm:self-auto"
-                                                >
-                                                    {probandoIA ? 'Probando conexión...' : 'Probar modelo activo'}
-                                                </button>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                                <div>
-                                                    <span className="text-xs text-slate-500 font-semibold block">
-                                                        Modelo seleccionado
-                                                    </span>
-                                                    <span className="text-sm font-extrabold text-slate-900 mt-0.5 block">
-                                                        {modeloActivoObj?.nombre || PREFERENCIAS_DEFAULT.modeloActivoNombre}
-                                                    </span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-xs text-slate-500 font-semibold block">
-                                                        Proveedor
-                                                    </span>
-                                                    <span className="text-sm font-extrabold text-slate-900 mt-0.5 block">
-                                                        {modeloActivoObj?.proveedor_nombre || proveedorIA}
-                                                    </span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-xs text-slate-500 font-semibold block">
-                                                        Origen de credencial
-                                                    </span>
-                                                    <span className="text-sm font-extrabold text-slate-900 mt-0.5 block">
-                                                        {modeloActivoObj?.origen === 'usuario'
-                                                            ? `Tu API Key (${modeloActivoObj.api_key_masked})`
-                                                            : iaSistemaConfigurada
-                                                              ? 'Groq Predeterminado'
-                                                              : 'Clave del servidor pendiente'}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {resultadoIA && (
-                                                <div
-                                                    role="status"
-                                                    className={`p-3.5 rounded-xl border text-xs font-semibold flex items-center justify-between gap-3 ${
-                                                        resultadoIA.ok
-                                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                                                            : 'bg-red-50 border-red-200 text-red-800'
-                                                    }`}
-                                                >
-                                                    <span>{resultadoIA.message}</span>
-                                                    {resultadoIA.latencyMs && (
-                                                        <span className="font-mono font-bold px-2 py-0.5 rounded bg-white border border-emerald-200 text-emerald-700 shrink-0 tabular-nums">
-                                                            {resultadoIA.latencyMs} ms
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Catálogo de Modelos Disponibles (Groq Sistema + Agregados por el usuario) */}
-                                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                                <div>
-                                                    <h3 className="text-lg font-extrabold text-slate-900">
-                                                        Modelos Disponibles
-                                                    </h3>
-                                                    <p className="text-xs text-slate-500">
-                                                        Haz clic en cualquier modelo para activarlo en tus agentes.
-                                                    </p>
-                                                </div>
-                                                <span className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-full border border-slate-200 tabular-nums self-start sm:self-auto">
-                                                    {todosLosModelos.length} modelos listos
-                                                </span>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                                                {todosLosModelos.map((modelo) => {
-                                                    const esActivo = preferencias.modeloActivoId === modelo.id;
-                                                    const esPersonalizado = modelo.origen === 'usuario';
-
-                                                    return (
-                                                        <div
-                                                            key={modelo.id}
-                                                            className={`p-4 rounded-xl border flex flex-col justify-between gap-3 transition-all bg-white ${
-                                                                esActivo
-                                                                    ? 'border-sape-burdeo ring-2 ring-sape-burdeo/20 shadow-sm'
-                                                                    : 'border-slate-200 hover:border-slate-300'
-                                                            }`}
-                                                        >
-                                                            <div className="space-y-1.5">
-                                                                <div className="flex items-start justify-between gap-2">
-                                                                    <span className="text-sm font-extrabold text-slate-900 leading-tight">
-                                                                        {modelo.nombre}
-                                                                    </span>
-                                                                    <span
-                                                                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${
-                                                                            esPersonalizado
-                                                                                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                                                                : 'bg-slate-100 text-slate-700 border-slate-200'
-                                                                        }`}
-                                                                    >
-                                                                        {esPersonalizado ? 'Tu API Key' : 'Groq Sistema'}
-                                                                    </span>
-                                                                </div>
-                                                                <p className="text-xs text-slate-500">
-                                                                    {modelo.subtitulo}
-                                                                </p>
-                                                                {esPersonalizado && modelo.api_key_masked && (
-                                                                    <p className="text-[11px] font-mono text-slate-500">
-                                                                        Clave: {modelo.api_key_masked}
-                                                                    </p>
-                                                                )}
-                                                            </div>
-
-                                                            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => activarModelo(modelo)}
-                                                                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-extrabold border transition-colors ${
-                                                                        esActivo
-                                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                                            : 'bg-slate-100 hover:bg-sape-burdeo hover:text-sape-amarillo text-slate-800 border-slate-200'
-                                                                    }`}
-                                                                >
-                                                                    {esActivo ? 'Activo' : 'Usar modelo'}
-                                                                </button>
-
-                                                                {esPersonalizado && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => eliminarModeloUsuario(modelo)}
-                                                                        aria-label={`Eliminar modelo ${modelo.nombre}`}
-                                                                        className="py-1.5 px-2.5 rounded-lg text-xs font-bold text-red-700 bg-white border border-red-200 hover:bg-red-600 hover:text-white transition-colors"
-                                                                    >
-                                                                        Quitar
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        {/* Formulario para Agregar un Modelo Nuevo mediante API Key */}
-                                        <form
-                                            id="agregar-modelo-api-key"
-                                            onSubmit={guardarNuevoModeloConKey}
-                                            className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5"
-                                        >
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                                <div>
-                                                    <h3 className="text-lg font-extrabold text-slate-900">
-                                                        Agregar Modelo con tu API Key
-                                                    </h3>
-                                                    <p className="text-xs text-slate-500">
-                                                        Tu clave se guarda encriptada en tu cuenta y disponible en cualquier equipo.
-                                                    </p>
-                                                </div>
-                                                <span className="text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full self-start sm:self-auto">
-                                                    Cifrado AES-256 activo
-                                                </span>
-                                            </div>
-
-                                            {/* Paso 1: Elegir Proveedor */}
-                                            <div className="space-y-2">
-                                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                                    1. Proveedor de IA
-                                                </label>
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                                                    {PROVEEDORES_IA.map((prov) => {
-                                                        const activo = nuevoProveedor === prov.id;
-                                                        return (
-                                                            <button
-                                                                key={prov.id}
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setNuevoProveedor(prov.id);
-                                                                    setModelosDetectadosKey([]);
-                                                                    setResultadoNuevaKey(null);
-                                                                    if (prov.modelosSugeridos?.length > 0) {
-                                                                        setNuevoModelId(prov.modelosSugeridos[0].id);
-                                                                    }
-                                                                }}
-                                                                className={`p-3.5 rounded-xl border text-left transition-all bg-white ${
-                                                                    activo
-                                                                        ? 'border-sape-burdeo ring-2 ring-sape-burdeo/20 shadow-sm'
-                                                                        : 'border-slate-200 hover:border-slate-300'
-                                                                }`}
-                                                            >
-                                                                <span className="block text-sm font-extrabold text-slate-900">
-                                                                    {prov.nombre}
-                                                                </span>
-                                                                <span className="block text-[11px] text-slate-500 mt-0.5">
-                                                                    {prov.subtitulo}
-                                                                </span>
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-
-                                            {/* Paso 2: Ingresar API Key y Verificar */}
-                                            <div className="space-y-2">
-                                                <label
-                                                    htmlFor="nuevaApiKeyInput"
-                                                    className="block text-xs font-bold text-slate-700 uppercase tracking-wider"
-                                                >
-                                                    2. API Key de {proveedorSeleccionadoObj.nombre}
-                                                </label>
-                                                <div className="flex flex-col sm:flex-row gap-2.5">
-                                                    <div className="relative flex-1">
-                                                        <input
-                                                            id="nuevaApiKeyInput"
-                                                            type={mostrarApiKey ? 'text' : 'password'}
-                                                            value={nuevaApiKey}
-                                                            onChange={(e) => setNuevaApiKey(e.target.value)}
-                                                            placeholder={proveedorSeleccionadoObj.placeholderKey}
-                                                            className="w-full rounded-xl border-slate-300 text-sm text-slate-900 pr-20 focus:border-sape-burdeo focus:ring-sape-burdeo font-mono"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setMostrarApiKey((v) => !v)}
-                                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-600 hover:text-slate-900 px-2 py-1 rounded bg-slate-100"
-                                                        >
-                                                            {mostrarApiKey ? 'Ocultar' : 'Mostrar'}
-                                                        </button>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={probarKeyYDetectarModelos}
-                                                        disabled={!nuevaApiKey.trim() || probandoNuevaKey}
-                                                        className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-bold text-xs px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 shrink-0"
-                                                    >
-                                                        {probandoNuevaKey
-                                                            ? 'Verificando...'
-                                                            : 'Verificar y cargar modelos'}
-                                                    </button>
-                                                </div>
-
-                                                {resultadoNuevaKey && (
-                                                    <div
-                                                        role="status"
-                                                        className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 ${
-                                                            resultadoNuevaKey.ok
-                                                                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                                                                : 'bg-red-50 border-red-200 text-red-800'
-                                                        }`}
-                                                    >
-                                                        <span>{resultadoNuevaKey.message}</span>
-                                                        {resultadoNuevaKey.latencyMs && (
-                                                            <span className="font-mono font-bold tabular-nums">
-                                                                {resultadoNuevaKey.latencyMs} ms
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Paso 3: Elegir o Escribir el Modelo */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                <div className="space-y-2">
-                                                    <label
-                                                        htmlFor="nuevoModelIdInput"
-                                                        className="block text-xs font-bold text-slate-700 uppercase tracking-wider"
-                                                    >
-                                                        3. Modelo a utilizar
-                                                    </label>
-                                                    <input
-                                                        id="nuevoModelIdInput"
-                                                        type="text"
-                                                        value={nuevoModelId}
-                                                        onChange={(e) => setNuevoModelId(e.target.value)}
-                                                        placeholder={proveedorSeleccionadoObj.modelosSugeridos?.[0]?.id || 'ID del modelo'}
-                                                        className="w-full rounded-xl border-slate-300 text-sm text-slate-900 focus:border-sape-burdeo focus:ring-sape-burdeo font-mono"
-                                                    />
-
-                                                    {/* Píldoras rápidas con modelos sugeridos o detectados */}
-                                                    <div className="flex flex-wrap gap-1.5 pt-1">
-                                                        {(modelosDetectadosKey.length > 0
-                                                            ? modelosDetectadosKey.slice(0, 6).map((id) => ({
-                                                                  id,
-                                                                  nombre: id,
-                                                              }))
-                                                            : proveedorSeleccionadoObj.modelosSugeridos || []
-                                                        ).map((sug) => (
-                                                            <button
-                                                                key={sug.id}
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setNuevoModelId(sug.id);
-                                                                    setNuevoNombreModelo(sug.nombre);
-                                                                }}
-                                                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
-                                                                    nuevoModelId === sug.id
-                                                                        ? 'bg-sape-burdeo text-sape-amarillo border-sape-burdeo'
-                                                                        : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
-                                                                }`}
-                                                            >
-                                                                {sug.nombre}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <label
-                                                        htmlFor="nuevoNombreModeloInput"
-                                                        className="block text-xs font-bold text-slate-700 uppercase tracking-wider"
-                                                    >
-                                                        4. Nombre corto (Opcional)
-                                                    </label>
-                                                    <input
-                                                        id="nuevoNombreModeloInput"
-                                                        type="text"
-                                                        value={nuevoNombreModelo}
-                                                        onChange={(e) => setNuevoNombreModelo(e.target.value)}
-                                                        maxLength={48}
-                                                        placeholder="Ej: Mi Modelo Personal"
-                                                        className="w-full rounded-xl border-slate-300 text-sm text-slate-900 focus:border-sape-burdeo focus:ring-sape-burdeo"
-                                                    />
-                                                    <p className="text-[11px] text-slate-500">
-                                                        Nombre visible en tus tarjetas y en el chat.
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex justify-end pt-2">
-                                                <button
-                                                    type="submit"
-                                                    disabled={
-                                                        !nuevaApiKey.trim() ||
-                                                        !nuevoModelId.trim() ||
-                                                        guardandoIA
-                                                    }
-                                                    className="bg-sape-burdeo hover:bg-sape-burdeo-hover text-sape-amarillo font-bold text-sm px-6 py-2.5 rounded-xl shadow-sm transition-colors disabled:opacity-50"
-                                                >
-                                                    {guardandoIA
-                                                        ? 'Guardando modelo...'
-                                                        : 'Guardar y Activar Modelo'}
-                                                </button>
-                                            </div>
-                                        </form>
-                                    </div>
+                                    <HubIAConfiguracion
+                                        esAdministrador={rolInfo.esAdministrador}
+                                        conexionActiva={conexionActiva}
+                                        configuracionInstitucional={institucional}
+                                        planesColegio={planesColegio}
+                                        modelosPersonalizados={modelosPersonalizados}
+                                        onServidorActualizado={(cfgIA, cfgInst) =>
+                                            aplicarRespuestaServidorIA(cfgIA, null, cfgInst)
+                                        }
+                                        onNotificar={mostrarConfirmacion}
+                                        onError={mostrarError}
+                                    />
                                 )}
 
                                 {/* SUB-APARTADO 2: RESPUESTAS Y VISUALES DE IA */}
@@ -1817,14 +1346,111 @@ export default function ConfiguracionIndex({
 
                                         return (
                                             <div className="space-y-6">
+                                                {/* Presupuesto mensual del colegio (solo Administrador) */}
+                                                {rolInfo.esAdministrador && institucional && (
+                                                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                            <div>
+                                                                <h3 className="text-lg font-extrabold text-slate-900">
+                                                                    Presupuesto Mensual del Colegio
+                                                                </h3>
+                                                                <p className="text-xs text-slate-500 mt-0.5">
+                                                                    {institucional.plan_nombre} · Mes{' '}
+                                                                    {institucional.metricas_mensuales?.mes || 'actual'}
+                                                                </p>
+                                                            </div>
+                                                            <span
+                                                                className={`px-3 py-1 rounded-full text-xs font-extrabold border self-start sm:self-auto ${
+                                                                    institucional.estado_presupuesto?.nivel === 'excedido' ||
+                                                                    institucional.estado_presupuesto?.nivel === 'critico'
+                                                                        ? 'bg-red-50 text-red-700 border-red-200'
+                                                                        : institucional.estado_presupuesto?.nivel === 'aviso'
+                                                                          ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                                                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                                }`}
+                                                            >
+                                                                {institucional.plan_categoria === 'gratuito'
+                                                                    ? 'Plan Gratuito ($0)'
+                                                                    : `${formatearUsd(institucional.metricas_mensuales?.costo_estimado_usd)} / ${formatearUsd(institucional.presupuesto_mensual_usd)} USD`}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                                            <div>
+                                                                <span className="text-xs text-slate-500 font-semibold block">
+                                                                    Consultas del colegio (mes)
+                                                                </span>
+                                                                <span className="text-lg font-extrabold text-slate-900 tabular-nums">
+                                                                    {Number(
+                                                                        institucional.metricas_mensuales?.total_consultas || 0
+                                                                    ).toLocaleString('es-CL')}
+                                                                </span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-xs text-slate-500 font-semibold block">
+                                                                    Tokens del colegio (mes)
+                                                                </span>
+                                                                <span className="text-lg font-extrabold text-slate-900 tabular-nums">
+                                                                    {Number(
+                                                                        institucional.metricas_mensuales?.total_tokens || 0
+                                                                    ).toLocaleString('es-CL')}
+                                                                </span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-xs text-slate-500 font-semibold block">
+                                                                    Gasto estimado (mes)
+                                                                </span>
+                                                                <span className="text-lg font-extrabold text-slate-900 tabular-nums">
+                                                                    {formatearUsd(
+                                                                        institucional.metricas_mensuales?.costo_estimado_usd || 0
+                                                                    )}{' '}
+                                                                    USD
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {institucional.plan_categoria === 'pago' &&
+                                                            institucional.presupuesto_mensual_usd > 0 && (
+                                                                <div className="space-y-1.5">
+                                                                    <div className="flex items-center justify-between text-xs text-slate-600">
+                                                                        <span>
+                                                                            {institucional.estado_presupuesto?.mensaje}
+                                                                        </span>
+                                                                        <span className="font-extrabold text-slate-900 tabular-nums">
+                                                                            {institucional.estado_presupuesto?.porcentaje || 0}%
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                                        <div
+                                                                            className={`h-full rounded-full ${
+                                                                                (institucional.estado_presupuesto?.porcentaje || 0) >= 90
+                                                                                    ? 'bg-red-600'
+                                                                                    : (institucional.estado_presupuesto?.porcentaje || 0) >=
+                                                                                        (institucional.alerta_porcentaje || 80)
+                                                                                      ? 'bg-amber-500'
+                                                                                      : 'bg-emerald-600'
+                                                                            }`}
+                                                                            style={{
+                                                                                width: `${Math.min(
+                                                                                    100,
+                                                                                    institucional.estado_presupuesto?.porcentaje || 0
+                                                                                )}%`,
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                    </div>
+                                                )}
+
                                                 {/* Cabecera y acciones rápidas */}
                                                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                                     <div>
                                                         <h3 className="text-lg font-extrabold text-slate-900">
-                                                            Consumo de Tokens y Cuota del Modelo
+                                                            Tu Consumo de Tokens y Cuota
                                                         </h3>
                                                         <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                                                            Monitorea cuántos tokens llevas utilizados en el chat e informes IA y cuánta cuota disponible reporta el proveedor para tu modelo activo.
+                                                            Monitorea tokens utilizados en el chat e informes IA y la cuota reportada por el proveedor.
                                                         </p>
                                                     </div>
 
@@ -1923,13 +1549,11 @@ export default function ConfiguracionIndex({
                                                             </p>
                                                         </div>
                                                         <div className="mt-3 pt-2.5 border-t border-slate-100 text-[11px] text-slate-600 truncate">
-                                                            {metricasConsumo?.ultimo_modelo_usado ? (
+                                                            {metricasConsumo?.ultima_consulta?.modelo_nombre ? (
                                                                 <span>
                                                                     Último:{' '}
                                                                     <strong className="text-slate-800">
-                                                                        {
-                                                                            metricasConsumo.ultimo_modelo_usado
-                                                                        }
+                                                                        {metricasConsumo.ultima_consulta.modelo_nombre}
                                                                     </strong>
                                                                 </span>
                                                             ) : (
@@ -2009,7 +1633,7 @@ export default function ConfiguracionIndex({
                                                                 null &&
                                                             cuotaActiva?.remaining_tokens !==
                                                                 undefined ? (
-                                                                <p className="text-2xl font-extrabold text-indigo-700 mt-1.5 tabular-nums">
+                                                                <p className="text-2xl font-extrabold text-sape-burdeo mt-1.5 tabular-nums">
                                                                     {Number(
                                                                         cuotaActiva.remaining_tokens
                                                                     ).toLocaleString('es-CL')}
@@ -2035,7 +1659,7 @@ export default function ConfiguracionIndex({
                                                                 <div className="space-y-1">
                                                                     <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                                                         <div
-                                                                            className="h-full bg-indigo-500 rounded-full"
+                                                                            className="h-full bg-sape-burdeo rounded-full"
                                                                             style={{
                                                                                 width: `${pctTokens}%`,
                                                                             }}
@@ -2176,7 +1800,7 @@ export default function ConfiguracionIndex({
                                                                                 <span className="text-slate-500 block text-[10px] font-bold uppercase">
                                                                                     Tokens/min disp.
                                                                                 </span>
-                                                                                <strong className="text-indigo-700 tabular-nums">
+                                                                                <strong className="text-sape-burdeo tabular-nums">
                                                                                     {Number(
                                                                                         cuota.remaining_tokens
                                                                                     ).toLocaleString(
