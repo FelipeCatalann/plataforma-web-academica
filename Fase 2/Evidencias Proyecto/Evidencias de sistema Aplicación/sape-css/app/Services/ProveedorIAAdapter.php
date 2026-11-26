@@ -505,6 +505,11 @@ class ProveedorIAAdapter
         return ! in_array($codigo, ['insufficient_quota', 'blocked_api_access', 'billing_hard_limit_reached'], true);
     }
 
+    public static function esErrorTamanoPeticion(Response $response): bool
+    {
+        return $response->status() === 413;
+    }
+
     public static function modeloRespaldoGroq(string $modeloActual): ?array
     {
         $actual = trim($modeloActual);
@@ -512,19 +517,19 @@ class ProveedorIAAdapter
         return match ($actual) {
             'openai/gpt-oss-120b' => [
                 'model' => 'openai/gpt-oss-20b',
-                'nombre' => 'GPT-OSS 20B (respaldo)',
+                'nombre' => 'Rápido - Mínimo gasto (GPT-OSS 20B, respaldo)',
             ],
             'openai/gpt-oss-20b' => [
                 'model' => 'llama-3.3-70b-versatile',
-                'nombre' => 'Llama 3.3 70B (respaldo)',
+                'nombre' => 'Respaldo General - Bajo gasto (Llama 3.3 70B, respaldo)',
             ],
             'llama-3.3-70b-versatile' => [
                 'model' => 'openai/gpt-oss-20b',
-                'nombre' => 'GPT-OSS 20B (respaldo)',
+                'nombre' => 'Rápido - Mínimo gasto (GPT-OSS 20B, respaldo)',
             ],
             default => [
                 'model' => 'openai/gpt-oss-20b',
-                'nombre' => 'GPT-OSS 20B (respaldo)',
+                'nombre' => 'Rápido - Mínimo gasto (GPT-OSS 20B, respaldo)',
             ],
         };
     }
@@ -604,6 +609,10 @@ class ProveedorIAAdapter
             }
 
             return "Se alcanzó el límite temporal de consultas en {$proveedorNombre}. Espera unos segundos, cambia de modelo o activa Groq Developer / OpenAI.";
+        }
+
+        if ($status === 413) {
+            return "La solicitud superó el límite de tamaño por consulta del plan en {$proveedorNombre}. Divide la lista en bloques más pequeños o cambia a otro modelo en Configuración → IA.";
         }
 
         if ($status === 400) {

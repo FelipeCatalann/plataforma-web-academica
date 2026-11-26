@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -240,5 +241,166 @@ class GestionDatosCursoTest extends TestCase
         ]);
         $respReimport->assertRedirect();
         $this->assertNotNull(DB::table('cursos')->where('nivel', '1')->where('letra', 'B')->first());
+    }
+
+    public function test_cp_007_nomina_con_fecha_retiro_guarda_matricula_retirada_y_no_vigente(): void
+    {
+        $libro = IOFactory::load($this->excel1A);
+        $nomina = $libro->getSheetByName('NOMINA');
+        $runRetirado = (string) $nomina->getCell('E2')->getValue();
+        $nomina->setCellValue('I2', '30-06-2026');
+        (new Xlsx($libro))->save($this->excel1A);
+
+        Excel::import(new ImportadorSyscol, $this->excel1A);
+
+        $estudianteId = DB::table('estudiantes')->where('identificadorInterno', $runRetirado)->value('id');
+        $matricula = DB::table('matriculas')->where('estudiante_id', $estudianteId)->first();
+
+        $this->assertNotNull($matricula);
+        $this->assertSame('RETIRADO', $matricula->estado);
+        $this->assertFalse((bool) $matricula->vigente);
+    }
+
+    public function test_cp_009_nota_de_curso_inexistente_se_rechaza_y_no_sobrescribe_otro_curso(): void
+    {
+        Excel::import(new ImportadorSyscol, $this->excel1A);
+        $notasAntes = DB::table('calificaciones')->orderBy('id')->get()->all();
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('Administrador', 'web'));
+
+        $libro = IOFactory::load($this->excel1A);
+        $hojaCal = $libro->getSheetByName('CALIFICACIONES');
+        $hojaCal->setCellValue('D2', 'B'); // 1° B no existe en la nómina de esta planilla
+        $hojaCal->setCellValue('I2', 2.0);
+        (new Xlsx($libro))->save($this->excel1B);
+
+        $archivo = new UploadedFile($this->excel1B, 'curso_inexistente.xlsx', null, null, true);
+        $this->actingAs($admin)->postJson(route('admin.importar.revisar'), ['archivo_excel' => $archivo])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('archivo_excel');
+
+        $this->assertDatabaseCount('cursos', 1);
+        $this->assertEquals($notasAntes, DB::table('calificaciones')->orderBy('id')->get()->all());
+    }
+
+    public function test_cp_010_nota_final_con_texto_es_rechazada_sin_guardar_calificacion(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('Administrador', 'web'));
+
+        $libro = IOFactory::load($this->excel1A);
+        $hojaCal = $libro->getSheetByName('CALIFICACIONES');
+        $hojaCal->setCellValue('I2', 'sin dato');
+        $hojaCal->setCellValue('J2', null);
+        $hojaCal->setCellValue('K2', null);
+        (new Xlsx($libro))->save($this->excel1A);
+
+        $archivo = new UploadedFile($this->excel1A, 'nota_texto.xlsx', null, null, true);
+        $this->actingAs($admin)->postJson(route('admin.importar.revisar'), ['archivo_excel' => $archivo])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('archivo_excel');
+
+        $this->assertDatabaseCount('calificaciones', 0);
+    }
+
+    public function test_cp_011_nota_final_mayor_a_siete_es_rechazada_sin_guardar_calificacion(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('Administrador', 'web'));
+
+        $libro = IOFactory::load($this->excel1A);
+        $hojaCal = $libro->getSheetByName('CALIFICACIONES');
+        $hojaCal->setCellValue('I2', 9.0);
+        $hojaCal->setCellValue('J2', null);
+        $hojaCal->setCellValue('K2', null);
+        (new Xlsx($libro))->save($this->excel1A);
+
+        $archivo = new UploadedFile($this->excel1A, 'nota_fuera_escala.xlsx', null, null, true);
+        $this->actingAs($admin)->postJson(route('admin.importar.revisar'), ['archivo_excel' => $archivo])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('archivo_excel');
+
+        $this->assertDatabaseCount('calificaciones', 0);
+    }
+
+    public function test_cp_012_eliminar_curso_sin_patron_en_nombre_no_borra_historial_de_otro_curso_con_mismas_notas(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('Administrador', 'web'));
+
+        // Dejar ambos archivos con exactamente la misma cantidad de calificaciones (1 fila de nota cada uno)
+        foreach ([$this->excel1A, $this->excel1B] as $ruta) {
+            $libro = IOFactory::load($ruta);
+            $nomina = $libro->getSheetByName('NOMINA');
+            if ($nomina->getHighestDataRow() > 2) {
+                $nomina->removeRow(3, $nomina->getHighestDataRow() - 2);
+            }
+            $cal = $libro->getSheetByName('CALIFICACIONES');
+            if ($cal->getHighestDataRow() > 2) {
+                $cal->removeRow(3, $cal->getHighestDataRow() - 2);
+            }
+            $cal->setCellValue('I2', 6.0);
+            $cal->setCellValue('J2', null);
+            $cal->setCellValue('K2', null);
+            $cal->setCellValue('L2', 1);
+            (new Xlsx($libro))->save($ruta);
+        }
+
+        $archivoUno = fn () => ['archivo_excel' => new UploadedFile($this->excel1A, 'carga_generica_uno.xlsx', null, null, true)];
+        $archivoDos = fn () => ['archivo_excel' => new UploadedFile($this->excel1B, 'carga_generica_dos.xlsx', null, null, true)];
+
+        $this->actingAs($admin)->postJson(route('admin.importar.revisar'), $archivoUno())->assertOk();
+        $this->post(route('admin.importar.store'), $archivoUno())->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->postJson(route('admin.importar.revisar'), $archivoDos())->assertOk();
+        $this->post(route('admin.importar.store'), $archivoDos())->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('importacion_excels', 2);
+        $curso1A = DB::table('cursos')->where('nivel', '1')->where('letra', 'A')->first();
+
+        $this->delete(route('admin.cursos.eliminarExcel', $curso1A->id))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('importacion_excels', ['archivoOriginal' => 'carga_generica_uno.xlsx']);
+        $this->assertDatabaseHas('importacion_excels', ['archivoOriginal' => 'carga_generica_dos.xlsx']);
+        $this->assertDatabaseCount('importacion_excels', 1);
+    }
+
+    public function test_cp_013_semestre_fuera_de_rango_es_rechazado_sin_guardar_calificacion(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('Administrador', 'web'));
+
+        $libro = IOFactory::load($this->excel1A);
+        $hojaCal = $libro->getSheetByName('CALIFICACIONES');
+        $hojaCal->setCellValue('L2', 3);
+        (new Xlsx($libro))->save($this->excel1A);
+
+        $archivo = new UploadedFile($this->excel1A, 'semestre_tres.xlsx', null, null, true);
+        $this->actingAs($admin)->postJson(route('admin.importar.revisar'), ['archivo_excel' => $archivo])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('archivo_excel');
+
+        $this->assertDatabaseCount('calificaciones', 0);
+    }
+
+    public function test_cp_014_reversion_de_migraciones_elimina_asignatura_curso_y_calificaciones(): void
+    {
+        $migracionCalificaciones = require database_path('migrations/2026_09_28_141620_create_calificacions_table.php');
+        $migracionAsignaturaCurso = require database_path('migrations/2026_09_28_141615_create_asignatura_cursos_table.php');
+
+        $this->assertTrue(Schema::hasTable('calificaciones'));
+        $this->assertTrue(Schema::hasTable('asignatura_curso'));
+
+        $migracionCalificaciones->down();
+        $migracionAsignaturaCurso->down();
+
+        $this->assertFalse(Schema::hasTable('calificaciones'));
+        $this->assertFalse(Schema::hasTable('asignatura_curso'));
+
+        // Restaurar esquema para que la transacción de RefreshDatabase cierre limpiamente
+        $migracionAsignaturaCurso->up();
+        $migracionCalificaciones->up();
     }
 }

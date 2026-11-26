@@ -5,12 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Asignatura;
 use App\Models\Curso;
 use App\Models\User;
+use App\Services\AsignacionDocenteService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
-use Spatie\Permission\Models\Role;
 
 class DashboardController extends Controller
 {
@@ -123,6 +121,7 @@ class DashboardController extends Controller
             $curso->setAttribute('calificaciones_count', $calificacionesCount);
             $curso->setAttribute('promedio_curso', $promedio);
             $curso->setAttribute('profesor_jefe_nombre', $curso->profesorJefe?->name);
+            $curso->setAttribute('profesor_jefe_email', $curso->profesorJefe?->email);
             $curso->setAttribute('archivo_excel', $importacionAsociada?->archivoOriginal);
             $curso->setAttribute('fecha_importacion', $importacionAsociada?->finalizadaEn ?? $curso->updated_at?->toDateTimeString());
 
@@ -156,6 +155,7 @@ class DashboardController extends Controller
                     'asignaturas_count' => $cursoSubido ? $cursoSubido->asignaturas->count() : 0,
                     'promedio_curso' => $cursoSubido?->promedio_curso,
                     'profesor_jefe_nombre' => $cursoSubido?->profesor_jefe_nombre,
+                    'profesor_jefe_email' => $cursoSubido?->profesor_jefe_email,
                     'archivo_excel' => $cursoSubido?->archivo_excel,
                     'fecha_importacion' => $cursoSubido?->fecha_importacion,
                     'estudiantes' => $cursoSubido ? ($estudiantesResumenPorCurso[$cursoSubido->id] ?? []) : [],
@@ -181,6 +181,7 @@ class DashboardController extends Controller
                     'asignaturas_count' => $cursoExtra->asignaturas->count(),
                     'promedio_curso' => $cursoExtra->promedio_curso,
                     'profesor_jefe_nombre' => $cursoExtra->profesor_jefe_nombre,
+                    'profesor_jefe_email' => $cursoExtra->profesor_jefe_email,
                     'archivo_excel' => $cursoExtra->archivo_excel,
                     'fecha_importacion' => $cursoExtra->fecha_importacion,
                     'estudiantes' => $estudiantesResumenPorCurso[$cursoExtra->id] ?? [],
@@ -214,7 +215,7 @@ class DashboardController extends Controller
         return User::select('id', 'name', 'email')->orderBy('name')->get();
     }
 
-    public function crearProfesor(Request $request)
+    public function crearProfesor(Request $request, AsignacionDocenteService $asignacionService)
     {
         $validated = $request->validate(
             [
@@ -252,21 +253,14 @@ class DashboardController extends Controller
             ]
         );
 
-        $nombreCompleto = collect([
-            trim($validated['nombre']),
-            trim($validated['primer_apellido']),
-            trim($validated['segundo_apellido']),
-        ])->filter()->implode(' ');
-
-        $profesor = new User([
-            'name' => $nombreCompleto,
-            'email' => trim($validated['email']),
-            'password' => Hash::make($validated['password']),
-        ]);
-        $profesor->save();
-
-        Role::firstOrCreate(['name' => $validated['rol_inicial']]);
-        $profesor->assignRole($validated['rol_inicial']);
+        $profesor = $asignacionService->crearDocente(
+            $validated['nombre'],
+            $validated['primer_apellido'],
+            $validated['segundo_apellido'],
+            $validated['email'],
+            $validated['password'],
+            $validated['rol_inicial']
+        );
 
         return back()->with(
             'success',
@@ -274,83 +268,50 @@ class DashboardController extends Controller
         );
     }
 
-    public function asignarCurso(Request $request)
+    public function asignarCurso(Request $request, AsignacionDocenteService $asignacionService)
     {
-        $request->validate([
-            'profesor_id' => 'required|exists:users,id',
-            'curso_id' => 'required|exists:cursos,id',
-            'tipo_rol' => 'required|in:jefe,asignatura',
-            'asignatura_id' => 'required_if:tipo_rol,asignatura',
+        $validado = $request->validate([
+            'profesor_id' => ['required', 'exists:users,id'],
+            'tipo_rol' => ['required', 'in:jefe,asignatura'],
+            'curso_id' => ['required_without:curso_ids', 'nullable', 'exists:cursos,id'],
+            'curso_ids' => ['required_without:curso_id', 'nullable', 'array', 'min:1'],
+            'curso_ids.*' => ['string', 'exists:cursos,id'],
+            'asignatura_id' => ['nullable', 'exists:asignaturas,id'],
+            'asignatura_ids' => ['nullable', 'array'],
+            'asignatura_ids.*' => ['string', 'exists:asignaturas,id'],
+            'asignatura_nombres' => ['nullable', 'array'],
+            'asignatura_nombres.*' => ['string', 'max:150'],
         ]);
 
-        $profesor = User::findOrFail($request->profesor_id);
-        $curso = Curso::findOrFail($request->curso_id);
+        $profesor = User::findOrFail($validado['profesor_id']);
+        $cursoIds = ! empty($validado['curso_ids'])
+            ? $validado['curso_ids']
+            : [$validado['curso_id']];
 
-        if ($request->tipo_rol === 'jefe') {
-            // Limpiamos jefatura anterior de este profesor para evitar que tenga 2 cursos como Profesor Jefe simultáneamente
-            Curso::where('profesor_jefe_id', $profesor->id)
-                ->where('id', '!=', $curso->id)
-                ->update(['profesor_jefe_id' => null]);
+        $asignaturaIds = ! empty($validado['asignatura_ids'])
+            ? $validado['asignatura_ids']
+            : (! empty($validado['asignatura_id']) ? [$validado['asignatura_id']] : []);
 
-            $curso->profesor_jefe_id = $profesor->id;
-            $curso->save();
+        $asignaturaNombres = $validado['asignatura_nombres'] ?? [];
 
-            $profesor->assignRole('Profesor Jefe');
+        $resultado = $asignacionService->aplicarAsignacionMultiple(
+            $request->user(),
+            $profesor,
+            $cursoIds,
+            $validado['tipo_rol'],
+            $asignaturaIds,
+            $asignaturaNombres
+        );
 
-        } else {
-            $asignaturaSolicitada = Asignatura::findOrFail($request->asignatura_id);
-            $nombreNormalizado = mb_strtolower(trim((string) $asignaturaSolicitada->nombre));
-
-            // Buscar filas existentes en asignatura_curso para este curso y asignatura (priorizando la que ya tiene calificaciones cargadas)
-            $filasExistentes = DB::table('asignatura_curso')
-                ->join('asignaturas', 'asignatura_curso.asignatura_id', '=', 'asignaturas.id')
-                ->leftJoin('calificaciones', 'calificaciones.asignatura_curso_id', '=', 'asignatura_curso.id')
-                ->where('asignatura_curso.curso_id', $curso->id)
-                ->where(function ($query) use ($asignaturaSolicitada, $nombreNormalizado) {
-                    $query->where('asignatura_curso.asignatura_id', $asignaturaSolicitada->id)
-                        ->orWhereRaw('LOWER(TRIM(asignaturas.nombre)) = ?', [$nombreNormalizado]);
-                })
-                ->select('asignatura_curso.id', DB::raw('COUNT(calificaciones.id) as total_notas'))
-                ->groupBy('asignatura_curso.id')
-                ->orderByDesc('total_notas')
-                ->get();
-
-            if ($filasExistentes->isNotEmpty()) {
-                $filaPrincipal = $filasExistentes->first();
-
-                DB::table('asignatura_curso')
-                    ->where('id', $filaPrincipal->id)
-                    ->update([
-                        'profesor_id' => $profesor->id,
-                        'updated_at' => now(),
-                    ]);
-
-                // Limpiar duplicados vacíos si existían para la misma asignatura y curso
-                $idsDuplicados = $filasExistentes->slice(1)->pluck('id')->all();
-                if (! empty($idsDuplicados)) {
-                    DB::table('calificaciones')
-                        ->whereIn('asignatura_curso_id', $idsDuplicados)
-                        ->update(['asignatura_curso_id' => $filaPrincipal->id]);
-
-                    DB::table('asignatura_curso')
-                        ->whereIn('id', $idsDuplicados)
-                        ->delete();
-                }
-            } else {
-                DB::table('asignatura_curso')->insert([
-                    'id' => Str::uuid()->toString(),
-                    'curso_id' => $curso->id,
-                    'asignatura_id' => $asignaturaSolicitada->id,
-                    'profesor_id' => $profesor->id,
-                    'ponderacion' => 1.00,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
+        if ($resultado['aplicadas'] > 1) {
+            $mensaje = "Se guardaron {$resultado['aplicadas']} asignaciones en {$resultado['cursos_afectados']} cursos para {$profesor->name}.";
+            if ($resultado['omitidas'] > 0) {
+                $mensaje .= " ({$resultado['omitidas']} combinaciones no dictadas en algún curso se omitieron).";
             }
 
-            $profesor->assignRole('Profesor de Asignatura');
+            return back()->with('success', $mensaje);
         }
 
-        return back()->with('success', '✅ ¡Asignación de carga académica guardada correctamente!');
+        return back()->with('success', '¡Asignación de carga académica guardada correctamente!');
     }
 }

@@ -87,8 +87,9 @@ export const MODELOS_GROQ_SISTEMA = [
     {
         id: 'openai/gpt-oss-120b',
         model_id: 'openai/gpt-oss-120b',
-        nombre: 'GPT-OSS 120B',
-        subtitulo: 'Groq · Razonamiento profundo',
+        nombre: 'Análisis - Bajo gasto',
+        nombre_tecnico: 'GPT-OSS 120B',
+        subtitulo: 'Uso diario recomendado',
         proveedor: 'groq',
         proveedor_nombre: 'Groq Cloud',
         origen: 'sistema',
@@ -96,8 +97,9 @@ export const MODELOS_GROQ_SISTEMA = [
     {
         id: 'qwen/qwen3.8-27b',
         model_id: 'qwen/qwen3.8-27b',
-        nombre: 'Qwen 3.8 27B',
-        subtitulo: 'Groq · Redacción formal',
+        nombre: 'Informes - Gasto medio',
+        nombre_tecnico: 'Qwen 3.8 27B',
+        subtitulo: 'Redacción formal',
         proveedor: 'groq',
         proveedor_nombre: 'Groq Cloud',
         origen: 'sistema',
@@ -105,13 +107,216 @@ export const MODELOS_GROQ_SISTEMA = [
     {
         id: 'openai/gpt-oss-20b',
         model_id: 'openai/gpt-oss-20b',
-        nombre: 'GPT-OSS 20B',
-        subtitulo: 'Groq · Consultas rápidas',
+        nombre: 'Rápido - Mínimo gasto',
+        nombre_tecnico: 'GPT-OSS 20B',
+        subtitulo: 'Consultas simples al instante',
         proveedor: 'groq',
         proveedor_nombre: 'Groq Cloud',
         origen: 'sistema',
     },
 ];
+
+export const CATALOGO_MODELOS_DOCENTE = {
+    'openai/gpt-oss-120b': {
+        nombre: 'Análisis - Bajo gasto',
+        nombreTecnico: 'GPT-OSS 120B',
+        subtitulo: 'Uso diario recomendado',
+    },
+    'qwen/qwen3.8-27b': {
+        nombre: 'Informes - Gasto medio',
+        nombreTecnico: 'Qwen 3.8 27B',
+        subtitulo: 'Redacción formal',
+    },
+    'openai/gpt-oss-20b': {
+        nombre: 'Rápido - Mínimo gasto',
+        nombreTecnico: 'GPT-OSS 20B',
+        subtitulo: 'Consultas simples al instante',
+    },
+    'llama-3.3-70b-versatile': {
+        nombre: 'Respaldo General - Bajo gasto',
+        nombreTecnico: 'Llama 3.3 70B',
+        subtitulo: 'Respaldo automático',
+    },
+    'gpt-4o-mini': {
+        nombre: 'Rápido - Bajo gasto',
+        nombreTecnico: 'GPT-4o Mini',
+        subtitulo: 'Uso diario económico',
+    },
+    'gpt-4.1-mini': {
+        nombre: 'Equilibrado - Gasto medio',
+        nombreTecnico: 'GPT-4.1 Mini',
+        subtitulo: 'Recomendado, muy estable',
+    },
+    'gpt-5-mini': {
+        nombre: 'Análisis - Gasto medio',
+        nombreTecnico: 'GPT-5 Mini',
+        subtitulo: 'Razonamiento avanzado',
+    },
+    'gpt-4o': {
+        nombre: 'Avanzado - Alto gasto',
+        nombreTecnico: 'GPT-4o',
+        subtitulo: 'Máxima capacidad',
+    },
+    'gemini-2.5-flash-lite': {
+        nombre: 'Rápido - Mínimo gasto',
+        nombreTecnico: 'Gemini 2.5 Flash-Lite',
+        subtitulo: 'Consultas breves',
+    },
+    'gemini-2.5-flash': {
+        nombre: 'Equilibrado - Gasto medio',
+        nombreTecnico: 'Gemini 2.5 Flash',
+        subtitulo: 'Rápido y versátil',
+    },
+    'gemini-2.5-pro': {
+        nombre: 'Análisis Profundo - Alto gasto',
+        nombreTecnico: 'Gemini 2.5 Pro',
+        subtitulo: 'Análisis extenso',
+    },
+    'openai/gpt-4.1-mini': {
+        nombre: 'Equilibrado - Gasto medio',
+        nombreTecnico: 'GPT-4.1 Mini',
+        subtitulo: 'Estable en OpenRouter',
+    },
+    'google/gemini-2.5-flash': {
+        nombre: 'Rápido - Gasto medio',
+        nombreTecnico: 'Gemini 2.5 Flash',
+        subtitulo: 'Rápido en OpenRouter',
+    },
+    'anthropic/claude-haiku-4-5': {
+        nombre: 'Redacción - Gasto medio',
+        nombreTecnico: 'Claude Haiku 4.5',
+        subtitulo: 'Redacción ágil',
+    },
+    'claude-haiku-4-5': {
+        nombre: 'Redacción Ágil - Gasto medio',
+        nombreTecnico: 'Claude Haiku 4.5',
+        subtitulo: 'Redacción rápida',
+    },
+    'claude-sonnet-4-6': {
+        nombre: 'Redacción Premium - Alto gasto',
+        nombreTecnico: 'Claude Sonnet 4.6',
+        subtitulo: 'Informes complejos',
+    },
+};
+
+const ALIAS_LEGACY_MODELOS = {
+    'gpt-oss 120b': { id: 'openai/gpt-oss-120b', esRespaldo: false },
+    'qwen 3.8 27b': { id: 'qwen/qwen3.8-27b', esRespaldo: false },
+    'gpt-oss 20b': { id: 'openai/gpt-oss-20b', esRespaldo: false },
+    'gpt-oss 20b (respaldo)': { id: 'openai/gpt-oss-20b', esRespaldo: true },
+    'llama 3.3 70b (respaldo)': { id: 'llama-3.3-70b-versatile', esRespaldo: true },
+    'análisis · bajo gasto': { id: 'openai/gpt-oss-120b', esRespaldo: false },
+    'informes · gasto medio': { id: 'qwen/qwen3.8-27b', esRespaldo: false },
+    'rápido · mínimo gasto': { id: 'openai/gpt-oss-20b', esRespaldo: false },
+    'análisis · bajo gasto (gpt-oss 120b)': { id: 'openai/gpt-oss-120b', esRespaldo: false },
+    'informes · gasto medio (qwen 3.8 27b)': { id: 'qwen/qwen3.8-27b', esRespaldo: false },
+    'rápido · mínimo gasto (gpt-oss 20b)': { id: 'openai/gpt-oss-20b', esRespaldo: false },
+    'rápido · mínimo gasto (gpt-oss 20b · respaldo)': { id: 'openai/gpt-oss-20b', esRespaldo: true },
+    'gpt-4.1 mini': { id: 'gpt-4.1-mini', esRespaldo: false },
+    'gpt-4o mini': { id: 'gpt-4o-mini', esRespaldo: false },
+    'gpt-5 mini': { id: 'gpt-5-mini', esRespaldo: false },
+    'gpt-4o': { id: 'gpt-4o', esRespaldo: false },
+    'gemini 2.5 flash': { id: 'gemini-2.5-flash', esRespaldo: false },
+    'gemini 2.5 flash-lite': { id: 'gemini-2.5-flash-lite', esRespaldo: false },
+    'gemini 2.5 pro': { id: 'gemini-2.5-pro', esRespaldo: false },
+    'claude haiku 4.5': { id: 'claude-haiku-4-5', esRespaldo: false },
+    'claude sonnet 4.6': { id: 'claude-sonnet-4-6', esRespaldo: false },
+};
+
+export function obtenerPresentacionModelo(entrada, modelIdOpcional = null) {
+    const construir = (nombre, nombreTecnico = null, subtitulo = '') => {
+        const limpio = String(nombre || '').trim() || 'Modelo IA';
+        const tecLimpio = nombreTecnico ? String(nombreTecnico).trim() : null;
+        const mostrarTec =
+            tecLimpio &&
+            tecLimpio.toLowerCase() !== limpio.toLowerCase() &&
+            !limpio.toLowerCase().includes(`(${tecLimpio.toLowerCase()})`)
+                ? tecLimpio
+                : null;
+        return {
+            nombre: limpio,
+            nombreTecnico: mostrarTec,
+            subtitulo: String(subtitulo || '').trim(),
+            etiquetaCompleta: mostrarTec ? `${limpio} (${mostrarTec})` : limpio,
+        };
+    };
+
+    if (entrada && typeof entrada === 'object') {
+        const claveId = String(modelIdOpcional || entrada.model_id || entrada.modelo || entrada.id || '').trim();
+        const cat = CATALOGO_MODELOS_DOCENTE[claveId] || null;
+        const nombreCrudo = String(entrada.nombre || entrada.modelo_nombre || '').trim();
+        const alias = ALIAS_LEGACY_MODELOS[nombreCrudo.toLowerCase()] || null;
+
+        if (alias) {
+            const catAlias = CATALOGO_MODELOS_DOCENTE[alias.id];
+            const tec = alias.esRespaldo
+                ? `${catAlias.nombreTecnico}, respaldo`
+                : catAlias.nombreTecnico;
+            return construir(catAlias.nombre, tec, entrada.subtitulo || catAlias.subtitulo);
+        }
+
+        const tecnicoExplicito =
+            entrada.nombreTecnico ||
+            entrada.nombre_tecnico ||
+            entrada.modelo_tecnico ||
+            cat?.nombreTecnico ||
+            null;
+
+        if (nombreCrudo) {
+            const matchParen = nombreCrudo.match(/^(.+?)\s*\(([^()]+)\)$/);
+            if (matchParen) {
+                return construir(
+                    matchParen[1],
+                    matchParen[2],
+                    entrada.subtitulo || cat?.subtitulo || ''
+                );
+            }
+            if (cat && nombreCrudo.toLowerCase() === claveId.toLowerCase()) {
+                return construir(cat.nombre, cat.nombreTecnico, entrada.subtitulo || cat.subtitulo);
+            }
+            return construir(nombreCrudo, tecnicoExplicito, entrada.subtitulo || cat?.subtitulo || '');
+        }
+
+        if (cat) {
+            return construir(cat.nombre, cat.nombreTecnico, entrada.subtitulo || cat.subtitulo);
+        }
+
+        return construir(claveId || 'Modelo IA', null, entrada.subtitulo || '');
+    }
+
+    const texto = String(entrada || '').trim();
+    const claveExplicita = String(modelIdOpcional || '').trim();
+
+    if (claveExplicita && CATALOGO_MODELOS_DOCENTE[claveExplicita]) {
+        const cat = CATALOGO_MODELOS_DOCENTE[claveExplicita];
+        if (!texto || texto.toLowerCase() === claveExplicita.toLowerCase()) {
+            return construir(cat.nombre, cat.nombreTecnico, cat.subtitulo);
+        }
+    }
+
+    if (CATALOGO_MODELOS_DOCENTE[texto]) {
+        const cat = CATALOGO_MODELOS_DOCENTE[texto];
+        return construir(cat.nombre, cat.nombreTecnico, cat.subtitulo);
+    }
+
+    const alias = ALIAS_LEGACY_MODELOS[texto.toLowerCase()] || null;
+    if (alias) {
+        const cat = CATALOGO_MODELOS_DOCENTE[alias.id];
+        const tec = alias.esRespaldo ? `${cat.nombreTecnico}, respaldo` : cat.nombreTecnico;
+        return construir(cat.nombre, tec, cat.subtitulo);
+    }
+
+    const matchParen = texto.match(/^(.+?)\s*\(([^()]+)\)$/);
+    if (matchParen) {
+        return construir(matchParen[1], matchParen[2]);
+    }
+
+    if (claveExplicita && CATALOGO_MODELOS_DOCENTE[claveExplicita]) {
+        return construir(texto, CATALOGO_MODELOS_DOCENTE[claveExplicita].nombreTecnico);
+    }
+
+    return construir(texto || 'Modelo IA', claveExplicita && claveExplicita !== texto ? claveExplicita : null);
+}
 
 export const PROVEEDORES_IA = [
     {
@@ -122,9 +327,24 @@ export const PROVEEDORES_IA = [
         consoleUrl: 'https://console.groq.com/keys',
         consoleLabel: 'Groq Console',
         modelosSugeridos: [
-            { id: 'openai/gpt-oss-120b', nombre: 'GPT-OSS 120B', etiqueta: 'Recomendado · $' },
-            { id: 'openai/gpt-oss-20b', nombre: 'GPT-OSS 20B', etiqueta: 'Ultrarrápido · $' },
-            { id: 'qwen/qwen3.8-27b', nombre: 'Qwen 3.8 27B', etiqueta: 'Informes · $$' },
+            {
+                id: 'openai/gpt-oss-120b',
+                nombre: 'Análisis - Bajo gasto',
+                nombreTecnico: 'GPT-OSS 120B',
+                etiqueta: 'Recomendado',
+            },
+            {
+                id: 'openai/gpt-oss-20b',
+                nombre: 'Rápido - Mínimo gasto',
+                nombreTecnico: 'GPT-OSS 20B',
+                etiqueta: 'Ultrarrápido',
+            },
+            {
+                id: 'qwen/qwen3.8-27b',
+                nombre: 'Informes - Gasto medio',
+                nombreTecnico: 'Qwen 3.8 27B',
+                etiqueta: 'Redacción formal',
+            },
         ],
     },
     {
@@ -135,10 +355,30 @@ export const PROVEEDORES_IA = [
         consoleUrl: 'https://platform.openai.com/api-keys',
         consoleLabel: 'OpenAI Platform',
         modelosSugeridos: [
-            { id: 'gpt-4.1-mini', nombre: 'GPT-4.1 Mini', etiqueta: 'Recomendado · $$' },
-            { id: 'gpt-4o-mini', nombre: 'GPT-4o Mini', etiqueta: 'Económico · $' },
-            { id: 'gpt-5-mini', nombre: 'GPT-5 Mini', etiqueta: 'Razonamiento · $$' },
-            { id: 'gpt-4o', nombre: 'GPT-4o', etiqueta: 'Avanzado · $$$' },
+            {
+                id: 'gpt-4.1-mini',
+                nombre: 'Equilibrado - Gasto medio',
+                nombreTecnico: 'GPT-4.1 Mini',
+                etiqueta: 'Recomendado',
+            },
+            {
+                id: 'gpt-4o-mini',
+                nombre: 'Rápido - Bajo gasto',
+                nombreTecnico: 'GPT-4o Mini',
+                etiqueta: 'Económico',
+            },
+            {
+                id: 'gpt-5-mini',
+                nombre: 'Análisis - Gasto medio',
+                nombreTecnico: 'GPT-5 Mini',
+                etiqueta: 'Razonamiento',
+            },
+            {
+                id: 'gpt-4o',
+                nombre: 'Avanzado - Alto gasto',
+                nombreTecnico: 'GPT-4o',
+                etiqueta: 'Alta capacidad',
+            },
         ],
     },
     {
@@ -149,9 +389,24 @@ export const PROVEEDORES_IA = [
         consoleUrl: 'https://aistudio.google.com/apikey',
         consoleLabel: 'Google AI Studio',
         modelosSugeridos: [
-            { id: 'gemini-2.5-flash', nombre: 'Gemini 2.5 Flash', etiqueta: 'Equilibrado · $$' },
-            { id: 'gemini-2.5-flash-lite', nombre: 'Gemini 2.5 Flash-Lite', etiqueta: 'Económico · $' },
-            { id: 'gemini-2.5-pro', nombre: 'Gemini 2.5 Pro', etiqueta: 'Avanzado · $$$' },
+            {
+                id: 'gemini-2.5-flash',
+                nombre: 'Equilibrado - Gasto medio',
+                nombreTecnico: 'Gemini 2.5 Flash',
+                etiqueta: 'Recomendado',
+            },
+            {
+                id: 'gemini-2.5-flash-lite',
+                nombre: 'Rápido - Mínimo gasto',
+                nombreTecnico: 'Gemini 2.5 Flash-Lite',
+                etiqueta: 'Económico',
+            },
+            {
+                id: 'gemini-2.5-pro',
+                nombre: 'Análisis Profundo - Alto gasto',
+                nombreTecnico: 'Gemini 2.5 Pro',
+                etiqueta: 'Avanzado',
+            },
         ],
     },
     {
@@ -162,9 +417,24 @@ export const PROVEEDORES_IA = [
         consoleUrl: 'https://openrouter.ai/keys',
         consoleLabel: 'OpenRouter',
         modelosSugeridos: [
-            { id: 'openai/gpt-4.1-mini', nombre: 'GPT-4.1 Mini', etiqueta: 'Estable · $$' },
-            { id: 'google/gemini-2.5-flash', nombre: 'Gemini 2.5 Flash', etiqueta: 'Rápido · $$' },
-            { id: 'anthropic/claude-haiku-4-5', nombre: 'Claude Haiku 4.5', etiqueta: 'Redacción · $$' },
+            {
+                id: 'openai/gpt-4.1-mini',
+                nombre: 'Equilibrado - Gasto medio',
+                nombreTecnico: 'GPT-4.1 Mini',
+                etiqueta: 'Estable',
+            },
+            {
+                id: 'google/gemini-2.5-flash',
+                nombre: 'Rápido - Gasto medio',
+                nombreTecnico: 'Gemini 2.5 Flash',
+                etiqueta: 'Rápido',
+            },
+            {
+                id: 'anthropic/claude-haiku-4-5',
+                nombre: 'Redacción - Gasto medio',
+                nombreTecnico: 'Claude Haiku 4.5',
+                etiqueta: 'Redacción',
+            },
         ],
     },
     {
@@ -175,8 +445,18 @@ export const PROVEEDORES_IA = [
         consoleUrl: 'https://console.anthropic.com/settings/keys',
         consoleLabel: 'Anthropic Console',
         modelosSugeridos: [
-            { id: 'claude-haiku-4-5', nombre: 'Claude Haiku 4.5', etiqueta: 'Rápido · $$' },
-            { id: 'claude-sonnet-4-6', nombre: 'Claude Sonnet 4.6', etiqueta: 'Premium · $$$' },
+            {
+                id: 'claude-haiku-4-5',
+                nombre: 'Redacción Ágil - Gasto medio',
+                nombreTecnico: 'Claude Haiku 4.5',
+                etiqueta: 'Rápido',
+            },
+            {
+                id: 'claude-sonnet-4-6',
+                nombre: 'Redacción Premium - Alto gasto',
+                nombreTecnico: 'Claude Sonnet 4.6',
+                etiqueta: 'Premium',
+            },
         ],
     },
 ];
@@ -293,9 +573,9 @@ export function formatearClpAprox(clp) {
 export const PREFERENCIAS_DEFAULT = {
     paleta: 'css', // 'css' | 'dark'
     varianteOscura: 'carbon', // 'carbon' | 'ebano' | 'grafito' | 'oled' | 'pizarra'
-    incluirFirmaWhatsapp: true,
-    firmaWhatsapp: 'Colegio San Sebastián de Melipilla',
-    criterioDefaultWhatsapp: 'auto', // 'auto' | 'alerta_academica' | 'citacion_entrevista' | 'reporte_avance' | 'reconocimiento'
+    incluirFirmaCorreo: true,
+    firmaCorreo: 'Colegio San Sebastián de Melipilla',
+    criterioDefaultCorreo: 'auto', // 'auto' | 'alerta_academica' | 'citacion_entrevista' | 'reporte_avance' | 'reconocimiento'
     modeloActivoId: MODELOS_GROQ_SISTEMA[0].id,
     modeloActivoNombre: MODELOS_GROQ_SISTEMA[0].nombre,
     modeloActivoProveedor: MODELOS_GROQ_SISTEMA[0].proveedor_nombre,
@@ -324,6 +604,17 @@ export function leerPreferenciasSape() {
             ...PREFERENCIAS_DEFAULT,
             ...(parsed && typeof parsed === 'object' ? parsed : {}),
         };
+        if (parsed && typeof parsed === 'object') {
+            if (parsed.incluirFirmaCorreo === undefined && parsed.incluirFirmaWhatsapp !== undefined) {
+                preferencias.incluirFirmaCorreo = Boolean(parsed.incluirFirmaWhatsapp);
+            }
+            if (parsed.firmaCorreo === undefined && parsed.firmaWhatsapp) {
+                preferencias.firmaCorreo = parsed.firmaWhatsapp;
+            }
+            if (parsed.criterioDefaultCorreo === undefined && parsed.criterioDefaultWhatsapp) {
+                preferencias.criterioDefaultCorreo = parsed.criterioDefaultWhatsapp;
+            }
+        }
         const modeloRetirado = 'llama-3.3-70b-versatile';
         if (preferencias.modeloActivoId === modeloRetirado) {
             preferencias.modeloActivoId = PREFERENCIAS_DEFAULT.modeloActivoId;
@@ -335,6 +626,11 @@ export function leerPreferenciasSape() {
                 preferencias[campo] = PREFERENCIAS_DEFAULT[campo];
             }
         }
+        const presentacionActiva = obtenerPresentacionModelo(
+            preferencias.modeloActivoNombre,
+            preferencias.modeloActivoId
+        );
+        preferencias.modeloActivoNombre = presentacionActiva.nombre;
         return preferencias;
     } catch {
         return { ...PREFERENCIAS_DEFAULT };

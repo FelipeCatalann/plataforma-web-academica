@@ -362,16 +362,21 @@ html[data-theme="dark"] .text-amber-900 {
     color: #fcd34d !important;
 }
 
-html[data-theme="dark"] .bg-red-50 {
-    background-color: rgba(239, 68, 68, 0.15) !important;
-    border-color: rgba(248, 113, 113, 0.55) !important;
-    color: #ffffff !important;
+html[data-theme="dark"] .bg-red-50,
+html[data-theme="dark"] .bg-red-50\/95 {
+    background-color: #2b1316 !important;
+    border-color: #7f1d1d !important;
+    color: #fecaca !important;
+}
+html[data-theme="dark"] .border-red-200,
+html[data-theme="dark"] .border-red-300 {
+    border-color: #7f1d1d !important;
 }
 html[data-theme="dark"] .text-red-600,
 html[data-theme="dark"] .text-red-700,
 html[data-theme="dark"] .text-red-800,
 html[data-theme="dark"] .text-red-900 {
-    color: #ffffff !important;
+    color: #fca5a5 !important;
 }
 
 html[data-theme="dark"] .bg-blue-50 {
@@ -413,6 +418,55 @@ html[data-theme="dark"] .mapa-termico-alto {
     color: #a7f3d0;
 }
 
+/* Numeral limpio de promedio / nota (sin caja, color condicional Decreto 67) */
+.sape-nota-valor {
+    display: inline-block;
+    min-width: 2.25rem;
+    text-align: right;
+    font-size: 0.875rem;
+    font-weight: 800;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    background-color: transparent;
+    border: 0;
+    padding: 0;
+}
+.sape-nota-inline {
+    display: inline;
+    font-weight: 800;
+    letter-spacing: -0.015em;
+    font-variant-numeric: tabular-nums;
+    line-height: inherit;
+    background-color: transparent;
+    border: 0;
+    padding: 0;
+}
+.sape-nota-valor[data-estado="critico"],
+.sape-nota-inline[data-estado="critico"] {
+    color: #dc2626;
+}
+.sape-nota-valor[data-estado="atencion"],
+.sape-nota-inline[data-estado="atencion"] {
+    color: #b45309;
+}
+.sape-nota-valor[data-estado="optimo"],
+.sape-nota-inline[data-estado="optimo"] {
+    color: #047857;
+}
+html[data-theme="dark"] .sape-nota-valor[data-estado="critico"],
+html[data-theme="dark"] .sape-nota-inline[data-estado="critico"] {
+    color: #f87171;
+}
+html[data-theme="dark"] .sape-nota-valor[data-estado="atencion"],
+html[data-theme="dark"] .sape-nota-inline[data-estado="atencion"] {
+    color: #fbbf24;
+}
+html[data-theme="dark"] .sape-nota-valor[data-estado="optimo"],
+html[data-theme="dark"] .sape-nota-inline[data-estado="optimo"] {
+    color: #34d399;
+}
+
 /* 10. Gráficos Recharts (Modo Claro y Modo Oscuro) */
 .recharts-wrapper,
 .recharts-wrapper *,
@@ -430,11 +484,30 @@ html[data-theme="dark"] .recharts-tooltip-cursor {
     stroke: transparent !important;
     display: none !important;
 }
+.sape-chart-value {
+    fill: #1e293b;
+    font-variant-numeric: tabular-nums;
+}
 html[data-theme="dark"] .recharts-cartesian-grid line {
     stroke: var(--dm-border) !important;
 }
 html[data-theme="dark"] .recharts-text {
     fill: var(--dm-text-muted) !important;
+}
+html[data-theme="dark"] .recharts-cartesian-axis-tick text {
+    fill: var(--dm-text-muted) !important;
+}
+html[data-theme="dark"] .recharts-text.sape-chart-value,
+html[data-theme="dark"] .sape-chart-value {
+    fill: #f8fafc !important;
+}
+html[data-theme="dark"] .recharts-text.sape-chart-ref-min,
+html[data-theme="dark"] .sape-chart-ref-min {
+    fill: #f87171 !important;
+}
+html[data-theme="dark"] .recharts-text.sape-chart-ref-prom,
+html[data-theme="dark"] .sape-chart-ref-prom {
+    fill: #60a5fa !important;
 }
 html[data-theme="dark"] .recharts-default-tooltip {
     background-color: var(--dm-inset) !important;
@@ -445,4 +518,43 @@ html[data-theme="dark"] .recharts-tooltip-label,
 html[data-theme="dark"] .recharts-tooltip-item {
     color: #f8fafc !important;
 }
+
+/* 11. Nombre técnico disimulado entre paréntesis en etiquetas de modelos IA */
+.sape-modelo-tecnico {
+    font-weight: 400;
+    font-size: 0.85em;
+    color: #94a3b8;
+}
+html[data-theme="dark"] .sape-modelo-tecnico {
+    color: #94a3b8 !important;
+    opacity: 0.78;
+}
+.sape-modelo-tecnico-burdeo {
+    font-weight: 400;
+    font-size: 0.84em;
+    color: rgba(255, 255, 255, 0.65);
+}
+.sape-modelo-tecnico-activo {
+    font-weight: 400;
+    font-size: 0.86em;
+    opacity: 0.76;
+}
+
+/* 12. Notificación flotante de éxito (texto negro de alto contraste en modo claro y oscuro) */
+.sape-toast-exito,
+html[data-theme="dark"] .sape-toast-exito {
+    background-color: #ecfdf5 !important;
+    border-color: #34d399 !important;
+    color: #000000 !important;
+}
+.sape-toast-exito-cerrar,
+html[data-theme="dark"] .sape-toast-exito-cerrar {
+    color: #0f172a !important;
+}
+.sape-toast-exito-cerrar:hover,
+html[data-theme="dark"] .sape-toast-exito-cerrar:hover {
+    background-color: #d1fae5 !important;
+    color: #000000 !important;
+}
+
 

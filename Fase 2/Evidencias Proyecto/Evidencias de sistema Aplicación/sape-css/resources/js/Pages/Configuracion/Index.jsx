@@ -18,6 +18,8 @@ import {
     OPCIONES_TAMANO_CHAT,
     formatearUsd,
 } from '@/utils/preferenciasSape';
+import NombreModeloIA from '@/Components/IA/NombreModeloIA';
+import IconoGmail from '@/Components/IconoGmail';
 
 const PALETAS_DISPONIBLES = [
     {
@@ -50,7 +52,7 @@ const PALETAS_DISPONIBLES = [
     },
 ];
 
-const CRITERIOS_WHATSAPP = [
+const CRITERIOS_CORREO = [
     {
         id: 'auto',
         titulo: 'Detección automática',
@@ -58,7 +60,7 @@ const CRITERIOS_WHATSAPP = [
     },
     {
         id: 'alerta_academica',
-        titulo: 'Alerta Académica (Decreto 67)',
+        titulo: 'Alerta Académica',
         subtitulo: 'Asignaturas bajo nota 4.0',
     },
     {
@@ -92,9 +94,9 @@ export default function ConfiguracionIndex({
         esProfesorAsignatura: false,
         etiqueta: 'Docente',
     },
-    estadisticasSistema = { enlacesGenerados: 0, misEnlaces: 0, registrosBitacora: 0 },
+    estadisticasSistema = { correosGenerados: 0, misCorreos: 0, registrosBitacora: 0 },
     historialImportaciones = [],
-    bitacoraWhatsapp = [],
+    bitacoraCorreos = [],
     miCargaDocente = { jefaturas: [], asignaturas: [] },
 }) {
     const { auth } = usePage().props;
@@ -102,8 +104,8 @@ export default function ConfiguracionIndex({
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
             const seccionParam = params.get('seccion');
-            if (seccionParam === 'ia_whatsapp' || seccionParam === 'ia') {
-                return 'ia_whatsapp';
+            if (seccionParam === 'ia_correo' || seccionParam === 'ia_whatsapp' || seccionParam === 'ia') {
+                return 'ia_correo';
             }
             if (seccionParam === 'rol_especifico' || seccionParam === 'diseno') {
                 return seccionParam;
@@ -115,10 +117,13 @@ export default function ConfiguracionIndex({
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
             const tabParam = params.get('tab');
+            if (tabParam === 'whatsapp') {
+                return 'correo';
+            }
             if (
                 tabParam === 'modelos' ||
                 tabParam === 'respuestas_visuales' ||
-                tabParam === 'whatsapp' ||
+                tabParam === 'correo' ||
                 tabParam === 'consumo_cuota'
             ) {
                 return tabParam;
@@ -337,16 +342,16 @@ export default function ConfiguracionIndex({
         }
     };
 
-    const guardarAjustesWhatsapp = (e) => {
+    const guardarAjustesCorreo = (e) => {
         e.preventDefault();
         const nuevas = guardarPreferenciasSape({
-            incluirFirmaWhatsapp: preferencias.incluirFirmaWhatsapp,
-            firmaWhatsapp:
-                (preferencias.firmaWhatsapp || '').trim() || PREFERENCIAS_DEFAULT.firmaWhatsapp,
-            criterioDefaultWhatsapp: preferencias.criterioDefaultWhatsapp,
+            incluirFirmaCorreo: preferencias.incluirFirmaCorreo,
+            firmaCorreo:
+                (preferencias.firmaCorreo || '').trim() || PREFERENCIAS_DEFAULT.firmaCorreo,
+            criterioDefaultCorreo: preferencias.criterioDefaultCorreo,
         });
         setPreferencias(nuevas);
-        mostrarConfirmacion('Plantillas y firma de WhatsApp guardadas.');
+        mostrarConfirmacion('Plantillas y firma de correo Gmail guardadas.');
     };
 
     const restablecerValores = async () => {
@@ -394,9 +399,9 @@ export default function ConfiguracionIndex({
             ),
         },
         {
-            id: 'ia_whatsapp',
-            titulo: 'IA, Agentes y WhatsApp',
-            subtitulo: 'Modelos, respuestas y firma',
+            id: 'ia_correo',
+            titulo: 'IA, Agentes y Correo',
+            subtitulo: 'Modelos, respuestas y Gmail',
             icono: (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -530,10 +535,18 @@ export default function ConfiguracionIndex({
                                     {paletaActivaObj.nombre}
                                 </span>
                             </div>
-                            <div className="flex items-center justify-between text-xs">
-                                <span className="text-slate-500 font-medium">Modelo IA</span>
-                                <span className="font-extrabold text-slate-800 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 truncate max-w-[140px]">
-                                    {conexionActiva?.modelo_nombre || modeloActivoObj?.nombre || PREFERENCIAS_DEFAULT.modeloActivoNombre}
+                            <div className="flex items-center justify-between text-xs gap-2">
+                                <span className="text-slate-500 font-medium shrink-0">Modelo IA</span>
+                                <span className="font-extrabold text-slate-800 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 truncate max-w-[155px]">
+                                    <NombreModeloIA
+                                        modelo={
+                                            conexionActiva?.modelo_nombre
+                                                ? conexionActiva
+                                                : modeloActivoObj || PREFERENCIAS_DEFAULT.modeloActivoNombre
+                                        }
+                                        modelId={conexionActiva?.modelo || modeloActivoObj?.model_id}
+                                        mostrarTecnico={false}
+                                    />
                                 </span>
                             </div>
                             <button
@@ -739,10 +752,10 @@ export default function ConfiguracionIndex({
                             </motion.div>
                         )}
 
-                        {/* APARTADO 2: IA, AGENTES Y WHATSAPP */}
-                        {seccionActiva === 'ia_whatsapp' && (
+                        {/* APARTADO 2: IA, AGENTES Y CORREO GMAIL */}
+                        {seccionActiva === 'ia_correo' && (
                             <motion.div
-                                key="ia_whatsapp"
+                                key="ia_correo"
                                 initial={{ opacity: 0, y: 12 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -12 }}
@@ -773,9 +786,18 @@ export default function ConfiguracionIndex({
                                                     conexionActiva?.configurada ? 'bg-emerald-500' : 'bg-amber-500'
                                                 }`}
                                             />
-                                            {conexionActiva?.configurada
-                                                ? `${conexionActiva.proveedor_nombre} · ${conexionActiva.modelo_nombre}`
-                                                : 'Sin API Key activa'}
+                                            {conexionActiva?.configurada ? (
+                                                <span>
+                                                    {conexionActiva.proveedor_nombre} ·{' '}
+                                                    <NombreModeloIA
+                                                        modelo={conexionActiva}
+                                                        modelId={conexionActiva.modelo}
+                                                        variante="claro"
+                                                    />
+                                                </span>
+                                            ) : (
+                                                'Sin API Key activa'
+                                            )}
                                         </span>
                                     </div>
 
@@ -802,8 +824,8 @@ export default function ConfiguracionIndex({
                                                 subtitulo: 'Tono, formato y lectura',
                                             },
                                             {
-                                                id: 'whatsapp',
-                                                titulo: 'Plantillas WhatsApp',
+                                                id: 'correo',
+                                                titulo: 'Plantillas Gmail',
                                                 subtitulo: 'Criterio y firma oficial',
                                             },
                                         ].map((tab) => {
@@ -1157,23 +1179,28 @@ export default function ConfiguracionIndex({
                                     </form>
                                 )}
 
-                                {/* SUB-APARTADO 3: PLANTILLAS Y FIRMA WHATSAPP */}
-                                {subTabIA === 'whatsapp' && (
+                                {/* SUB-APARTADO 3: PLANTILLAS Y FIRMA DE CORREO GMAIL */}
+                                {subTabIA === 'correo' && (
                                     <form
-                                        onSubmit={guardarAjustesWhatsapp}
+                                        onSubmit={guardarAjustesCorreo}
                                         className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6"
                                     >
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                            <div>
-                                                <h3 className="text-lg font-extrabold text-slate-900">
-                                                    Plantillas y Firma de WhatsApp
-                                                </h3>
-                                                <p className="text-xs text-slate-500">
-                                                    Configura el mensaje inicial para contacto con apoderados.
-                                                </p>
+                                            <div className="flex items-start gap-3">
+                                                <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 mt-0.5">
+                                                    <IconoGmail className="w-5 h-5" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-lg font-extrabold text-slate-900">
+                                                        Plantillas y Firma de Correo Gmail
+                                                    </h3>
+                                                    <p className="text-xs text-slate-500">
+                                                        Configura el mensaje inicial y la firma institucional para correos e informes enviados a Gmail.
+                                                    </p>
+                                                </div>
                                             </div>
                                             <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full border border-slate-200 tabular-nums self-start sm:self-auto">
-                                                {estadisticasSistema.enlacesGenerados} envíos en bitácora
+                                                {estadisticasSistema.correosGenerados || 0} correos en bitácora
                                             </span>
                                         </div>
 
@@ -1182,9 +1209,9 @@ export default function ConfiguracionIndex({
                                                 Criterio Inicial Predeterminado
                                             </span>
                                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                {CRITERIOS_WHATSAPP.map((crit) => {
+                                                {CRITERIOS_CORREO.map((crit) => {
                                                     const activo =
-                                                        preferencias.criterioDefaultWhatsapp === crit.id;
+                                                        preferencias.criterioDefaultCorreo === crit.id;
                                                     return (
                                                         <button
                                                             key={crit.id}
@@ -1192,7 +1219,7 @@ export default function ConfiguracionIndex({
                                                             onClick={() =>
                                                                 setPreferencias((prev) => ({
                                                                     ...prev,
-                                                                    criterioDefaultWhatsapp: crit.id,
+                                                                    criterioDefaultCorreo: crit.id,
                                                                 }))
                                                             }
                                                             className={`p-3.5 rounded-xl border text-left transition-all bg-white ${
@@ -1216,19 +1243,19 @@ export default function ConfiguracionIndex({
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between">
                                                 <label
-                                                    htmlFor="firmaWhatsappInput"
+                                                    htmlFor="firmaCorreoInput"
                                                     className="block text-sm font-bold text-slate-700"
                                                 >
-                                                    Firma institucional al pie del mensaje
+                                                    Firma institucional al pie del correo
                                                 </label>
                                                 <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer">
                                                     <input
                                                         type="checkbox"
-                                                        checked={preferencias.incluirFirmaWhatsapp}
+                                                        checked={preferencias.incluirFirmaCorreo}
                                                         onChange={(e) =>
                                                             setPreferencias((prev) => ({
                                                                 ...prev,
-                                                                incluirFirmaWhatsapp: e.target.checked,
+                                                                incluirFirmaCorreo: e.target.checked,
                                                             }))
                                                         }
                                                         className="rounded text-sape-burdeo focus:ring-sape-burdeo"
@@ -1237,14 +1264,14 @@ export default function ConfiguracionIndex({
                                                 </label>
                                             </div>
                                             <input
-                                                id="firmaWhatsappInput"
+                                                id="firmaCorreoInput"
                                                 type="text"
-                                                disabled={!preferencias.incluirFirmaWhatsapp}
-                                                value={preferencias.firmaWhatsapp}
+                                                disabled={!preferencias.incluirFirmaCorreo}
+                                                value={preferencias.firmaCorreo}
                                                 onChange={(e) =>
                                                     setPreferencias((prev) => ({
                                                         ...prev,
-                                                        firmaWhatsapp: e.target.value,
+                                                        firmaCorreo: e.target.value,
                                                     }))
                                                 }
                                                 maxLength={120}
@@ -1255,13 +1282,13 @@ export default function ConfiguracionIndex({
 
                                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5">
                                             <span className="text-xs font-bold text-slate-700 block">
-                                                Vista previa del cierre del mensaje WhatsApp
+                                                Vista previa del cierre del correo en Gmail
                                             </span>
                                             <p className="text-xs text-slate-600 whitespace-pre-line font-sans">
-                                                {`Quedo atento(a) a su confirmación. Muchas gracias.${
-                                                    preferencias.incluirFirmaWhatsapp &&
-                                                    preferencias.firmaWhatsapp.trim()
-                                                        ? `\n— ${preferencias.firmaWhatsapp.trim()}`
+                                                {`Atentamente,\n${auth?.user?.name || 'Docente'}${
+                                                    preferencias.incluirFirmaCorreo &&
+                                                    preferencias.firmaCorreo.trim()
+                                                        ? `\n${preferencias.firmaCorreo.trim()}`
                                                         : ''
                                                 }`}
                                             </p>
@@ -1272,7 +1299,7 @@ export default function ConfiguracionIndex({
                                                 type="submit"
                                                 className="bg-sape-burdeo hover:bg-sape-burdeo-hover text-sape-amarillo font-bold text-sm px-6 py-2.5 rounded-xl shadow-sm transition-colors"
                                             >
-                                                Guardar Plantillas WhatsApp
+                                                Guardar Plantillas Gmail
                                             </button>
                                         </div>
                                     </form>
@@ -1553,7 +1580,11 @@ export default function ConfiguracionIndex({
                                                                 <span>
                                                                     Último:{' '}
                                                                     <strong className="text-slate-800">
-                                                                        {metricasConsumo.ultima_consulta.modelo_nombre}
+                                                                        <NombreModeloIA
+                                                                            modelo={metricasConsumo.ultima_consulta.modelo_nombre}
+                                                                            modelId={metricasConsumo.ultima_consulta.modelo_id}
+                                                                            variante="claro"
+                                                                        />
                                                                     </strong>
                                                                 </span>
                                                             ) : (
@@ -1612,7 +1643,11 @@ export default function ConfiguracionIndex({
                                                                     </div>
                                                                     <span className="text-[11px] text-slate-600 block">
                                                                         {pctRequests}% disponible en{' '}
-                                                                        {modeloActivoObj?.nombre}
+                                                                        <NombreModeloIA
+                                                                            modelo={modeloActivoObj}
+                                                                            modelId={modeloActivoObj?.model_id}
+                                                                            mostrarTecnico={false}
+                                                                        />
                                                                     </span>
                                                                 </div>
                                                             ) : (
@@ -1706,7 +1741,11 @@ export default function ConfiguracionIndex({
                                                                     <div className="space-y-1 min-w-0">
                                                                         <div className="flex flex-wrap items-center gap-2">
                                                                             <span className="text-sm font-extrabold text-slate-900">
-                                                                                {item.nombre}
+                                                                                <NombreModeloIA
+                                                                                    modelo={item}
+                                                                                    modelId={item.model_id}
+                                                                                    variante="claro"
+                                                                                />
                                                                             </span>
                                                                             {item.esActivo && (
                                                                                 <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-sape-burdeo text-sape-amarillo">
@@ -1714,12 +1753,8 @@ export default function ConfiguracionIndex({
                                                                                 </span>
                                                                             )}
                                                                             <span className="text-[11px] font-medium text-slate-500">
-                                                                                {item.proveedor_nombre ||
-                                                                                    'Groq Cloud'}{' '}
-                                                                                ·{' '}
-                                                                                <code className="font-mono text-[11px] text-slate-600">
-                                                                                    {item.model_id}
-                                                                                </code>
+                                                                                {item.proveedor_nombre || 'Groq Cloud'}
+                                                                                {item.subtitulo ? ` · ${item.subtitulo}` : ''}
                                                                             </span>
                                                                         </div>
 
@@ -1866,7 +1901,7 @@ export default function ConfiguracionIndex({
                                                     Auditoría e Historial Institucional
                                                 </h2>
                                                 <p className="text-slate-600 text-sm mt-1">
-                                                    Registro histórico de planillas Syscol importadas y bitácora de comunicaciones WhatsApp.
+                                                    Registro histórico de planillas Syscol importadas y bitácora de correos preparados en Gmail.
                                                 </p>
                                             </div>
                                             <Link
@@ -1941,48 +1976,59 @@ export default function ConfiguracionIndex({
                                             )}
                                         </div>
 
-                                        {/* Tabla 2: Bitácora Institucional de Envíos WhatsApp */}
+                                        {/* Tabla 2: Bitácora Institucional de Correos Gmail */}
                                         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                                             <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-                                                <div>
-                                                    <h3 className="text-base font-extrabold text-slate-900">
-                                                        Bitácora Institucional de Contactos WhatsApp
-                                                    </h3>
-                                                    <p className="text-xs text-slate-500 mt-0.5">
-                                                        Trazabilidad de enlaces Click-to-Chat generados hacia apoderados.
-                                                    </p>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+                                                        <IconoGmail className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-base font-extrabold text-slate-900">
+                                                            Bitácora Institucional de Correos (Gmail)
+                                                        </h3>
+                                                        <p className="text-xs text-slate-500 mt-0.5">
+                                                            Trazabilidad de correos e informes IA enviados hacia apoderados y equipo docente.
+                                                        </p>
+                                                    </div>
                                                 </div>
                                                 <span className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-full border border-slate-200 tabular-nums">
-                                                    {estadisticasSistema.enlacesGenerados} totales
+                                                    {estadisticasSistema.correosGenerados || 0} totales
                                                 </span>
                                             </div>
 
-                                            {bitacoraWhatsapp.length > 0 ? (
+                                            {bitacoraCorreos.length > 0 ? (
                                                 <div className="overflow-x-auto">
                                                     <table className="w-full text-left border-collapse">
                                                         <thead>
                                                             <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600">
-                                                                <th className="py-3 px-4">Docente</th>
-                                                                <th className="py-3 px-4">Estudiante</th>
-                                                                <th className="py-3 px-4">Curso</th>
-                                                                <th className="py-3 px-4">Teléfono Destino</th>
+                                                                <th className="py-3 px-4">Emisor</th>
+                                                                <th className="py-3 px-4">Destinatario</th>
+                                                                <th className="py-3 px-4">Correo</th>
+                                                                <th className="py-3 px-4">Asunto / Origen</th>
                                                                 <th className="py-3 px-4 text-right">Fecha</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-slate-100 text-xs">
-                                                            {bitacoraWhatsapp.map((item) => (
+                                                            {bitacoraCorreos.map((item) => (
                                                                 <tr key={item.id} className="hover:bg-slate-50">
                                                                     <td className="py-3 px-4 font-bold text-slate-800">
-                                                                        {item.docente}
+                                                                        {item.emisor}
                                                                     </td>
                                                                     <td className="py-3 px-4 text-slate-700">
-                                                                        {item.estudiante}
+                                                                        <span className="font-semibold block">{item.destinatario}</span>
+                                                                        <span className="text-[11px] text-slate-500">{item.curso}</span>
                                                                     </td>
-                                                                    <td className="py-3 px-4 font-semibold text-slate-700">
-                                                                        {item.curso}
+                                                                    <td className="py-3 px-4 font-mono text-slate-600">
+                                                                        {item.correo}
                                                                     </td>
-                                                                    <td className="py-3 px-4 font-mono text-slate-600 tabular-nums">
-                                                                        {item.telefono}
+                                                                    <td className="py-3 px-4 text-slate-700 max-w-[240px]">
+                                                                        <span className="block truncate font-semibold" title={item.asunto}>
+                                                                            {item.asunto}
+                                                                        </span>
+                                                                        <span className="inline-block mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                                                            {item.origen === 'informe_ia' ? 'Informe IA' : 'Correo Gmail'}
+                                                                        </span>
                                                                     </td>
                                                                     <td className="py-3 px-4 text-right text-slate-500 tabular-nums">
                                                                         {item.fecha
@@ -1996,7 +2042,7 @@ export default function ConfiguracionIndex({
                                                 </div>
                                             ) : (
                                                 <div className="p-8 text-center text-sm text-slate-500">
-                                                    Aún no se han generado enlaces de contacto WhatsApp con apoderados.
+                                                    Aún no se han preparado correos en Gmail desde la plataforma.
                                                 </div>
                                             )}
                                         </div>
@@ -2097,41 +2143,52 @@ export default function ConfiguracionIndex({
 
                                         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                                             <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-                                                <div>
-                                                    <h3 className="text-base font-extrabold text-slate-900">
-                                                        Mis Contactos WhatsApp Recientes
-                                                    </h3>
-                                                    <p className="text-xs text-slate-500 mt-0.5">
-                                                        Últimos enlaces Click-to-Chat preparados desde tu cuenta docente.
-                                                    </p>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+                                                        <IconoGmail className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-base font-extrabold text-slate-900">
+                                                            Mis Correos Recientes (Gmail)
+                                                        </h3>
+                                                        <p className="text-xs text-slate-500 mt-0.5">
+                                                            Últimos correos e informes IA preparados desde tu cuenta docente.
+                                                        </p>
+                                                    </div>
                                                 </div>
                                                 <span className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-full border border-slate-200 tabular-nums">
-                                                    {estadisticasSistema.misEnlaces} realizados
+                                                    {estadisticasSistema.misCorreos || 0} realizados
                                                 </span>
                                             </div>
 
-                                            {bitacoraWhatsapp.length > 0 ? (
+                                            {bitacoraCorreos.length > 0 ? (
                                                 <div className="overflow-x-auto">
                                                     <table className="w-full text-left border-collapse">
                                                         <thead>
                                                             <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600">
-                                                                <th className="py-3 px-4">Estudiante</th>
-                                                                <th className="py-3 px-4">Curso</th>
-                                                                <th className="py-3 px-4">Teléfono</th>
+                                                                <th className="py-3 px-4">Destinatario</th>
+                                                                <th className="py-3 px-4">Correo</th>
+                                                                <th className="py-3 px-4">Asunto / Origen</th>
                                                                 <th className="py-3 px-4 text-right">Fecha</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-slate-100 text-xs">
-                                                            {bitacoraWhatsapp.map((item) => (
+                                                            {bitacoraCorreos.map((item) => (
                                                                 <tr key={item.id} className="hover:bg-slate-50">
-                                                                    <td className="py-3 px-4 font-bold text-slate-800">
-                                                                        {item.estudiante}
+                                                                    <td className="py-3 px-4">
+                                                                        <span className="font-bold text-slate-800 block">{item.destinatario}</span>
+                                                                        <span className="text-[11px] text-slate-500">{item.curso}</span>
                                                                     </td>
-                                                                    <td className="py-3 px-4 font-semibold text-slate-700">
-                                                                        {item.curso}
+                                                                    <td className="py-3 px-4 font-mono text-slate-600">
+                                                                        {item.correo}
                                                                     </td>
-                                                                    <td className="py-3 px-4 font-mono text-slate-600 tabular-nums">
-                                                                        {item.telefono}
+                                                                    <td className="py-3 px-4 text-slate-700 max-w-[240px]">
+                                                                        <span className="block truncate font-semibold" title={item.asunto}>
+                                                                            {item.asunto}
+                                                                        </span>
+                                                                        <span className="inline-block mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                                                            {item.origen === 'informe_ia' ? 'Informe IA' : 'Correo Gmail'}
+                                                                        </span>
                                                                     </td>
                                                                     <td className="py-3 px-4 text-right text-slate-500 tabular-nums">
                                                                         {item.fecha
@@ -2145,7 +2202,7 @@ export default function ConfiguracionIndex({
                                                 </div>
                                             ) : (
                                                 <div className="p-8 text-center text-sm text-slate-500">
-                                                    Aún no has generado enlaces de contacto WhatsApp desde tu ficha de jefatura.
+                                                    Aún no has preparado correos en Gmail desde tu cuenta docente.
                                                 </div>
                                             )}
                                         </div>

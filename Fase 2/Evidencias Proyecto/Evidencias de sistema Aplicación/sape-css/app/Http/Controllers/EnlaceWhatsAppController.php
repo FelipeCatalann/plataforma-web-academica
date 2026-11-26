@@ -21,6 +21,12 @@ class EnlaceWhatsAppController extends Controller
      */
     public function prepararEnlace(Request $request): JsonResponse
     {
+        abort_unless(
+            config('sape.whatsapp_habilitado', false),
+            410,
+            'El canal de WhatsApp se encuentra desactivado. Utiliza Correo Gmail.'
+        );
+
         $validated = $request->validate([
             'estudiante_id' => 'required|uuid',
             'curso_id' => 'required|uuid',

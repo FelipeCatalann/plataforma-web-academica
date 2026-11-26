@@ -72,8 +72,9 @@ class ConfiguracionIAService
         [
             'id' => self::MODELO_CHAT_DEFAULT,
             'model_id' => self::MODELO_CHAT_DEFAULT,
-            'nombre' => 'GPT-OSS 120B',
-            'subtitulo' => 'Groq · Razonamiento profundo',
+            'nombre' => 'Análisis - Bajo gasto',
+            'nombre_tecnico' => 'GPT-OSS 120B',
+            'subtitulo' => 'Uso diario recomendado',
             'proveedor' => 'groq',
             'proveedor_nombre' => 'Groq Cloud',
             'origen' => 'sistema',
@@ -82,18 +83,20 @@ class ConfiguracionIAService
         [
             'id' => self::MODELO_INFORMES_DEFAULT,
             'model_id' => self::MODELO_INFORMES_DEFAULT,
-            'nombre' => 'Qwen 3.8 27B',
-            'subtitulo' => 'Groq · Redacción formal',
+            'nombre' => 'Informes - Gasto medio',
+            'nombre_tecnico' => 'Qwen 3.8 27B',
+            'subtitulo' => 'Redacción formal',
             'proveedor' => 'groq',
             'proveedor_nombre' => 'Groq Cloud',
             'origen' => 'sistema',
-            'recomendado_para' => 'Informes Decreto 67',
+            'recomendado_para' => 'Informes',
         ],
         [
             'id' => 'openai/gpt-oss-20b',
             'model_id' => 'openai/gpt-oss-20b',
-            'nombre' => 'GPT-OSS 20B',
-            'subtitulo' => 'Groq · Consultas rápidas',
+            'nombre' => 'Rápido - Mínimo gasto',
+            'nombre_tecnico' => 'GPT-OSS 20B',
+            'subtitulo' => 'Consultas simples al instante',
             'proveedor' => 'groq',
             'proveedor_nombre' => 'Groq Cloud',
             'origen' => 'sistema',
@@ -546,7 +549,8 @@ class ConfiguracionIAService
             $personalizados[] = [
                 'id' => (string) $modelo['id'],
                 'model_id' => (string) $modelo['model_id'],
-                'nombre' => (string) ($modelo['nombre'] ?? $modelo['model_id']),
+                'nombre' => (string) ($modelo['nombre'] ?? $this->nombreLegibleModelo((string) $modelo['model_id'])),
+                'nombre_tecnico' => $this->nombreTecnicoModelo((string) $modelo['model_id']),
                 'subtitulo' => (string) ($modelo['subtitulo'] ?? ($proveedorInfo['nombre'].' · Clave propia')),
                 'proveedor' => $proveedorId,
                 'proveedor_nombre' => $proveedorInfo['nombre'],
@@ -617,6 +621,8 @@ class ConfiguracionIAService
                 'modelo' => $credencialActiva['model'],
                 'modelo_id' => $credencialActiva['modelo_id'],
                 'modelo_nombre' => $credencialActiva['modelo_nombre'],
+                'modelo_tecnico' => $credencialActiva['modelo_tecnico'] ?? null,
+                'modelo_etiqueta' => $credencialActiva['modelo_etiqueta'] ?? $credencialActiva['modelo_nombre'],
                 'proveedor' => $credencialActiva['proveedor'],
                 'proveedor_nombre' => $credencialActiva['proveedor_nombre'],
                 'origen' => $credencialActiva['origen_credencial'],
@@ -915,10 +921,15 @@ class ConfiguracionIAService
             default => 'Mantén una extensión equilibrada y clara.',
         };
 
+        $modeloTecnico = $this->nombreTecnicoModelo($modelId);
+        $modeloEtiqueta = $this->etiquetaCompletaModelo($modelId, $modeloNombre);
+
         return [
             'model' => $modelId,
             'modelo_id' => $modeloIdInterno,
             'modelo_nombre' => $modeloNombre,
+            'modelo_tecnico' => $modeloTecnico,
+            'modelo_etiqueta' => $modeloEtiqueta,
             'proveedor' => $proveedorId,
             'base_url' => $baseUrl,
             'api_key' => $apiKey,
@@ -941,9 +952,34 @@ class ConfiguracionIAService
     public function nombreLegibleModelo(string $modelId): string
     {
         $catalogoNombres = [
+            'openai/gpt-oss-120b' => 'Análisis - Bajo gasto',
+            'openai/gpt-oss-20b' => 'Rápido - Mínimo gasto',
+            'qwen/qwen3.8-27b' => 'Informes - Gasto medio',
+            'llama-3.3-70b-versatile' => 'Respaldo General - Bajo gasto',
+            'gpt-4.1-mini' => 'Equilibrado - Gasto medio',
+            'gpt-4o-mini' => 'Rápido - Bajo gasto',
+            'gpt-5-mini' => 'Análisis - Gasto medio',
+            'gpt-4o' => 'Avanzado - Alto gasto',
+            'gemini-2.5-flash' => 'Equilibrado - Gasto medio',
+            'gemini-2.5-flash-lite' => 'Rápido - Mínimo gasto',
+            'gemini-2.5-pro' => 'Análisis Profundo - Alto gasto',
+            'openai/gpt-4.1-mini' => 'Equilibrado - Gasto medio',
+            'google/gemini-2.5-flash' => 'Rápido - Gasto medio',
+            'anthropic/claude-haiku-4-5' => 'Redacción - Gasto medio',
+            'claude-haiku-4-5' => 'Redacción Ágil - Gasto medio',
+            'claude-sonnet-4-6' => 'Redacción Premium - Alto gasto',
+        ];
+
+        return $catalogoNombres[$modelId] ?? $modelId;
+    }
+
+    public function nombreTecnicoModelo(string $modelId): ?string
+    {
+        $catalogoTecnico = [
             'openai/gpt-oss-120b' => 'GPT-OSS 120B',
             'openai/gpt-oss-20b' => 'GPT-OSS 20B',
             'qwen/qwen3.8-27b' => 'Qwen 3.8 27B',
+            'llama-3.3-70b-versatile' => 'Llama 3.3 70B',
             'gpt-4.1-mini' => 'GPT-4.1 Mini',
             'gpt-4o-mini' => 'GPT-4o Mini',
             'gpt-5-mini' => 'GPT-5 Mini',
@@ -951,11 +987,35 @@ class ConfiguracionIAService
             'gemini-2.5-flash' => 'Gemini 2.5 Flash',
             'gemini-2.5-flash-lite' => 'Gemini 2.5 Flash-Lite',
             'gemini-2.5-pro' => 'Gemini 2.5 Pro',
+            'openai/gpt-4.1-mini' => 'GPT-4.1 Mini',
+            'google/gemini-2.5-flash' => 'Gemini 2.5 Flash',
+            'anthropic/claude-haiku-4-5' => 'Claude Haiku 4.5',
             'claude-haiku-4-5' => 'Claude Haiku 4.5',
             'claude-sonnet-4-6' => 'Claude Sonnet 4.6',
         ];
 
-        return $catalogoNombres[$modelId] ?? $modelId;
+        return $catalogoTecnico[$modelId] ?? ($modelId !== '' ? $modelId : null);
+    }
+
+    public function etiquetaCompletaModelo(string $modelId, ?string $nombreBase = null): string
+    {
+        $nombre = trim((string) ($nombreBase ?: $this->nombreLegibleModelo($modelId)));
+        $tecnico = $this->nombreTecnicoModelo($modelId);
+
+        if ($nombre === '') {
+            return $tecnico ?? $modelId;
+        }
+
+        if (
+            $tecnico === null
+            || $tecnico === ''
+            || strcasecmp($nombre, $tecnico) === 0
+            || str_contains($nombre, "({$tecnico})")
+        ) {
+            return $nombre;
+        }
+
+        return "{$nombre} ({$tecnico})";
     }
 
     public function registrarConsumoYCuota(?User $user, array $credenciales, $response): array

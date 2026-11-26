@@ -73,7 +73,7 @@ export const calcularMetricasEstudianteCompleto = (est) => {
         ramosRojos,
         ramosRojosDetalle,
         asistenciaAnual,
-        totalWhatsApps: Number(est?.total_whatsapps || 0),
+        totalCorreos: Number(est?.total_correos || 0),
         rut: est?.identificadorInterno || est?.run || 'Sin RUT',
         nombreCompleto,
         iniciales,

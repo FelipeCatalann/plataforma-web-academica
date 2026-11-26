@@ -29,8 +29,27 @@ class EnlaceWhatsAppFeatureTest extends TestCase
         Excel::import(new ImportadorSyscol, $archivo);
     }
 
+    public function test_whatsapp_desactivado_por_defecto_responde_410_y_no_registra_enlaces(): void
+    {
+        $profesor = User::factory()->create();
+        $profesor->assignRole(Role::findOrCreate('Profesor Jefe', 'web'));
+        $curso = DB::table('cursos')->first();
+        DB::table('cursos')->where('id', $curso->id)->update(['profesor_jefe_id' => $profesor->id]);
+        $matricula = DB::table('matriculas')->where('curso_id', $curso->id)->where('vigente', true)->first();
+
+        $this->actingAs($profesor)->postJson(route('whatsapp.preparar'), [
+            'estudiante_id' => $matricula->estudiante_id,
+            'curso_id' => $curso->id,
+            'telefono' => '+56912345678',
+            'mensaje' => 'Mensaje de prueba con WhatsApp desactivado.',
+        ])->assertStatus(410);
+
+        $this->assertDatabaseCount('enlace_whats_apps', 0);
+    }
+
     public function test_profesor_jefe_prepara_enlace_whatsapp_y_registra_bitacora(): void
     {
+        config(['sape.whatsapp_habilitado' => true]);
         $profesor = User::factory()->create(['name' => 'Prof. Catalina Soto']);
         $profesor->assignRole(Role::findOrCreate('Profesor Jefe', 'web'));
         $curso = DB::table('cursos')->first();
@@ -72,6 +91,7 @@ class EnlaceWhatsAppFeatureTest extends TestCase
 
     public function test_rechaza_telefono_invalido_al_preparar_enlace(): void
     {
+        config(['sape.whatsapp_habilitado' => true]);
         $profesor = User::factory()->create();
         $curso = DB::table('cursos')->first();
         $matricula = DB::table('matriculas')->where('curso_id', $curso->id)->first();
@@ -89,6 +109,7 @@ class EnlaceWhatsAppFeatureTest extends TestCase
 
     public function test_docente_ajeno_no_modifica_apoderado_ni_registra_enlace(): void
     {
+        config(['sape.whatsapp_habilitado' => true]);
         $docente = User::factory()->create();
         $docente->assignRole(Role::findOrCreate('Profesor Jefe', 'web'));
         $matricula = DB::table('matriculas')->where('vigente', true)->first();
@@ -108,6 +129,7 @@ class EnlaceWhatsAppFeatureTest extends TestCase
 
     public function test_cambiar_contacto_compartido_solo_afecta_la_matricula_autorizada(): void
     {
+        config(['sape.whatsapp_habilitado' => true]);
         $matriculas = DB::table('matriculas')->where('vigente', true)->limit(2)->get();
         [$matricula, $otra] = $matriculas->all();
         DB::table('matriculas')->where('id', $otra->id)->update(['apoderado_id' => $matricula->apoderado_id]);

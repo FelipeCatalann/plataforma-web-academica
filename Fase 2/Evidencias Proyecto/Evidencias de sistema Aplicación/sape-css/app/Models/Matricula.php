@@ -41,4 +41,9 @@ class Matricula extends Model
     {
         return $this->hasMany(EnlaceWhatsApp::class, 'matricula_id');
     }
+
+    public function comunicacionesCorreo()
+    {
+        return $this->hasMany(ComunicacionCorreo::class, 'matricula_id');
+    }
 }

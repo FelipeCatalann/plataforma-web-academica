@@ -3,10 +3,10 @@ import ReactMarkdown from 'react-markdown';
 
 const escaparRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const claseNotaSemantica = (valor) => {
-    if (valor < 4.0) return 'bg-red-50 text-red-700 border-red-200';
-    if (valor < 4.8) return 'bg-amber-50 text-amber-800 border-amber-200';
-    return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+const estadoNotaSemantica = (valor) => {
+    if (valor < 4.0) return 'critico';
+    if (valor < 4.8) return 'atencion';
+    return 'optimo';
 };
 
 const clasePuntoEstado = (estado) => {
@@ -77,6 +77,7 @@ const decorarTextoCadena = (texto, indiceEstudiantes, regexNombres, onClickEstud
                 nodos.push(
                     <span
                         key={`pct-${idxSeg}-${idxM}`}
+                        data-sape-badge="pct"
                         className={`inline-flex items-center px-1.5 py-0 rounded-md border text-[0.9em] font-extrabold tabular-nums mx-0.5 ${clasePct}`}
                     >
                         {parte}
@@ -99,12 +100,13 @@ const decorarTextoCadena = (texto, indiceEstudiantes, regexNombres, onClickEstud
                 }
 
                 const notaNum = parseFloat(parte.replace(',', '.'));
+                const estadoNota = estadoNotaSemantica(notaNum);
                 nodos.push(
                     <span
                         key={`nota-${idxSeg}-${idxM}`}
-                        className={`inline-flex items-center px-1.5 py-0 rounded-md border text-[0.9em] font-extrabold tabular-nums mx-0.5 ${claseNotaSemantica(
-                            notaNum
-                        )}`}
+                        data-sape-badge="nota"
+                        data-estado={estadoNota}
+                        className="sape-nota-inline"
                     >
                         {parte}
                     </span>
@@ -125,6 +127,13 @@ const decorarHijosReact = (children, indiceEstudiantes, regexNombres, onClickEst
             return decorarTextoCadena(child, indiceEstudiantes, regexNombres, onClickEstudiante);
         }
         if (React.isValidElement(child) && child.props?.children) {
+            if (
+                child.type === 'button' ||
+                child.type === 'style' ||
+                child.props?.['data-sape-badge']
+            ) {
+                return child;
+            }
             return React.cloneElement(child, {
                 children: decorarHijosReact(
                     child.props.children,

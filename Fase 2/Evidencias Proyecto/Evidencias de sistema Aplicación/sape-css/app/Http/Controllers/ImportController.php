@@ -103,7 +103,15 @@ class ImportController extends Controller
                 'updated_at' => now(),
             ]);
 
-            Excel::import(new ImportadorSyscol, $archivo);
+            $importador = new ImportadorSyscol;
+            Excel::import($importador, $archivo);
+
+            foreach ($importador->cursosProcesados() as $cursoProcesadoId) {
+                DB::table('importacion_excel_curso')->insertOrIgnore([
+                    'importacion_excel_id' => $importacionId,
+                    'curso_id' => $cursoProcesadoId,
+                ]);
+            }
 
             DB::table('importacion_excels')->where('id', $importacionId)->update([
                 'estadoImportacion' => 'PROCESADA',
@@ -174,6 +182,12 @@ class ImportController extends Controller
                     ->delete();
             }
 
+            $importacionesVinculadas = DB::table('importacion_excel_curso')
+                ->where('curso_id', $curso->id)
+                ->pluck('importacion_excel_id')
+                ->all();
+
+            DB::table('importacion_excel_curso')->where('curso_id', $curso->id)->delete();
             DB::table('cuartil_detalle_curriculars')->where('curso_id', $curso->id)->delete();
             DB::table('matriculas')->where('curso_id', $curso->id)->delete();
             DB::table('asignatura_curso')->where('curso_id', $curso->id)->delete();
@@ -203,17 +217,31 @@ class ImportController extends Controller
                 }
             }
 
-            // Limpiar el historial de importación (checksum) de este curso para permitir re-subir su Excel
-            $patron1 = "_{$curso->nivel}M{$curso->letra}";
-            $patron2 = "_{$curso->nivel}{$curso->letra}";
-            $borradosPorNombre = DB::table('importacion_excels')
-                ->where('archivoOriginal', 'like', "%{$patron1}%")
-                ->orWhere('archivoOriginal', 'like', "%{$patron2}%")
-                ->delete();
+            // Limpiar únicamente el historial de importación asociado a este curso (sin afectar otros cursos)
+            $borradosPorRelacion = 0;
+            if (! empty($importacionesVinculadas)) {
+                $importacionesCompartidas = DB::table('importacion_excel_curso')
+                    ->whereIn('importacion_excel_id', $importacionesVinculadas)
+                    ->pluck('importacion_excel_id')
+                    ->all();
+                $importacionesExclusivas = array_values(array_diff($importacionesVinculadas, $importacionesCompartidas));
+                if (! empty($importacionesExclusivas)) {
+                    $borradosPorRelacion = DB::table('importacion_excels')
+                        ->whereIn('id', $importacionesExclusivas)
+                        ->delete();
+                }
+            }
 
-            if ($borradosPorNombre === 0 && $calificacionesBorradas > 0) {
+            // Respaldo acotado para registros históricos previos a la tabla pivote (solo por nombre y sin vínculo a otros cursos)
+            if ($borradosPorRelacion === 0) {
+                $patron1 = "_{$curso->nivel}M{$curso->letra}";
+                $patron2 = "_{$curso->nivel}{$curso->letra}";
                 DB::table('importacion_excels')
-                    ->where('filasProcesadas', $calificacionesBorradas)
+                    ->whereNotIn('id', DB::table('importacion_excel_curso')->select('importacion_excel_id'))
+                    ->where(function ($query) use ($patron1, $patron2) {
+                        $query->where('archivoOriginal', 'like', "%{$patron1}%")
+                            ->orWhere('archivoOriginal', 'like', "%{$patron2}%");
+                    })
                     ->delete();
             }
 

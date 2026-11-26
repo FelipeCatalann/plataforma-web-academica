@@ -8,10 +8,10 @@ const colorBarraPorNota = (nota) => {
     return 'bg-emerald-600';
 };
 
-const claseBadgeNota = (nota) => {
-    if (nota < 4.0) return 'bg-red-50 text-red-700 border-red-200';
-    if (nota < 4.8) return 'bg-amber-50 text-amber-800 border-amber-200';
-    return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+const estadoNotaSemantica = (nota) => {
+    if (nota < 4.0) return 'critico';
+    if (nota < 4.8) return 'atencion';
+    return 'optimo';
 };
 
 export function WidgetVisualRespuesta({ tipo, metricasCurso, textoRespuesta, cursoNombre, onClickEstudiante }) {
@@ -145,6 +145,7 @@ export function WidgetVisualRespuesta({ tipo, metricasCurso, textoRespuesta, cur
                 <div className="space-y-2.5">
                     {listaMostrar.map((asig) => {
                         const anchoPct = Math.min(100, Math.max(8, ((asig.promedio - 1) / 6) * 100));
+                        const estadoAsig = estadoNotaSemantica(asig.promedio);
                         return (
                             <div key={asig.nombre} className="space-y-1">
                                 <div className="flex items-center justify-between gap-2 text-xs">
@@ -155,11 +156,7 @@ export function WidgetVisualRespuesta({ tipo, metricasCurso, textoRespuesta, cur
                                                 {asig.alumnosBajo4} bajo 4.0
                                             </span>
                                         )}
-                                        <span
-                                            className={`px-2 py-0.5 rounded-md border text-[11px] font-extrabold ${claseBadgeNota(
-                                                asig.promedio
-                                            )}`}
-                                        >
+                                        <span data-estado={estadoAsig} className="sape-nota-valor">
                                             {asig.promedio.toFixed(1)}
                                         </span>
                                     </div>

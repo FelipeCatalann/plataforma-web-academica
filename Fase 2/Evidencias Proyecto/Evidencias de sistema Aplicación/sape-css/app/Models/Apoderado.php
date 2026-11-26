@@ -15,6 +15,7 @@ class Apoderado extends Model
     protected $fillable = [
         'id',
         'nombre',
+        'correo',
         'telefono',
         'telefonoVigente',
     ];

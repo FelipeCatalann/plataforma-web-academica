@@ -1,8 +1,18 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
+import IconoGmail from '@/Components/IconoGmail';
 import { leerPreferenciasSape } from '@/utils/preferenciasSape';
 
-export default function ModalInformeIA({ estudiante, cursoId, cursoNombre, isOpen, onClose }) {
+export default function ModalInformeIA({
+    estudiante,
+    cursoId,
+    cursoNombre,
+    profesorNombre = '',
+    profesorJefeCurso = null,
+    isOpen,
+    onClose,
+    onCorreoEnviado = null,
+}) {
     const [destinatario, setDestinatario] = useState('Apoderado');
     const [palabrasClave, setPalabrasClave] = useState('');
     const [informe, setInforme] = useState('');
@@ -11,6 +21,14 @@ export default function ModalInformeIA({ estudiante, cursoId, cursoNombre, isOpe
     const [cargando, setCargando] = useState(false);
     const [error, setError] = useState('');
     const [copiado, setCopiado] = useState(false);
+
+    // Envío directo del informe a Gmail real desde la vista previa
+    const [correoDestino, setCorreoDestino] = useState('');
+    const [nombreDestino, setNombreDestino] = useState('');
+    const [asuntoCorreo, setAsuntoCorreo] = useState('');
+    const [directorio, setDirectorio] = useState([]);
+    const [enviandoGmail, setEnviandoGmail] = useState(false);
+    const [resultadoGmail, setResultadoGmail] = useState(null);
 
     const abortControllerRef = useRef(null);
     const copyTimerRef = useRef(null);
@@ -78,7 +96,30 @@ export default function ModalInformeIA({ estudiante, cursoId, cursoNombre, isOpe
         setCargando(false);
         setError('');
         setCopiado(false);
+        setCorreoDestino(estudiante?.apoderado_correo || '');
+        setNombreDestino(estudiante?.apoderado_nombre || '');
+        setAsuntoCorreo('');
+        setEnviandoGmail(false);
+        setResultadoGmail(null);
     }, [estudiante?.id, cursoId, isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        let activo = true;
+        axios
+            .get('/correos-gmail/directorio')
+            .then((res) => {
+                if (activo && Array.isArray(res.data?.contactos)) {
+                    setDirectorio(res.data.contactos);
+                }
+            })
+            .catch(() => {
+                // El usuario puede escribir el correo manualmente
+            });
+        return () => {
+            activo = false;
+        };
+    }, [isOpen]);
 
     // Cerrar con tecla Escape
     useEffect(() => {
@@ -145,8 +186,25 @@ export default function ModalInformeIA({ estudiante, cursoId, cursoNombre, isOpe
             );
 
             if (respuesta.data?.success && respuesta.data?.informe) {
+                const nombreEst = `${estudiante.nombres || ''} ${estudiante.apellidos || ''}`.trim();
+                const asuntoSugerido = `Informe Pedagógico - ${nombreEst}${cursoNombre ? ` (${cursoNombre})` : ''}`;
                 setInforme(respuesta.data.informe);
                 setInformeOriginal(respuesta.data.informe);
+                setAsuntoCorreo(asuntoSugerido);
+                setResultadoGmail(null);
+
+                if (destinatario === 'Apoderado') {
+                    setCorreoDestino(estudiante?.apoderado_correo || '');
+                    setNombreDestino(estudiante?.apoderado_nombre || 'Apoderado');
+                } else if (profesorJefeCurso?.email) {
+                    setCorreoDestino(profesorJefeCurso.email);
+                    setNombreDestino(profesorJefeCurso.nombre || destinatario);
+                } else {
+                    const directivo = directorio.find((c) => c.categoria === 'direccion_utp');
+                    setCorreoDestino(directivo?.email || '');
+                    setNombreDestino(directivo?.nombre || destinatario);
+                }
+
                 setEditandoParametros(false);
             } else {
                 setError('El servicio no devolvió contenido para el informe. Intenta generarlo nuevamente.');
@@ -170,6 +228,91 @@ export default function ModalInformeIA({ estudiante, cursoId, cursoNombre, isOpe
             copyTimerRef.current = setTimeout(() => setCopiado(false), 2500);
         } catch {
             setError('Tu navegador bloqueó el copiado automático. Selecciona el texto del cuadro y presiona Ctrl+C.');
+        }
+    };
+
+    const enviarInformeAGmail = async () => {
+        if (enviandoGmail || !informe.trim()) return;
+        const correoLimpio = correoDestino.trim();
+        if (!correoLimpio || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoLimpio)) {
+            setError('Ingresa un correo electrónico válido para abrir el informe en Gmail.');
+            return;
+        }
+        const asuntoFinal =
+            asuntoCorreo.trim() ||
+            `Informe Pedagógico - ${nombreCompleto}${cursoNombre ? ` (${cursoNombre})` : ''}`;
+
+        const prefs = leerPreferenciasSape();
+        const firmaTexto =
+            prefs.incluirFirmaCorreo && prefs.firmaCorreo?.trim()
+                ? `\n\n${profesorNombre ? `${profesorNombre}\n` : ''}${prefs.firmaCorreo.trim()}`
+                : '';
+        const textoFinalGmail = `${informe.trim()}${
+            firmaTexto && !informe.includes(prefs.firmaCorreo?.trim() || '___') ? firmaTexto : ''
+        }`;
+
+        const tipoDest =
+            destinatario === 'Apoderado'
+                ? 'apoderado'
+                : directorio.some(
+                        (c) =>
+                            c.email?.toLowerCase() === correoLimpio.toLowerCase() &&
+                            c.categoria === 'direccion_utp'
+                    )
+                  ? 'direccion_utp'
+                  : 'equipo_docente';
+
+        setEnviandoGmail(true);
+        setError('');
+
+        try {
+            const { data } = await axios.post('/correos-gmail', {
+                estudiante_id: estudiante?.id || null,
+                curso_id: cursoId || null,
+                tipo_destinatario: tipoDest,
+                nombre_destino: nombreDestino.trim() || destinatario,
+                correo_destino: correoLimpio,
+                asunto: asuntoFinal,
+                cuerpo: textoFinalGmail,
+                origen: 'informe_ia',
+                criterio: 'informe_ia',
+            });
+
+            if (data?.success && data?.gmail_url) {
+                let copiadoAuto = false;
+                if (data.excede_limite && navigator.clipboard) {
+                    try {
+                        await navigator.clipboard.writeText(textoFinalGmail);
+                        copiadoAuto = true;
+                    } catch {
+                        // El botón de copiar queda disponible
+                    }
+                }
+
+                setResultadoGmail({
+                    url: data.gmail_url,
+                    excedeLimite: Boolean(data.excede_limite),
+                    copiadoAuto,
+                });
+
+                if (onCorreoEnviado && estudiante?.id) {
+                    onCorreoEnviado(
+                        estudiante.id,
+                        data.comunicacion,
+                        tipoDest === 'apoderado' ? correoLimpio : null
+                    );
+                }
+
+                window.open(data.gmail_url, '_blank', 'noopener,noreferrer');
+            }
+        } catch (err) {
+            const msg =
+                err.response?.data?.errors?.correo_destino?.[0] ||
+                err.response?.data?.message ||
+                'No se pudo preparar el envío en Gmail. Revisa el correo ingresado.';
+            setError(msg);
+        } finally {
+            setEnviandoGmail(false);
         }
     };
 
@@ -436,9 +579,136 @@ export default function ModalInformeIA({ estudiante, cursoId, cursoNombre, isOpe
 
                             <div className="flex justify-between items-center text-xs text-slate-500">
                                 <span>
-                                    Puedes editar cualquier párrafo antes de copiar el documento definitivo.
+                                    Revisa o edita cualquier párrafo antes de pasarlo a Gmail.
                                 </span>
                                 <span className="font-mono tabular-nums">{informe.length} caracteres</span>
+                            </div>
+
+                            {/* BLOQUE DE ENVÍO DIRECTO DEL INFORME A GMAIL REAL */}
+                            <div className="pt-4 border-t border-slate-200 space-y-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <IconoGmail className="w-4 h-4" />
+                                        <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+                                            Enviar este informe por Gmail
+                                        </span>
+                                    </div>
+                                    <span className="text-[11px] text-slate-500">
+                                        Pasa el texto editado directo a Gmail
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label
+                                            htmlFor="informe-gmail-para"
+                                            className="block text-xs font-bold text-slate-700 mb-1"
+                                        >
+                                            Correo destinatario (Para)
+                                        </label>
+                                        <input
+                                            id="informe-gmail-para"
+                                            type="email"
+                                            value={correoDestino}
+                                            onChange={(e) => setCorreoDestino(e.target.value)}
+                                            placeholder={
+                                                destinatario === 'Apoderado'
+                                                    ? 'apoderado@gmail.com'
+                                                    : 'direccion@colegio.cl'
+                                            }
+                                            className="w-full rounded-lg border-slate-300 bg-white text-sm text-slate-900 focus:border-sape-burdeo focus:ring-sape-burdeo"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label
+                                            htmlFor="informe-gmail-asunto"
+                                            className="block text-xs font-bold text-slate-700 mb-1"
+                                        >
+                                            Asunto en Gmail
+                                        </label>
+                                        <input
+                                            id="informe-gmail-asunto"
+                                            type="text"
+                                            maxLength={200}
+                                            value={asuntoCorreo}
+                                            onChange={(e) => setAsuntoCorreo(e.target.value)}
+                                            className="w-full rounded-lg border-slate-300 bg-white text-sm text-slate-900 focus:border-sape-burdeo focus:ring-sape-burdeo"
+                                        />
+                                    </div>
+                                </div>
+
+                                {directorio.length > 0 && (
+                                    <div className="space-y-1.5">
+                                        <span className="block text-[11px] font-bold text-slate-500">
+                                            Elegir rápido del equipo docente o Dirección:
+                                        </span>
+                                        <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
+                                            {estudiante?.apoderado_correo && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setCorreoDestino(estudiante.apoderado_correo);
+                                                        setNombreDestino(estudiante.apoderado_nombre || 'Apoderado');
+                                                    }}
+                                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                                                        correoDestino.trim().toLowerCase() ===
+                                                        estudiante.apoderado_correo.toLowerCase()
+                                                            ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                                                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    Apoderado ({estudiante.apoderado_correo})
+                                                </button>
+                                            )}
+                                            {directorio.slice(0, 8).map((c) => {
+                                                const activo =
+                                                    correoDestino.trim().toLowerCase() ===
+                                                    (c.email || '').toLowerCase();
+                                                return (
+                                                    <button
+                                                        key={c.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setCorreoDestino(c.email);
+                                                            setNombreDestino(c.nombre);
+                                                        }}
+                                                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                                                            activo
+                                                                ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                                                                : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                                                        }`}
+                                                    >
+                                                        {c.nombre}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {resultadoGmail && (
+                                    <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                                        <div>
+                                            <p className="font-bold">Informe listo en Gmail</p>
+                                            <p className="text-emerald-800">
+                                                {resultadoGmail.excedeLimite
+                                                    ? resultadoGmail.copiadoAuto
+                                                        ? 'El informe es extenso y se copió al portapapeles: presiona Ctrl+V en Gmail.'
+                                                        : 'El informe es extenso: usa "Copiar informe" y pégalo en Gmail.'
+                                                    : 'Si el navegador bloqueó la pestaña nueva, ábrelo aquí:'}
+                                            </p>
+                                        </div>
+                                        <a
+                                            href={resultadoGmail.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center justify-center gap-1.5 bg-white text-slate-900 border border-slate-300 hover:bg-slate-100 font-bold px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0"
+                                        >
+                                            <IconoGmail className="w-3.5 h-3.5" />
+                                            <span>Abrir Gmail ahora</span>
+                                        </a>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -449,37 +719,37 @@ export default function ModalInformeIA({ estudiante, cursoId, cursoNombre, isOpe
                     <button
                         type="button"
                         onClick={onClose}
-                        className="bg-white text-slate-700 font-bold px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors text-sm"
+                        className="bg-white text-slate-700 font-bold px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 transition-colors text-sm"
                     >
                         Cerrar
                     </button>
 
-                    {informe && !cargando && (
-                        <button
-                            type="button"
-                            onClick={copiarAlPortapapeles}
-                            className={`font-bold px-5 py-2.5 rounded-xl shadow-sm transition-colors flex items-center gap-2 text-sm ${
-                                copiado
-                                    ? 'bg-emerald-600 text-white'
-                                    : 'bg-sape-burdeo text-sape-amarillo hover:bg-sape-burdeo-hover'
-                            }`}
-                        >
-                            {copiado ? (
-                                <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    <span>Informe copiado al portapapeles</span>
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                                    </svg>
-                                    <span>Copiar Informe</span>
-                                </>
-                            )}
-                        </button>
+                    {informe && !cargando && !editandoParametros && (
+                        <div className="flex flex-wrap items-center gap-2.5">
+                            <button
+                                type="button"
+                                onClick={copiarAlPortapapeles}
+                                className={`font-bold px-4 py-2.5 rounded-xl border transition-colors flex items-center gap-2 text-sm ${
+                                    copiado
+                                        ? 'bg-emerald-600 text-white border-emerald-600'
+                                        : 'bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200'
+                                }`}
+                            >
+                                <span>{copiado ? 'Copiado' : 'Copiar informe'}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                disabled={enviandoGmail || !correoDestino.trim()}
+                                onClick={enviarInformeAGmail}
+                                className="bg-sape-burdeo hover:bg-sape-burdeo-hover disabled:opacity-50 text-sape-amarillo font-bold px-5 py-2.5 rounded-xl shadow-sm transition-colors inline-flex items-center gap-2 text-sm"
+                            >
+                                <span className="w-5 h-5 rounded-md bg-white flex items-center justify-center shrink-0">
+                                    <IconoGmail className="w-3.5 h-3.5" />
+                                </span>
+                                <span>{enviandoGmail ? 'Abriendo Gmail...' : 'Abrir en Gmail'}</span>
+                            </button>
+                        </div>
                     )}
                 </div>
             </div>

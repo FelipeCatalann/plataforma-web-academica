@@ -5,7 +5,9 @@ import {
     estimarCostoMensualPlan,
     formatearUsd,
     formatearClpAprox,
+    obtenerPresentacionModelo,
 } from '@/utils/preferenciasSape';
+import NombreModeloIA from '@/Components/IA/NombreModeloIA';
 
 const IconoCandado = () => (
     <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -325,7 +327,7 @@ export default function HubIAConfiguracion({
                 nombrePersonal.trim() ||
                 provPersObj.modelosSugeridos?.find((m) => m.id === modelIdPersonal.trim())
                     ?.nombre ||
-                modelIdPersonal.trim();
+                obtenerPresentacionModelo(modelIdPersonal.trim()).nombre;
 
             const { data } = await axios.post('/configuracion/ia', {
                 accion: 'agregar_modelo',
@@ -392,12 +394,28 @@ export default function HubIAConfiguracion({
 
     const sugeridosInst =
         modelosDetectadosInst.length > 0
-            ? modelosDetectadosInst.slice(0, 6).map((id) => ({ id, nombre: id, etiqueta: 'Disponible' }))
+            ? modelosDetectadosInst.slice(0, 6).map((id) => {
+                  const info = obtenerPresentacionModelo(id);
+                  return {
+                      id,
+                      nombre: info.nombre,
+                      nombreTecnico: info.nombreTecnico,
+                      etiqueta: 'Disponible',
+                  };
+              })
             : provInstObj.modelosSugeridos || [];
 
     const sugeridosPers =
         modelosDetectadosPers.length > 0
-            ? modelosDetectadosPers.slice(0, 6).map((id) => ({ id, nombre: id, etiqueta: 'Disponible' }))
+            ? modelosDetectadosPers.slice(0, 6).map((id) => {
+                  const info = obtenerPresentacionModelo(id);
+                  return {
+                      id,
+                      nombre: info.nombre,
+                      nombreTecnico: info.nombreTecnico,
+                      etiqueta: 'Disponible',
+                  };
+              })
             : provPersObj.modelosSugeridos || [];
 
     const estimacionActual = estimarCostoMensualPlan(planActualObj, docentesSim, consultasDiaSim);
@@ -424,9 +442,13 @@ export default function HubIAConfiguracion({
                                     <>
                                         Modelo activo:{' '}
                                         <strong className="text-slate-800">
-                                            {conexionActiva.modelo_nombre}
+                                            <NombreModeloIA
+                                                modelo={conexionActiva}
+                                                modelId={conexionActiva.modelo}
+                                                variante="claro"
+                                            />
                                         </strong>{' '}
-                                        ({conexionActiva.plan_nombre || 'Plan del colegio'})
+                                        · {conexionActiva.plan_nombre || 'Plan del colegio'}
                                     </>
                                 ) : (
                                     'Elige un proveedor abajo y conecta una API Key para activar el Copiloto e Informes.'
@@ -732,26 +754,32 @@ export default function HubIAConfiguracion({
                                     className="w-full rounded-xl border-slate-300 bg-white text-sm text-slate-900 focus:border-sape-burdeo focus:ring-sape-burdeo font-mono"
                                 />
                                 <div className="flex flex-wrap gap-1.5">
-                                    {sugeridosInst.map((mod) => (
-                                        <button
-                                            key={mod.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setModeloChatInst(mod.id);
-                                                if (!mostrarAvanzadoInst) {
-                                                    setModeloInformesInst(mod.id);
-                                                }
-                                            }}
-                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
-                                                modeloChatInst === mod.id
-                                                    ? 'bg-sape-burdeo text-sape-amarillo border-sape-burdeo'
-                                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                                            }`}
-                                        >
-                                            {mod.nombre}
-                                            {mod.etiqueta ? ` · ${mod.etiqueta}` : ''}
-                                        </button>
-                                    ))}
+                                    {sugeridosInst.map((mod) => {
+                                        const seleccionadoChip = modeloChatInst === mod.id;
+                                        return (
+                                            <button
+                                                key={mod.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setModeloChatInst(mod.id);
+                                                    if (!mostrarAvanzadoInst) {
+                                                        setModeloInformesInst(mod.id);
+                                                    }
+                                                }}
+                                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                                                    seleccionadoChip
+                                                        ? 'bg-sape-burdeo text-sape-amarillo border-sape-burdeo'
+                                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                                }`}
+                                            >
+                                                <NombreModeloIA
+                                                    modelo={mod}
+                                                    modelId={mod.id}
+                                                    variante={seleccionadoChip ? 'chip-activo' : 'claro'}
+                                                />
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 
@@ -961,8 +989,12 @@ export default function HubIAConfiguracion({
                                                             {plan.ideal_para}
                                                         </span>
                                                     </td>
-                                                    <td className="py-2.5 px-3 font-mono text-[11px] text-slate-700">
-                                                        {plan.modelo_chat_sugerido}
+                                                    <td className="py-2.5 px-3 text-xs font-bold text-slate-800">
+                                                        <NombreModeloIA
+                                                            modelo={plan.modelo_chat_sugerido}
+                                                            modelId={plan.modelo_chat_sugerido}
+                                                            variante="claro"
+                                                        />
                                                     </td>
                                                     <td className="py-2.5 px-3 text-slate-700 tabular-nums whitespace-nowrap">
                                                         {plan.categoria === 'gratuito'
@@ -1038,8 +1070,12 @@ export default function HubIAConfiguracion({
                         </div>
                         <div>
                             <span className="text-xs text-slate-500 font-semibold block">Modelo</span>
-                            <span className="text-xs font-mono font-bold text-slate-900 block mt-1">
-                                {configuracionInstitucional?.modelo_chat || 'openai/gpt-oss-120b'}
+                            <span className="text-xs font-extrabold text-slate-900 block mt-1">
+                                <NombreModeloIA
+                                    modelo={configuracionInstitucional?.modelo_chat || 'openai/gpt-oss-120b'}
+                                    modelId={configuracionInstitucional?.modelo_chat || 'openai/gpt-oss-120b'}
+                                    variante="claro"
+                                />
                             </span>
                         </div>
                     </div>
@@ -1090,15 +1126,16 @@ export default function HubIAConfiguracion({
                                         <div className="space-y-1">
                                             <div className="flex items-start justify-between gap-2">
                                                 <span className="text-sm font-extrabold text-slate-900">
-                                                    {mod.nombre}
+                                                    <NombreModeloIA
+                                                        modelo={mod}
+                                                        modelId={mod.model_id}
+                                                        variante="claro"
+                                                    />
                                                 </span>
-                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
                                                     {mod.proveedor_nombre}
                                                 </span>
                                             </div>
-                                            <p className="text-[11px] font-mono text-slate-500 truncate">
-                                                {mod.model_id}
-                                            </p>
                                             {mod.api_key_masked && (
                                                 <p className="text-[11px] font-mono text-slate-500">
                                                     Clave: {mod.api_key_masked}
@@ -1249,23 +1286,30 @@ export default function HubIAConfiguracion({
                                         className="w-full rounded-xl border-slate-300 bg-white text-sm text-slate-900 font-mono"
                                     />
                                     <div className="flex flex-wrap gap-1.5">
-                                        {sugeridosPers.map((mod) => (
-                                            <button
-                                                key={mod.id}
-                                                type="button"
-                                                onClick={() => {
-                                                    setModelIdPersonal(mod.id);
-                                                    setNombrePersonal(mod.nombre);
-                                                }}
-                                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
-                                                    modelIdPersonal === mod.id
-                                                        ? 'bg-sape-burdeo text-sape-amarillo border-sape-burdeo'
-                                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                                                }`}
-                                            >
-                                                {mod.nombre}
-                                            </button>
-                                        ))}
+                                        {sugeridosPers.map((mod) => {
+                                            const seleccionadoChip = modelIdPersonal === mod.id;
+                                            return (
+                                                <button
+                                                    key={mod.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setModelIdPersonal(mod.id);
+                                                        setNombrePersonal(mod.nombre);
+                                                    }}
+                                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                                                        seleccionadoChip
+                                                            ? 'bg-sape-burdeo text-sape-amarillo border-sape-burdeo'
+                                                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    <NombreModeloIA
+                                                        modelo={mod}
+                                                        modelId={mod.id}
+                                                        variante={seleccionadoChip ? 'chip-activo' : 'claro'}
+                                                    />
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 

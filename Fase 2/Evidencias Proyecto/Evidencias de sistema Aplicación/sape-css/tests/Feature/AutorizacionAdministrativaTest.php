@@ -21,6 +21,10 @@ class AutorizacionAdministrativaTest extends TestCase
         return [
             'crear profesor' => ['POST', '/admin/profesores'],
             'asignar curso' => ['POST', '/admin/asignar-curso'],
+            'plantilla excel docentes' => ['GET', '/admin/asignacion-ia/plantilla-excel'],
+            'analizar asignacion ia' => ['POST', '/admin/asignacion-ia/analizar'],
+            'analizar excel docentes ia' => ['POST', '/admin/asignacion-ia/analizar-excel'],
+            'confirmar lote asignacion ia' => ['POST', '/admin/asignacion-ia/confirmar'],
             'formulario de importación' => ['GET', '/admin/importar'],
             'importar Excel' => ['POST', '/admin/importar'],
             'revisar Excel' => ['POST', '/admin/importar/revisar'],

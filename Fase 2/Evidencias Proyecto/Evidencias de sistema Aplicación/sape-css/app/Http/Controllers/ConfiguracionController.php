@@ -36,19 +36,19 @@ class ConfiguracionController extends Controller
         $iaConfigurada = (bool) ($configuracionIA['conexion_activa']['configurada'] ?? false);
         $iaSistemaConfigurada = (bool) ($configuracionInstitucional['configurada'] ?? false);
 
-        $enlacesGenerados = 0;
-        $misEnlaces = 0;
+        $correosGenerados = 0;
+        $misCorreos = 0;
         $registrosBitacora = 0;
         $historialImportaciones = [];
-        $bitacoraWhatsapp = [];
+        $bitacoraCorreos = [];
         $miCargaDocente = [
             'jefaturas' => [],
             'asignaturas' => [],
         ];
 
         try {
-            $enlacesGenerados = DB::table('enlace_whats_apps')->count();
-            $misEnlaces = DB::table('enlace_whats_apps')
+            $correosGenerados = DB::table('comunicaciones_correo')->count();
+            $misCorreos = DB::table('comunicaciones_correo')
                 ->where('user_id', $user->id)
                 ->count();
             $registrosBitacora = DB::table('registro_bitacoras')->count();
@@ -68,33 +68,39 @@ class ConfiguracionController extends Controller
                     ->values()
                     ->all();
 
-                $bitacoraWhatsapp = DB::table('enlace_whats_apps')
-                    ->leftJoin('users', 'enlace_whats_apps.user_id', '=', 'users.id')
-                    ->leftJoin('matriculas', 'enlace_whats_apps.matricula_id', '=', 'matriculas.id')
+                $bitacoraCorreos = DB::table('comunicaciones_correo')
+                    ->leftJoin('users', 'comunicaciones_correo.user_id', '=', 'users.id')
+                    ->leftJoin('matriculas', 'comunicaciones_correo.matricula_id', '=', 'matriculas.id')
                     ->leftJoin('estudiantes', 'matriculas.estudiante_id', '=', 'estudiantes.id')
                     ->leftJoin('cursos', 'matriculas.curso_id', '=', 'cursos.id')
                     ->select(
-                        'enlace_whats_apps.id',
-                        'enlace_whats_apps.telefonoDestinoSnapshot',
-                        'enlace_whats_apps.estado',
-                        'enlace_whats_apps.generadoEn',
-                        'users.name as docente_nombre',
+                        'comunicaciones_correo.id',
+                        'comunicaciones_correo.tipo_destinatario',
+                        'comunicaciones_correo.nombre_destino',
+                        'comunicaciones_correo.correo_destino',
+                        'comunicaciones_correo.asunto',
+                        'comunicaciones_correo.origen',
+                        'comunicaciones_correo.generado_en',
+                        'users.name as emisor_nombre',
                         'estudiantes.nombres as estudiante_nombres',
                         'estudiantes.apellidos as estudiante_apellidos',
                         'cursos.nivel as curso_nivel',
                         'cursos.letra as curso_letra'
                     )
-                    ->orderByDesc('enlace_whats_apps.generadoEn')
+                    ->orderByDesc('comunicaciones_correo.generado_en')
                     ->limit(15)
                     ->get()
                     ->map(fn ($row) => [
                         'id' => $row->id,
-                        'docente' => $row->docente_nombre ?? 'Docente',
-                        'estudiante' => trim(($row->estudiante_nombres ?? '').' '.($row->estudiante_apellidos ?? '')) ?: 'Estudiante',
-                        'curso' => $row->curso_nivel ? "{$row->curso_nivel}° Medio {$row->curso_letra}" : '-',
-                        'telefono' => $row->telefonoDestinoSnapshot ?? '-',
-                        'estado' => $row->estado ?? 'ABIERTO_POR_DOCENTE',
-                        'fecha' => $row->generadoEn,
+                        'emisor' => $row->emisor_nombre ?? 'Docente',
+                        'destinatario' => $row->nombre_destino
+                            ?: (trim(($row->estudiante_nombres ?? '').' '.($row->estudiante_apellidos ?? '')) ?: 'Destinatario'),
+                        'tipo_destinatario' => $row->tipo_destinatario,
+                        'curso' => $row->curso_nivel ? "{$row->curso_nivel}° Medio {$row->curso_letra}" : 'Comunicación interna',
+                        'correo' => $row->correo_destino ?? '-',
+                        'asunto' => $row->asunto ?? '-',
+                        'origen' => $row->origen ?? 'correo_directo',
+                        'fecha' => $row->generado_en,
                     ])
                     ->values()
                     ->all();
@@ -139,32 +145,38 @@ class ConfiguracionController extends Controller
                     'asignaturas' => $asignaturas,
                 ];
 
-                $bitacoraWhatsapp = DB::table('enlace_whats_apps')
-                    ->leftJoin('matriculas', 'enlace_whats_apps.matricula_id', '=', 'matriculas.id')
+                $bitacoraCorreos = DB::table('comunicaciones_correo')
+                    ->leftJoin('matriculas', 'comunicaciones_correo.matricula_id', '=', 'matriculas.id')
                     ->leftJoin('estudiantes', 'matriculas.estudiante_id', '=', 'estudiantes.id')
                     ->leftJoin('cursos', 'matriculas.curso_id', '=', 'cursos.id')
-                    ->where('enlace_whats_apps.user_id', $user->id)
+                    ->where('comunicaciones_correo.user_id', $user->id)
                     ->select(
-                        'enlace_whats_apps.id',
-                        'enlace_whats_apps.telefonoDestinoSnapshot',
-                        'enlace_whats_apps.estado',
-                        'enlace_whats_apps.generadoEn',
+                        'comunicaciones_correo.id',
+                        'comunicaciones_correo.tipo_destinatario',
+                        'comunicaciones_correo.nombre_destino',
+                        'comunicaciones_correo.correo_destino',
+                        'comunicaciones_correo.asunto',
+                        'comunicaciones_correo.origen',
+                        'comunicaciones_correo.generado_en',
                         'estudiantes.nombres as estudiante_nombres',
                         'estudiantes.apellidos as estudiante_apellidos',
                         'cursos.nivel as curso_nivel',
                         'cursos.letra as curso_letra'
                     )
-                    ->orderByDesc('enlace_whats_apps.generadoEn')
-                    ->limit(10)
+                    ->orderByDesc('comunicaciones_correo.generado_en')
+                    ->limit(15)
                     ->get()
                     ->map(fn ($row) => [
                         'id' => $row->id,
-                        'docente' => $user->name,
-                        'estudiante' => trim(($row->estudiante_nombres ?? '').' '.($row->estudiante_apellidos ?? '')) ?: 'Estudiante',
-                        'curso' => $row->curso_nivel ? "{$row->curso_nivel}° Medio {$row->curso_letra}" : '-',
-                        'telefono' => $row->telefonoDestinoSnapshot ?? '-',
-                        'estado' => $row->estado ?? 'ABIERTO_POR_DOCENTE',
-                        'fecha' => $row->generadoEn,
+                        'emisor' => $user->name,
+                        'destinatario' => $row->nombre_destino
+                            ?: (trim(($row->estudiante_nombres ?? '').' '.($row->estudiante_apellidos ?? '')) ?: 'Destinatario'),
+                        'tipo_destinatario' => $row->tipo_destinatario,
+                        'curso' => $row->curso_nivel ? "{$row->curso_nivel}° Medio {$row->curso_letra}" : 'Comunicación interna',
+                        'correo' => $row->correo_destino ?? '-',
+                        'asunto' => $row->asunto ?? '-',
+                        'origen' => $row->origen ?? 'correo_directo',
+                        'fecha' => $row->generado_en,
                     ])
                     ->values()
                     ->all();
@@ -188,12 +200,12 @@ class ConfiguracionController extends Controller
                 'etiqueta' => $rolEtiqueta,
             ],
             'estadisticasSistema' => [
-                'enlacesGenerados' => $enlacesGenerados,
-                'misEnlaces' => $misEnlaces,
+                'correosGenerados' => $correosGenerados,
+                'misCorreos' => $misCorreos,
                 'registrosBitacora' => $registrosBitacora,
             ],
             'historialImportaciones' => $historialImportaciones,
-            'bitacoraWhatsapp' => $bitacoraWhatsapp,
+            'bitacoraCorreos' => $bitacoraCorreos,
             'miCargaDocente' => $miCargaDocente,
         ]);
     }
@@ -325,9 +337,11 @@ class ConfiguracionController extends Controller
                     $configActualizada = $iaService->obtenerConfiguracionPublica($user);
                     $esAdmin = method_exists($user, 'hasRole') && $user->hasRole('Administrador');
 
+                    $etiquetaModelo = $credenciales['modelo_etiqueta'] ?? $credenciales['modelo_nombre'];
+
                     return response()->json([
                         'ok' => true,
-                        'message' => "Cuota actualizada para {$credenciales['modelo_nombre']}.",
+                        'message' => "Cuota actualizada para {$etiquetaModelo}.",
                         'configuracionIA' => $configActualizada,
                         'configuracionInstitucional' => $iaService->obtenerConfiguracionInstitucionalPublica($esAdmin),
                     ]);
@@ -471,6 +485,8 @@ class ConfiguracionController extends Controller
                 $inst->save();
             }
 
+            $etiquetaModeloActivo = $iaService->etiquetaCompletaModelo($activeModel);
+
             return response()->json([
                 'ok' => true,
                 'respuestaVerificada' => $verificarRespuesta,
@@ -479,7 +495,7 @@ class ConfiguracionController extends Controller
                 'models' => $listaIds,
                 'activeModel' => $activeModel,
                 'message' => $verificarRespuesta
-                    ? "Conexión y respuesta verificadas con {$proveedorNombre} · {$activeModel} ({$latenciaMs} ms)."
+                    ? "Conexión y respuesta verificadas con {$proveedorNombre} · {$etiquetaModeloActivo} ({$latenciaMs} ms)."
                     : "Conexión activa con {$proveedorNombre} ({$latenciaMs} ms · {$modelos} modelos disponibles).",
             ]);
         } catch (\Throwable $e) {

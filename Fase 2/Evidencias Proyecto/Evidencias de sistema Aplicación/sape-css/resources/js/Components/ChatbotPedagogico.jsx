@@ -6,9 +6,12 @@ import {
     leerPreferenciasSape,
     guardarPreferenciasSape,
     sincronizarPreferenciasDesdeServidor,
+    obtenerPresentacionModelo,
     MODELOS_GROQ_SISTEMA,
     PREFERENCIAS_DEFAULT,
 } from '@/utils/preferenciasSape';
+import NombreModeloIA from '@/Components/IA/NombreModeloIA';
+import IconoGmail from '@/Components/IconoGmail';
 import {
     calcularMetricasCurso,
     calcularMetricasEstudianteCompleto,
@@ -37,18 +40,6 @@ const SUGERENCIAS_RAPIDAS = [
         prompt: 'Redacta una pauta estructurada con los puntos clave de rendimiento de este curso para presentar en la próxima reunión de apoderados.',
     },
 ];
-
-const DESCRIPCION_CLARA_MODELOS = {
-    'openai/gpt-oss-20b': {
-        rolCorto: 'Consultas rápidas',
-    },
-    'openai/gpt-oss-120b': {
-        rolCorto: 'Razonamiento profundo',
-    },
-    'qwen/qwen3.8-27b': {
-        rolCorto: 'Redacción formal',
-    },
-};
 
 const construirMensajeBienvenida = (cursoContexto, nombreModelo = PREFERENCIAS_DEFAULT.modeloActivoNombre) => ({
     role: 'ai',
@@ -325,7 +316,7 @@ export default function ChatbotPedagogico({
     cursoContexto,
     alturaClase = '',
     onAbrirInforme = null,
-    onAbrirWhatsApp = null,
+    onAbrirGmail = null,
     onVerFicha = null,
 }) {
     const [preferencias, setPreferencias] = useState(() => leerPreferenciasSape());
@@ -373,7 +364,8 @@ export default function ChatbotPedagogico({
                       id: 'institucional',
                       model_id: conexionActiva.modelo,
                       nombre: conexionActiva.modelo_nombre || 'Plan del Colegio',
-                      subtitulo: `${conexionActiva.proveedor_nombre} · Plan Colegio`,
+                      nombre_tecnico: conexionActiva.modelo_tecnico || null,
+                      subtitulo: `${conexionActiva.proveedor_nombre} - Plan Colegio`,
                       proveedor_nombre: conexionActiva.proveedor_nombre,
                       origen: 'institucional',
                   },
@@ -817,10 +809,12 @@ export default function ChatbotPedagogico({
         alturaClase ||
         'h-[calc(100dvh-9.5rem)] sm:h-[calc(100dvh-10rem)] md:h-[calc(100dvh-8rem)] min-h-[360px]';
 
-    const infoModeloActivo = DESCRIPCION_CLARA_MODELOS[modeloActivoObj?.id] || {
-        rolCorto: modeloActivoObj?.subtitulo || 'Modelo activo',
-        usoIdeal: modeloActivoObj?.origen === 'usuario' ? 'Tu API Key' : 'Groq Sistema',
-    };
+    const presentacionModeloActivo = obtenerPresentacionModelo(
+        modeloActivoObj || preferencias.modeloActivoNombre,
+        modeloActivoObj?.model_id || preferencias.modeloActivoId
+    );
+    const rolCortoModeloActivo =
+        modeloActivoObj?.subtitulo || presentacionModeloActivo.subtitulo || 'Modelo activo';
 
     return (
         <div
@@ -884,10 +878,14 @@ export default function ChatbotPedagogico({
                             <span className="w-2 h-2 rounded-full bg-sape-amarillo shrink-0" />
                             <div className="text-left">
                                 <span className="font-extrabold block leading-tight">
-                                    {modeloActivoObj?.nombre || PREFERENCIAS_DEFAULT.modeloActivoNombre}
+                                    <NombreModeloIA
+                                        modelo={modeloActivoObj || preferencias.modeloActivoNombre}
+                                        modelId={modeloActivoObj?.model_id || preferencias.modeloActivoId}
+                                        variante="burdeo"
+                                    />
                                 </span>
                                 <span className="text-[10px] text-sape-amarillo block leading-tight">
-                                    {infoModeloActivo.rolCorto}
+                                    {rolCortoModeloActivo}
                                 </span>
                             </div>
                             <svg className="w-3.5 h-3.5 text-sape-amarillo ml-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -916,9 +914,11 @@ export default function ChatbotPedagogico({
                                     <div className="p-2 max-h-72 overflow-y-auto space-y-1.5">
                                         {todosLosModelos.map((mod) => {
                                             const esActivo = mod.id === modeloActivoObj?.id;
-                                            const info = DESCRIPCION_CLARA_MODELOS[mod.id] || {
-                                                rolCorto: mod.subtitulo || mod.proveedor_nombre,
-                                            };
+                                            const presentacion = obtenerPresentacionModelo(mod, mod.model_id);
+                                            const rolCorto =
+                                                mod.subtitulo ||
+                                                presentacion.subtitulo ||
+                                                mod.proveedor_nombre;
 
                                             return (
                                                 <button
@@ -933,10 +933,14 @@ export default function ChatbotPedagogico({
                                                 >
                                                     <div className="min-w-0">
                                                         <span className="block text-xs font-extrabold text-slate-900">
-                                                            {mod.nombre}
+                                                            <NombreModeloIA
+                                                                modelo={mod}
+                                                                modelId={mod.model_id}
+                                                                variante="claro"
+                                                            />
                                                         </span>
                                                         <span className="block text-[11px] text-slate-500 mt-0.5">
-                                                            {info.rolCorto}
+                                                            {rolCorto}
                                                         </span>
                                                     </div>
 
@@ -952,7 +956,7 @@ export default function ChatbotPedagogico({
 
                                     <div className="px-3 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
                                         <Link
-                                            href="/configuracion?seccion=ia_whatsapp&tab=modelos#agregar-modelo-api-key"
+                                            href="/configuracion?seccion=ia_correo&tab=modelos#agregar-modelo-api-key"
                                             className="text-xs font-extrabold text-sape-burdeo hover:underline"
                                         >
                                             + Agregar modelo con API Key
@@ -968,7 +972,7 @@ export default function ChatbotPedagogico({
                         type="button"
                         onClick={iniciarNuevoChat}
                         disabled={cargando}
-                        className="text-xs font-extrabold bg-sape-amarillo text-sape-burdeo hover:bg-white px-3 py-2 rounded-xl transition-colors shadow-sm shrink-0 disabled:opacity-50"
+                        className="text-xs font-extrabold bg-sape-amarillo text-sape-burdeo hover:bg-[#f2f35a] px-3 py-2 rounded-xl transition-colors shadow-sm shrink-0 disabled:opacity-50"
                     >
                         + Nuevo chat
                     </button>
@@ -1153,8 +1157,11 @@ export default function ChatbotPedagogico({
                                                                 Copiloto S.A.P.E
                                                             </span>
                                                             {msg.modeloNombre && (
-                                                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
-                                                                    {msg.modeloNombre}
+                                                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+                                                                    <NombreModeloIA
+                                                                        modelo={msg.modeloNombre}
+                                                                        variante="claro"
+                                                                    />
                                                                 </span>
                                                             )}
                                                         </div>
@@ -1267,14 +1274,14 @@ export default function ChatbotPedagogico({
                                                                                     Informe IA
                                                                                 </button>
                                                                             )}
-                                                                            {typeof onAbrirWhatsApp === 'function' && (
+                                                                            {typeof onAbrirGmail === 'function' && (
                                                                                 <button
                                                                                     type="button"
-                                                                                    onClick={() => onAbrirWhatsApp(est)}
-                                                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:border-emerald-600 text-slate-800 hover:text-emerald-700 text-[11px] font-bold transition-colors"
+                                                                                    onClick={() => onAbrirGmail(est)}
+                                                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:border-sape-burdeo text-slate-800 hover:text-sape-burdeo text-[11px] font-bold transition-colors"
                                                                                 >
-                                                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                                                                                    WhatsApp
+                                                                                    <IconoGmail className="w-3.5 h-3.5" />
+                                                                                    Gmail
                                                                                 </button>
                                                                             )}
                                                                             {typeof onVerFicha === 'function' && (
@@ -1455,7 +1462,7 @@ export default function ChatbotPedagogico({
                                                                 })
                                                                 .slice(0, 15)
                                                                 .map((est) => {
-                                                                    const m = calcularMetricasEstudiante(est);
+                                                                    const m = calcularMetricasEstudianteCompleto(est);
                                                                     return (
                                                                         <div
                                                                             key={est.id}
@@ -1500,16 +1507,17 @@ export default function ChatbotPedagogico({
                                                                                     </button>
                                                                                 )}
 
-                                                                                {typeof onAbrirWhatsApp === 'function' && (
+                                                                                {typeof onAbrirGmail === 'function' && (
                                                                                     <button
                                                                                         type="button"
                                                                                         onClick={() => {
                                                                                             setSelectorAlumnoAbierto(false);
-                                                                                            onAbrirWhatsApp(est);
+                                                                                            onAbrirGmail(est);
                                                                                         }}
-                                                                                        className="px-2 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-[11px] font-bold"
+                                                                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 hover:border-sape-burdeo hover:text-sape-burdeo text-[11px] font-bold"
                                                                                     >
-                                                                                        WhatsApp
+                                                                                        <IconoGmail className="w-3.5 h-3.5" />
+                                                                                        Gmail
                                                                                     </button>
                                                                                 )}
 

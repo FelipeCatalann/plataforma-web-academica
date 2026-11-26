@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import SearchableSelect from '@/Components/SearchableSelect';
+import AsistenteAsignacionIA from '@/Components/Director/AsistenteAsignacionIA';
+import ModalCorreoGmail from '@/Components/ModalCorreoGmail';
+import IconoGmail from '@/Components/IconoGmail';
 import { mensajeRevision, revisarImportacion } from '@/utils/revisarImportacion';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -111,6 +114,15 @@ export default function PanelDirector({
     const [cursoPorBorrar, setCursoPorBorrar] = useState(null);
     const [borrandoCursoId, setBorrandoCursoId] = useState(null);
     const [cursoSugeridoImportacion, setCursoSugeridoImportacion] = useState(null);
+    const [modalCorreoOpen, setModalCorreoOpen] = useState(false);
+    const [destinatarioCorreoDirector, setDestinatarioCorreoDirector] = useState(null);
+    const [cursoCorreoDirector, setCursoCorreoDirector] = useState(null);
+
+    const abrirCorreoDirector = (destinatario = null, cursoCtx = null) => {
+        setDestinatarioCorreoDirector(destinatario || { tipo: 'equipo_docente' });
+        setCursoCorreoDirector(cursoCtx);
+        setModalCorreoOpen(true);
+    };
 
     const [panelPersonalizarGrafico, setPanelPersonalizarGrafico] = useState(false);
     const colorDebounceRef = useRef(null);
@@ -298,11 +310,15 @@ export default function PanelDirector({
         });
     };
 
+    const [modoAsignacion, setModoAsignacion] = useState('ia');
+    const [filtroAsigMulti, setFiltroAsigMulti] = useState('');
     const { data: dataAsig, setData: setDataAsig, post: postAsig, processing: procAsig, reset: resetAsig, errors: errorsAsig } = useForm({
         profesor_id: '',
         curso_id: '',
+        curso_ids: [],
         tipo_rol: 'jefe',
         asignatura_id: '',
+        asignatura_nombres: [],
     });
 
     const [mostrarCrearProfesor, setMostrarCrearProfesor] = useState(false);
@@ -442,7 +458,37 @@ export default function PanelDirector({
         e.preventDefault();
         postAsig(route('admin.asignar.curso'), {
             preserveScroll: true,
-            onSuccess: () => resetAsig(),
+            onSuccess: () => {
+                resetAsig();
+                setFiltroAsigMulti('');
+            },
+        });
+    };
+
+    const toggleCursoMulti = (cursoId) => {
+        const idStr = String(cursoId);
+        setDataAsig((prev) => {
+            const actual = Array.isArray(prev.curso_ids) ? prev.curso_ids.map(String) : [];
+            const existe = actual.includes(idStr);
+            const siguientes = existe ? actual.filter((c) => c !== idStr) : [...actual, idStr];
+            return {
+                ...prev,
+                curso_id: siguientes[0] || '',
+                curso_ids: siguientes,
+            };
+        });
+    };
+
+    const toggleAsignaturaMulti = (nombreAsig) => {
+        setDataAsig((prev) => {
+            const actual = Array.isArray(prev.asignatura_nombres) ? prev.asignatura_nombres : [];
+            const existe = actual.includes(nombreAsig);
+            return {
+                ...prev,
+                asignatura_nombres: existe
+                    ? actual.filter((n) => n !== nombreAsig)
+                    : [...actual, nombreAsig],
+            };
         });
     };
 
@@ -459,6 +505,56 @@ export default function PanelDirector({
         });
         return map;
     }, [profesores]);
+
+    const asignaturasMultiCatalogo = useMemo(() => {
+        const seleccionCursos = (dataAsig.curso_ids || []).length > 0
+            ? (cursos || []).filter((c) => (dataAsig.curso_ids || []).map(String).includes(String(c.id)))
+            : [];
+
+        const mapa = new Map();
+        seleccionCursos.forEach((curso) => {
+            (curso.asignaturas || []).forEach((asig) => {
+                const nombre = (asig.nombre || '').trim();
+                if (!nombre) return;
+                const clave = nombre.toLowerCase();
+                if (!mapa.has(clave)) {
+                    mapa.set(clave, {
+                        nombre,
+                        cursosCount: 0,
+                        reemplazos: [],
+                    });
+                }
+                const entry = mapa.get(clave);
+                entry.cursosCount += 1;
+                const profActualId = asig.pivot?.profesor_id;
+                if (profActualId && String(profActualId) !== String(dataAsig.profesor_id)) {
+                    entry.reemplazos.push({
+                        curso: `${curso.nivel}° Medio ${curso.letra}`,
+                        docente: profesoresMap.get(String(profActualId)) || 'otro docente',
+                    });
+                }
+            });
+        });
+
+        const lista = Array.from(mapa.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+        if (!filtroAsigMulti.trim()) return lista;
+        const q = filtroAsigMulti.trim().toLowerCase();
+        return lista.filter((item) => item.nombre.toLowerCase().includes(q));
+    }, [cursos, dataAsig.curso_ids, dataAsig.profesor_id, profesoresMap, filtroAsigMulti]);
+
+    const reemplazosMultiResumen = useMemo(() => {
+        if (dataAsig.tipo_rol !== 'asignatura') return [];
+        const seleccionadas = new Set(dataAsig.asignatura_nombres || []);
+        const lista = [];
+        asignaturasMultiCatalogo.forEach((item) => {
+            if (seleccionadas.has(item.nombre)) {
+                item.reemplazos.forEach((rep) => {
+                    lista.push({ ...rep, asignatura: item.nombre });
+                });
+            }
+        });
+        return lista;
+    }, [dataAsig.tipo_rol, dataAsig.asignatura_nombres, asignaturasMultiCatalogo]);
 
     const profesoresOpciones = useMemo(() => {
         return (profesores || []).map((prof) => {
@@ -769,7 +865,7 @@ export default function PanelDirector({
                             exit={{ opacity: 0, y: -20, scale: 0.95 }}
                             role="status"
                             aria-live="polite"
-                            className="pointer-events-auto bg-emerald-50/95 backdrop-blur-md border border-emerald-400 text-emerald-900 px-5 py-3.5 rounded-2xl shadow-2xl font-bold text-sm flex items-center justify-between gap-4 max-w-2xl w-full"
+                            className="sape-toast-exito pointer-events-auto border border-emerald-400 px-5 py-3.5 rounded-2xl shadow-2xl font-bold text-sm flex items-center justify-between gap-4 max-w-2xl w-full"
                         >
                             <div className="flex items-center gap-3 min-w-0">
                                 <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center flex-shrink-0">
@@ -777,13 +873,13 @@ export default function PanelDirector({
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
                                     </svg>
                                 </div>
-                                <span className="break-words">{alertaGlobal}</span>
+                                <span className="break-words text-black">{alertaGlobal}</span>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setAlertaGlobal('')}
                                 aria-label="Cerrar notificación de éxito"
-                                className="text-emerald-700 hover:text-emerald-950 p-1 rounded-lg hover:bg-emerald-100 transition-colors shrink-0"
+                                className="sape-toast-exito-cerrar p-1 rounded-lg transition-colors shrink-0"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -881,6 +977,17 @@ export default function PanelDirector({
                                 </nav>
                             </div>
                         ))}
+
+                        <div className="pt-4 border-t border-slate-200">
+                            <button
+                                type="button"
+                                onClick={() => abrirCorreoDirector({ tipo: 'equipo_docente' }, null)}
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 hover:border-sape-burdeo text-slate-800 font-bold text-xs sm:text-sm flex items-center gap-2.5 transition-colors shadow-sm"
+                            >
+                                <IconoGmail className="w-4 h-4 shrink-0" />
+                                <span>Correo Gmail</span>
+                            </button>
+                        </div>
                     </div>
                 </aside>
 
@@ -1731,40 +1838,75 @@ export default function PanelDirector({
                                 exit={{ opacity: 0, y: -18 }}
                                 className="space-y-6"
                             >
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                    <div>
-                                        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-                                            Asignación de Carga Académica
-                                        </h1>
-                                        <p className="text-slate-600 text-sm mt-1">
-                                            Registra nuevos docentes y vincúlalos con sus cursos y subsectores. Revisa a la derecha la titularidad vigente antes de realizar cambios.
-                                        </p>
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col gap-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                        <div>
+                                            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                                                Asignación de Carga Académica
+                                            </h1>
+                                            <p className="text-slate-600 text-sm mt-1">
+                                                Usa el Agente IA para procesar planillas Excel o listas docentes con comprobación previa, o asigna manualmente múltiples cursos y asignaturas.
+                                            </p>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+                                            <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-700 tabular-nums">
+                                                {profesores.length} {profesores.length === 1 ? 'docente registrado' : 'docentes registrados'} • {cursos.filter((c) => c.profesor_jefe_id).length}/{cursos.length} cursos con Jefe
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setMostrarCrearProfesor((prev) => !prev);
+                                                    clearErrorsNuevoProf();
+                                                }}
+                                                aria-expanded={mostrarCrearProfesor}
+                                                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+                                                    mostrarCrearProfesor
+                                                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                                                        : 'bg-sape-burdeo text-sape-amarillo border-sape-burdeo hover:bg-sape-burdeo-hover shadow-sm'
+                                                }`}
+                                            >
+                                                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    {mostrarCrearProfesor ? (
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                                    ) : (
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                                                    )}
+                                                </svg>
+                                                <span>{mostrarCrearProfesor ? 'Cerrar Registro' : 'Crear Nuevo Profesor'}</span>
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
-                                        <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-700 tabular-nums">
-                                            {profesores.length} {profesores.length === 1 ? 'docente registrado' : 'docentes registrados'} • {cursos.filter((c) => c.profesor_jefe_id).length}/{cursos.length} cursos con Jefe
-                                        </span>
+
+                                    <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100">
                                         <button
                                             type="button"
-                                            onClick={() => {
-                                                setMostrarCrearProfesor((prev) => !prev);
-                                                clearErrorsNuevoProf();
-                                            }}
-                                            aria-expanded={mostrarCrearProfesor}
-                                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-                                                mostrarCrearProfesor
-                                                    ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                                                    : 'bg-sape-burdeo text-sape-amarillo border-sape-burdeo hover:bg-sape-burdeo-hover shadow-sm'
+                                            onClick={() => setModoAsignacion('ia')}
+                                            aria-pressed={modoAsignacion === 'ia'}
+                                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-colors ${
+                                                modoAsignacion === 'ia'
+                                                    ? 'bg-sape-burdeo text-sape-amarillo border-sape-burdeo shadow-sm'
+                                                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                                             }`}
                                         >
-                                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                {mostrarCrearProfesor ? (
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                                ) : (
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                                                )}
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                                             </svg>
-                                            <span>{mostrarCrearProfesor ? 'Cerrar Registro' : 'Crear Nuevo Profesor'}</span>
+                                            <span>Asistente IA y Excel</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setModoAsignacion('manual')}
+                                            aria-pressed={modoAsignacion === 'manual'}
+                                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-colors ${
+                                                modoAsignacion === 'manual'
+                                                    ? 'bg-sape-burdeo text-sape-amarillo border-sape-burdeo shadow-sm'
+                                                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                                            }`}
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                            </svg>
+                                            <span>Asignación Manual Múltiple</span>
                                         </button>
                                     </div>
                                 </div>
@@ -2107,14 +2249,26 @@ export default function PanelDirector({
                                     )}
                                 </AnimatePresence>
 
+                                {modoAsignacion === 'ia' && (
+                                    <AsistenteAsignacionIA
+                                        profesores={profesores}
+                                        cursos={cursos}
+                                        onLoteAplicado={(mensaje) => {
+                                            setAlertaGlobal(mensaje);
+                                            setTimeout(() => setAlertaGlobal(''), 6500);
+                                        }}
+                                    />
+                                )}
+
                                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                                    {/* COLUMNA IZQUIERDA: FORMULARIO DE ASIGNACIÓN */}
-                                    <div className="lg:col-span-5 bg-white p-6 sm:p-7 rounded-2xl border border-slate-200/80 shadow-sm">
+                                    {/* COLUMNA IZQUIERDA: FORMULARIO MANUAL (CON SELECCIÓN MÚLTIPLE) */}
+                                    {modoAsignacion === 'manual' && (
+                                    <div className="lg:col-span-5 bg-white p-6 sm:p-7 rounded-2xl border border-slate-200 shadow-sm">
                                         <h2 className="text-lg font-extrabold text-slate-900 mb-1">
                                             Registrar o Actualizar Asignación
                                         </h2>
                                         <p className="text-xs text-slate-500 mb-5">
-                                            Cada selector muestra la carga vigente para evitar sobrescribir jefaturas o subsectores por error.
+                                            En modo Profesor de Asignatura puedes marcar varios cursos y asignaturas en un solo guardado.
                                         </p>
 
                                         <form onSubmit={manejarAsignacion} className="space-y-5">
@@ -2147,35 +2301,8 @@ export default function PanelDirector({
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-bold text-slate-700 mb-1.5">
-                                                    2. Seleccionar Curso (Con Excel Cargado)
-                                                </label>
-                                                <SearchableSelect
-                                                    options={cursosOpciones}
-                                                    value={dataAsig.curso_id}
-                                                    onChange={(val) => {
-                                                        setDataAsig((prev) => ({
-                                                            ...prev,
-                                                            curso_id: val,
-                                                            asignatura_id: '',
-                                                        }));
-                                                    }}
-                                                    labelKey="nombre"
-                                                    subLabelKey="detalle"
-                                                    placeholder="-- Selecciona o busca un curso --"
-                                                    searchPlaceholder="Buscar curso por nivel, letra o Profesor Jefe..."
-                                                    name="curso_id"
-                                                    required
-                                                    error={errorsAsig.curso_id}
-                                                    emptyTitle="No hay cursos con Excel cargado"
-                                                    itemSingular="curso disponible"
-                                                    itemPlural="cursos disponibles"
-                                                />
-                                            </div>
-
-                                            <div>
                                                 <label className="block text-sm font-bold text-slate-700 mb-2">
-                                                    3. Tipo de Asignación (Rol)
+                                                    2. Tipo de Asignación (Rol)
                                                 </label>
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
                                                     <label
@@ -2191,14 +2318,20 @@ export default function PanelDirector({
                                                             value="jefe"
                                                             checked={dataAsig.tipo_rol === 'jefe'}
                                                             onChange={() => {
-                                                                setDataAsig('tipo_rol', 'jefe');
-                                                                setDataAsig('asignatura_id', '');
+                                                                setDataAsig((prev) => ({
+                                                                    ...prev,
+                                                                    tipo_rol: 'jefe',
+                                                                    curso_id: prev.curso_id || prev.curso_ids?.[0] || '',
+                                                                    curso_ids: [],
+                                                                    asignatura_id: '',
+                                                                    asignatura_nombres: [],
+                                                                }));
                                                             }}
                                                             className="text-sape-burdeo focus:ring-sape-burdeo w-4 h-4"
                                                         />
                                                         <div>
                                                             <span className="block font-bold text-sm text-slate-800">Profesor Jefe</span>
-                                                            <span className="block text-[11px] text-slate-500">Jefatura única de curso</span>
+                                                            <span className="block text-[11px] text-slate-500">Jefatura única</span>
                                                         </div>
                                                     </label>
                                                     <label
@@ -2213,49 +2346,201 @@ export default function PanelDirector({
                                                             name="tipo_rol"
                                                             value="asignatura"
                                                             checked={dataAsig.tipo_rol === 'asignatura'}
-                                                            onChange={() => setDataAsig('tipo_rol', 'asignatura')}
+                                                            onChange={() => {
+                                                                setDataAsig((prev) => ({
+                                                                    ...prev,
+                                                                    tipo_rol: 'asignatura',
+                                                                    curso_ids:
+                                                                        (prev.curso_ids || []).length > 0
+                                                                            ? prev.curso_ids
+                                                                            : prev.curso_id
+                                                                              ? [String(prev.curso_id)]
+                                                                              : [],
+                                                                }));
+                                                            }}
                                                             className="text-sape-burdeo focus:ring-sape-burdeo w-4 h-4"
                                                         />
                                                         <div>
                                                             <span className="block font-bold text-sm text-slate-800">Profesor de Asignatura</span>
-                                                            <span className="block text-[11px] text-slate-500">Subsector curricular</span>
+                                                            <span className="block text-[11px] text-slate-500">Múltiples cursos</span>
                                                         </div>
                                                     </label>
                                                 </div>
                                             </div>
 
-                                            <AnimatePresence>
-                                                {dataAsig.tipo_rol === 'asignatura' && (
-                                                    <motion.div
-                                                        initial={{ opacity: 0, y: -6 }}
-                                                        animate={{ opacity: 1, y: 0 }}
-                                                        exit={{ opacity: 0, y: -6 }}
-                                                        transition={{ duration: 0.16 }}
-                                                        className="pt-1 relative z-30"
-                                                    >
-                                                        <div>
-                                                            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-                                                                4. Seleccionar Asignatura del Curso
+                                            {dataAsig.tipo_rol === 'jefe' ? (
+                                                <div>
+                                                    <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                                                        3. Seleccionar Curso (Con Excel Cargado)
+                                                    </label>
+                                                    <SearchableSelect
+                                                        options={cursosOpciones}
+                                                        value={dataAsig.curso_id}
+                                                        onChange={(val) => {
+                                                            setDataAsig((prev) => ({
+                                                                ...prev,
+                                                                curso_id: val,
+                                                                curso_ids: val ? [String(val)] : [],
+                                                                asignatura_id: '',
+                                                            }));
+                                                        }}
+                                                        labelKey="nombre"
+                                                        subLabelKey="detalle"
+                                                        placeholder="-- Selecciona o busca un curso --"
+                                                        searchPlaceholder="Buscar curso por nivel, letra o Profesor Jefe..."
+                                                        name="curso_id"
+                                                        required
+                                                        error={errorsAsig.curso_id}
+                                                        emptyTitle="No hay cursos con Excel cargado"
+                                                        itemSingular="curso disponible"
+                                                        itemPlural="cursos disponibles"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-4">
+                                                    <div>
+                                                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                            <label className="block text-sm font-bold text-slate-700">
+                                                                3. Seleccionar Cursos ({(dataAsig.curso_ids || []).length})
                                                             </label>
-                                                            <SearchableSelect
-                                                                options={asignaturasDisponibles}
-                                                                value={dataAsig.asignatura_id}
-                                                                onChange={(val) => setDataAsig('asignatura_id', val)}
-                                                                labelKey="nombre"
-                                                                subLabelKey="detalle"
-                                                                placeholder="-- Selecciona o busca la Asignatura --"
-                                                                searchPlaceholder="Buscar asignatura o docente actual..."
-                                                                name="asignatura_id"
-                                                                required={dataAsig.tipo_rol === 'asignatura'}
-                                                                error={errorsAsig.asignatura_id}
-                                                                emptyTitle="No se encontraron asignaturas"
-                                                                itemSingular="asignatura disponible"
-                                                                itemPlural="asignaturas disponibles"
-                                                            />
+                                                            <div className="flex items-center gap-2">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setDataAsig((prev) => ({
+                                                                            ...prev,
+                                                                            curso_ids: cursos.map((c) => String(c.id)),
+                                                                            curso_id: cursos[0]?.id ? String(cursos[0].id) : '',
+                                                                        }))
+                                                                    }
+                                                                    className="text-xs font-bold text-sape-burdeo hover:underline"
+                                                                >
+                                                                    Todos
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setDataAsig((prev) => ({
+                                                                            ...prev,
+                                                                            curso_ids: [],
+                                                                            curso_id: '',
+                                                                            asignatura_nombres: [],
+                                                                        }))
+                                                                    }
+                                                                    className="text-xs font-bold text-slate-500 hover:underline"
+                                                                >
+                                                                    Limpiar
+                                                                </button>
+                                                            </div>
                                                         </div>
-                                                    </motion.div>
-                                                )}
-                                            </AnimatePresence>
+                                                        <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 max-h-44 overflow-y-auto">
+                                                            {cursos.map((curso) => {
+                                                                const activo = (dataAsig.curso_ids || [])
+                                                                    .map(String)
+                                                                    .includes(String(curso.id));
+                                                                return (
+                                                                    <button
+                                                                        key={curso.id}
+                                                                        type="button"
+                                                                        aria-pressed={activo}
+                                                                        onClick={() => toggleCursoMulti(curso.id)}
+                                                                        className={`px-2.5 py-2 rounded-lg text-xs font-bold border transition-colors tabular-nums ${
+                                                                            activo
+                                                                                ? 'bg-sape-burdeo text-sape-amarillo border-sape-burdeo'
+                                                                                : 'bg-white text-slate-800 border-slate-300 hover:border-sape-burdeo'
+                                                                        }`}
+                                                                    >
+                                                                        {curso.nivel}° {curso.letra}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                        {(errorsAsig.curso_ids || errorsAsig.curso_id) && (
+                                                            <p className="mt-1.5 text-xs font-semibold text-red-600">
+                                                                {errorsAsig.curso_ids || errorsAsig.curso_id}
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    <div>
+                                                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                            <label className="block text-sm font-bold text-slate-700">
+                                                                4. Seleccionar Asignaturas ({(dataAsig.asignatura_nombres || []).length})
+                                                            </label>
+                                                            {asignaturasMultiCatalogo.length > 0 && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setDataAsig(
+                                                                            'asignatura_nombres',
+                                                                            (dataAsig.asignatura_nombres || []).length === asignaturasMultiCatalogo.length
+                                                                                ? []
+                                                                                : asignaturasMultiCatalogo.map((a) => a.nombre)
+                                                                        )
+                                                                    }
+                                                                    className="text-xs font-bold text-sape-burdeo hover:underline"
+                                                                >
+                                                                    {(dataAsig.asignatura_nombres || []).length === asignaturasMultiCatalogo.length
+                                                                        ? 'Desmarcar'
+                                                                        : 'Todas'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+
+                                                        {(dataAsig.curso_ids || []).length === 0 ? (
+                                                            <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                                                                Marca al menos un curso arriba para ver sus asignaturas.
+                                                            </p>
+                                                        ) : (
+                                                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={filtroAsigMulti}
+                                                                    onChange={(e) => setFiltroAsigMulti(e.target.value)}
+                                                                    placeholder="Filtrar asignatura..."
+                                                                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:border-sape-burdeo"
+                                                                />
+                                                                <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                                                                    {asignaturasMultiCatalogo.map((item) => {
+                                                                        const marcada = (dataAsig.asignatura_nombres || []).includes(item.nombre);
+                                                                        return (
+                                                                            <label
+                                                                                key={item.nombre}
+                                                                                className={`flex items-center justify-between gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                                                                                    marcada
+                                                                                        ? 'bg-white border-sape-burdeo'
+                                                                                        : 'bg-white border-slate-200 hover:border-slate-300'
+                                                                                }`}
+                                                                            >
+                                                                                <span className="inline-flex items-center gap-2 min-w-0">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={marcada}
+                                                                                        onChange={() => toggleAsignaturaMulti(item.nombre)}
+                                                                                        className="rounded border-slate-300 text-sape-burdeo focus:ring-sape-burdeo w-4 h-4 shrink-0"
+                                                                                    />
+                                                                                    <span className="text-xs font-bold text-slate-800 truncate">
+                                                                                        {item.nombre}
+                                                                                    </span>
+                                                                                </span>
+                                                                                <span className="text-[11px] font-semibold text-slate-500 tabular-nums shrink-0">
+                                                                                    {item.cursosCount}/{(dataAsig.curso_ids || []).length} cursos
+                                                                                </span>
+                                                                            </label>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {(errorsAsig.asignatura_ids || errorsAsig.asignatura_id) && (
+                                                            <p className="mt-1.5 text-xs font-semibold text-red-600">
+                                                                {errorsAsig.asignatura_ids || errorsAsig.asignatura_id}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
 
                                             {/* AVISOS CONTEXTUALES PRE-ENVÍO */}
                                             {dataAsig.tipo_rol === 'jefe' &&
@@ -2273,26 +2558,39 @@ export default function PanelDirector({
                                                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 space-y-1">
                                                     <p className="font-bold">Docente con jefatura activa en otro curso</p>
                                                     <p className="text-amber-800">
-                                                        El profesor seleccionado es actualmente Profesor Jefe de <strong>{profesorSeleccionadoJefaturaActual.nivel}° Medio {profesorSeleccionadoJefaturaActual.letra}</strong>. Un docente solo puede tener una jefatura titular, por lo que su curso anterior quedará sin Profesor Jefe.
+                                                        El profesor seleccionado es actualmente Profesor Jefe de <strong>{profesorSeleccionadoJefaturaActual.nivel}° Medio {profesorSeleccionadoJefaturaActual.letra}</strong>. Su curso anterior quedará sin Profesor Jefe.
                                                     </p>
                                                 </div>
                                             )}
 
-                                            {dataAsig.tipo_rol === 'asignatura' &&
-                                                asignaturaSeleccionadaActual?.pivot?.profesor_id &&
-                                                String(asignaturaSeleccionadaActual.pivot.profesor_id) !== String(dataAsig.profesor_id) && (
-                                                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 space-y-1">
-                                                        <p className="font-bold">Reemplazo de docente en {asignaturaSeleccionadaActual.nombre}</p>
-                                                        <p className="text-amber-800">
-                                                            Este subsector está actualmente a cargo de <strong>{profesoresMap.get(String(asignaturaSeleccionadaActual.pivot.profesor_id)) || 'otro docente'}</strong> en {cursoSeleccionadoParaAsig?.nivel}° Medio {cursoSeleccionadoParaAsig?.letra}.
-                                                        </p>
-                                                    </div>
-                                                )}
+                                            {dataAsig.tipo_rol === 'asignatura' && reemplazosMultiResumen.length > 0 && (
+                                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 space-y-1">
+                                                    <p className="font-bold tabular-nums">
+                                                        Se reemplazarán {reemplazosMultiResumen.length} asignaciones vigentes
+                                                    </p>
+                                                    <p className="text-amber-800">
+                                                        {reemplazosMultiResumen
+                                                            .slice(0, 3)
+                                                            .map((r) => `${r.asignatura} en ${r.curso} (${r.docente})`)
+                                                            .join(' · ')}
+                                                        {reemplazosMultiResumen.length > 3
+                                                            ? ` y ${reemplazosMultiResumen.length - 3} más.`
+                                                            : '.'}
+                                                    </p>
+                                                </div>
+                                            )}
 
                                             <div className="pt-4 border-t border-slate-200 flex justify-end">
                                                 <button
                                                     type="submit"
-                                                    disabled={procAsig}
+                                                    disabled={
+                                                        procAsig ||
+                                                        !dataAsig.profesor_id ||
+                                                        (dataAsig.tipo_rol === 'jefe'
+                                                            ? !dataAsig.curso_id
+                                                            : (dataAsig.curso_ids || []).length === 0 ||
+                                                              (dataAsig.asignatura_nombres || []).length === 0)
+                                                    }
                                                     className="w-full sm:w-auto bg-sape-burdeo text-sape-amarillo px-7 py-3 rounded-xl font-bold shadow-md hover:bg-sape-burdeo-hover transition-all hover:-translate-y-0.5 disabled:opacity-50"
                                                 >
                                                     {procAsig ? 'Guardando...' : 'Guardar Asignación'}
@@ -2300,9 +2598,10 @@ export default function PanelDirector({
                                             </div>
                                         </form>
                                     </div>
+                                    )}
 
-                                    {/* COLUMNA DERECHA: ESTADO ACTUAL DE CARGAS ACADÉMICAS POR CURSO */}
-                                    <div className="lg:col-span-7 bg-white p-6 sm:p-7 rounded-2xl border border-slate-200/80 shadow-sm space-y-5">
+                                    {/* COLUMNA DERECHA (O COMPLETA EN MODO IA): ESTADO ACTUAL DE CARGAS POR CURSO */}
+                                    <div className={`${modoAsignacion === 'manual' ? 'lg:col-span-7' : 'lg:col-span-12'} bg-white p-6 sm:p-7 rounded-2xl border border-slate-200 shadow-sm space-y-5`}>
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
                                             <div>
                                                 <h2 className="text-lg font-extrabold text-slate-900">
@@ -2353,16 +2652,39 @@ export default function PanelDirector({
                                                                             <span>Sin Profesor Jefe</span>
                                                                         </span>
                                                                     )}
+                                                                    {curso.profesor_jefe_email && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                abrirCorreoDirector(
+                                                                                    {
+                                                                                        tipo: 'equipo_docente',
+                                                                                        nombre: curso.profesor_jefe_nombre,
+                                                                                        correo: curso.profesor_jefe_email,
+                                                                                    },
+                                                                                    curso
+                                                                                )
+                                                                            }
+                                                                            title={`Escribir correo Gmail a ${curso.profesor_jefe_nombre}`}
+                                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-300 hover:border-sape-burdeo hover:bg-slate-100 text-slate-800 text-xs font-bold transition-colors"
+                                                                        >
+                                                                            <IconoGmail className="w-3.5 h-3.5" />
+                                                                            <span>Gmail</span>
+                                                                        </button>
+                                                                    )}
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() =>
+                                                                        onClick={() => {
+                                                                            setModoAsignacion('manual');
                                                                             setDataAsig((prev) => ({
                                                                                 ...prev,
                                                                                 curso_id: curso.id,
+                                                                                curso_ids: [String(curso.id)],
                                                                                 tipo_rol: 'jefe',
                                                                                 asignatura_id: '',
-                                                                            }))
-                                                                        }
+                                                                                asignatura_nombres: [],
+                                                                            }));
+                                                                        }}
                                                                         className="text-xs font-bold text-sape-burdeo hover:underline px-2 py-1"
                                                                     >
                                                                         {curso.profesor_jefe_nombre ? 'Cambiar' : 'Asignar Jefe'}
@@ -2386,14 +2708,32 @@ export default function PanelDirector({
                                                                             <button
                                                                                 key={asig.id}
                                                                                 type="button"
-                                                                                onClick={() =>
-                                                                                    setDataAsig((prev) => ({
-                                                                                        ...prev,
-                                                                                        curso_id: curso.id,
-                                                                                        tipo_rol: 'asignatura',
-                                                                                        asignatura_id: asig.id,
-                                                                                    }))
-                                                                                }
+                                                                                onClick={() => {
+                                                                                    setModoAsignacion('manual');
+                                                                                    setDataAsig((prev) => {
+                                                                                        const cursoIdStr = String(curso.id);
+                                                                                        const cursosPrev = prev.tipo_rol === 'asignatura' && Array.isArray(prev.curso_ids)
+                                                                                            ? prev.curso_ids.map(String)
+                                                                                            : [];
+                                                                                        const cursosNuevos = cursosPrev.includes(cursoIdStr)
+                                                                                            ? cursosPrev
+                                                                                            : [...cursosPrev, cursoIdStr];
+                                                                                        const asigsPrev = prev.tipo_rol === 'asignatura' && Array.isArray(prev.asignatura_nombres)
+                                                                                            ? prev.asignatura_nombres
+                                                                                            : [];
+                                                                                        const asigsNuevas = asigsPrev.includes(asig.nombre)
+                                                                                            ? asigsPrev
+                                                                                            : [...asigsPrev, asig.nombre];
+                                                                                        return {
+                                                                                            ...prev,
+                                                                                            curso_id: curso.id,
+                                                                                            curso_ids: cursosNuevos,
+                                                                                            tipo_rol: 'asignatura',
+                                                                                            asignatura_id: asig.id,
+                                                                                            asignatura_nombres: asigsNuevas,
+                                                                                        };
+                                                                                    });
+                                                                                }}
                                                                                 className={`text-left p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2 ${
                                                                                     seleccionada
                                                                                         ? 'bg-white border-sape-burdeo ring-2 ring-sape-burdeo/15'
@@ -3079,6 +3419,14 @@ export default function PanelDirector({
                     </div>
                 )}
             </AnimatePresence>
+
+            <ModalCorreoGmail
+                isOpen={modalCorreoOpen}
+                onClose={() => setModalCorreoOpen(false)}
+                curso={cursoCorreoDirector}
+                profesorNombre={auth?.user?.name}
+                destinatarioInicial={destinatarioCorreoDirector}
+            />
         </AuthenticatedLayout>
     );
 }

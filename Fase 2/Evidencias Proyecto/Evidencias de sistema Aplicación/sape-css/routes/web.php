@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\AsignacionDocenteIAController;
 use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\ConfiguracionController;
+use App\Http\Controllers\CorreoGmailController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EnlaceWhatsAppController;
 use App\Http\Controllers\ImportController;
@@ -42,6 +44,8 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/panel-jefe', [ProfesorController::class, 'panelJefe'])->middleware('role:Profesor Jefe')->name('profesor.jefe');
     Route::get('/panel-asignatura', [ProfesorController::class, 'panelAsignatura'])->middleware('role:Profesor de Asignatura')->name('profesor.asignatura');
+    Route::get('/correos-gmail/directorio', [CorreoGmailController::class, 'directorio'])->name('correo.directorio');
+    Route::post('/correos-gmail', [CorreoGmailController::class, 'prepararCorreo'])->name('correo.preparar');
     Route::post('/enlaces-whatsapp', [EnlaceWhatsAppController::class, 'prepararEnlace'])->name('whatsapp.preparar');
 
     Route::get('/configuracion', [ConfiguracionController::class, 'index'])->name('configuracion.index');
@@ -52,6 +56,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::middleware(['auth', 'verified', 'role:Administrador'])->group(function () {
     Route::post('/admin/asignar-curso', [DashboardController::class, 'asignarCurso'])->name('admin.asignar.curso');
     Route::post('/admin/profesores', [DashboardController::class, 'crearProfesor'])->name('admin.profesores.store');
+    Route::get('/admin/asignacion-ia/plantilla-excel', [AsignacionDocenteIAController::class, 'descargarPlantilla'])->name('admin.asignacion-ia.plantilla');
+    Route::post('/admin/asignacion-ia/analizar', [AsignacionDocenteIAController::class, 'analizar'])->middleware('throttle:ia')->name('admin.asignacion-ia.analizar');
+    Route::post('/admin/asignacion-ia/analizar-excel', [AsignacionDocenteIAController::class, 'analizarExcel'])->middleware('throttle:ia')->name('admin.asignacion-ia.analizar-excel');
+    Route::post('/admin/asignacion-ia/confirmar', [AsignacionDocenteIAController::class, 'confirmar'])->name('admin.asignacion-ia.confirmar');
     // 1. Mostrar la pantalla del formulario (GET)
     Route::get('/admin/importar', [ImportController::class, 'index'])->name('importar.vista');
     Route::post('/admin/importar/revisar', [ImportController::class, 'revisar'])->middleware('throttle:6,1')->name('admin.importar.revisar');

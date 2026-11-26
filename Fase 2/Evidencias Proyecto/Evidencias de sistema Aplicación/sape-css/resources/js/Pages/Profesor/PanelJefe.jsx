@@ -22,7 +22,8 @@ import ChatbotPedagogico from '@/Components/ChatbotPedagogico';
 import { redondearNotaChilena } from '@/Components/Chat/AnalizadorVisualChat';
 import MapaTermicoRendimiento from '@/Components/MapaTermicoRendimiento';
 import ModalInformeIA from '@/Components/ModalInformeIA';
-import ModalWhatsAppApoderado from '@/Components/ModalWhatsAppApoderado';
+import ModalCorreoGmail from '@/Components/ModalCorreoGmail';
+import IconoGmail from '@/Components/IconoGmail';
 
 const PALETAS_GRAFICO_ASIGNATURAS = [
     {
@@ -85,8 +86,9 @@ export default function PanelJefe({ auth, curso }) {
     const [modalInformeOpen, setModalInformeOpen] = useState(false);
     const [estudianteParaInforme, setEstudianteParaInforme] = useState(null);
 
-    const [modalWhatsAppOpen, setModalWhatsAppOpen] = useState(false);
-    const [estudianteParaWhatsApp, setEstudianteParaWhatsApp] = useState(null);
+    const [modalCorreoOpen, setModalCorreoOpen] = useState(false);
+    const [estudianteParaCorreo, setEstudianteParaCorreo] = useState(null);
+    const [destinatarioInicialCorreo, setDestinatarioInicialCorreo] = useState(null);
     const [seguimientoLocal, setSeguimientoLocal] = useState({});
 
     const [panelPersonalizarGrafico, setPanelPersonalizarGrafico] = useState(false);
@@ -287,27 +289,37 @@ export default function PanelJefe({ auth, curso }) {
     };
 
     const abrirModalInforme = (estudiante) => {
-        setEstudianteParaInforme(estudiante);
+        const extra = seguimientoLocal[estudiante.id];
+        setEstudianteParaInforme(
+            extra?.correo
+                ? { ...estudiante, apoderado_correo: extra.correo }
+                : estudiante
+        );
         setModalInformeOpen(true);
     };
 
-    const abrirModalWhatsApp = (estudiante) => {
-        const extra = seguimientoLocal[estudiante.id];
-        setEstudianteParaWhatsApp(
-            extra
-                ? { ...estudiante, apoderado_telefono: extra.telefono || estudiante.apoderado_telefono }
-                : estudiante
-        );
-        setModalWhatsAppOpen(true);
+    const abrirModalCorreo = (estudiante = null, destinatarioInicial = null) => {
+        if (estudiante) {
+            const extra = seguimientoLocal[estudiante.id];
+            setEstudianteParaCorreo(
+                extra?.correo
+                    ? { ...estudiante, apoderado_correo: extra.correo }
+                    : estudiante
+            );
+        } else {
+            setEstudianteParaCorreo(null);
+        }
+        setDestinatarioInicialCorreo(destinatarioInicial);
+        setModalCorreoOpen(true);
     };
 
-    const registrarEnlaceGenerado = (estudianteId, enlace, telefonoActualizado) => {
+    const registrarCorreoGenerado = (estudianteId, comunicacion, correoActualizado) => {
         setSeguimientoLocal((prev) => ({
             ...prev,
             [estudianteId]: {
                 total: (prev[estudianteId]?.total ?? 0) + 1,
-                ultimo: enlace,
-                telefono: telefonoActualizado,
+                ultimo: comunicacion,
+                correo: correoActualizado || prev[estudianteId]?.correo || '',
             },
         }));
     };
@@ -324,7 +336,7 @@ export default function PanelJefe({ auth, curso }) {
             if (!coincideTexto) return false;
 
             const rojas = contarAsignaturasBajo40(est);
-            const contactos = (est.total_whatsapps || 0) + (seguimientoLocal[est.id]?.total || 0);
+            const contactos = (est.total_correos || 0) + (seguimientoLocal[est.id]?.total || 0);
 
             if (filtroNomina === 'riesgo') return rojas > 0;
             if (filtroNomina === 'contactados') return contactos > 0;
@@ -752,13 +764,13 @@ export default function PanelJefe({ auth, curso }) {
                                         {configGrafico.mostrarGrilla && <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />}
                                         <XAxis dataKey="nombre" axisLine={false} tickLine={false} interval={0} height={xAxisHeight} tick={renderTickAsignatura} />
                                         <YAxis domain={[1, 7]} axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
-                                        <ReferenceLine y={4.0} stroke="#EF4444" strokeDasharray="4 4" label={{ value: 'Mín. 4.0', position: 'right', fill: '#DC2626', fontSize: 11, fontWeight: 700 }} />
+                                        <ReferenceLine y={4.0} stroke="#EF4444" strokeDasharray="4 4" label={{ value: 'Mín. 4.0', position: 'right', fill: '#DC2626', fontSize: 11, fontWeight: 700, className: 'sape-chart-ref-min' }} />
                                         {configGrafico.mostrarPromedioCurso && !isNaN(promCursoNum) && (
-                                            <ReferenceLine y={promCursoNum} stroke="#2563EB" strokeDasharray="3 3" label={{ value: `Prom. ${promCursoNum.toFixed(1)}`, position: 'left', fill: '#2563EB', fontSize: 11, fontWeight: 700 }} />
+                                            <ReferenceLine y={promCursoNum} stroke="#2563EB" strokeDasharray="3 3" label={{ value: `Prom. ${promCursoNum.toFixed(1)}`, position: 'left', fill: '#2563EB', fontSize: 11, fontWeight: 700, className: 'sape-chart-ref-prom' }} />
                                         )}
                                         <Tooltip cursor={false} contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)', fontWeight: 600 }} />
                                         <Area type="monotone" dataKey="promedio" stroke={paletaObj.stroke} strokeWidth={3} fill={`url(#${idAreaGrad})`} name="Promedio Asignatura" dot={{ r: 5, fill: paletaObj.stroke, strokeWidth: 2, stroke: '#FFFFFF' }} activeDot={{ r: 7 }} animationDuration={500}>
-                                            {configGrafico.mostrarValores && <LabelList dataKey="promedio" position="top" offset={10} formatter={(v) => Number(v).toFixed(1)} style={{ fill: '#334155', fontSize: 12, fontWeight: 800 }} />}
+                                            {configGrafico.mostrarValores && <LabelList dataKey="promedio" position="top" offset={10} formatter={(v) => Number(v).toFixed(1)} className="sape-chart-value" style={{ fontSize: 12, fontWeight: 800 }} />}
                                         </Area>
                                     </AreaChart>
                                 ) : configGrafico.tipoGrafico === 'linea' ? (
@@ -766,13 +778,13 @@ export default function PanelJefe({ auth, curso }) {
                                         {configGrafico.mostrarGrilla && <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />}
                                         <XAxis dataKey="nombre" axisLine={false} tickLine={false} interval={0} height={xAxisHeight} tick={renderTickAsignatura} />
                                         <YAxis domain={[1, 7]} axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
-                                        <ReferenceLine y={4.0} stroke="#EF4444" strokeDasharray="4 4" label={{ value: 'Mín. 4.0', position: 'right', fill: '#DC2626', fontSize: 11, fontWeight: 700 }} />
+                                        <ReferenceLine y={4.0} stroke="#EF4444" strokeDasharray="4 4" label={{ value: 'Mín. 4.0', position: 'right', fill: '#DC2626', fontSize: 11, fontWeight: 700, className: 'sape-chart-ref-min' }} />
                                         {configGrafico.mostrarPromedioCurso && !isNaN(promCursoNum) && (
-                                            <ReferenceLine y={promCursoNum} stroke="#2563EB" strokeDasharray="3 3" label={{ value: `Prom. ${promCursoNum.toFixed(1)}`, position: 'left', fill: '#2563EB', fontSize: 11, fontWeight: 700 }} />
+                                            <ReferenceLine y={promCursoNum} stroke="#2563EB" strokeDasharray="3 3" label={{ value: `Prom. ${promCursoNum.toFixed(1)}`, position: 'left', fill: '#2563EB', fontSize: 11, fontWeight: 700, className: 'sape-chart-ref-prom' }} />
                                         )}
                                         <Tooltip cursor={false} contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)', fontWeight: 600 }} />
                                         <Line type="monotone" dataKey="promedio" stroke={paletaObj.stroke} strokeWidth={3} name="Promedio Asignatura" dot={{ r: 5, fill: paletaObj.stroke, strokeWidth: 2, stroke: '#FFFFFF' }} activeDot={{ r: 7 }} animationDuration={500}>
-                                            {configGrafico.mostrarValores && <LabelList dataKey="promedio" position="top" offset={10} formatter={(v) => Number(v).toFixed(1)} style={{ fill: '#334155', fontSize: 12, fontWeight: 800 }} />}
+                                            {configGrafico.mostrarValores && <LabelList dataKey="promedio" position="top" offset={10} formatter={(v) => Number(v).toFixed(1)} className="sape-chart-value" style={{ fontSize: 12, fontWeight: 800 }} />}
                                         </Line>
                                     </LineChart>
                                 ) : (
@@ -786,9 +798,9 @@ export default function PanelJefe({ auth, curso }) {
                                         {configGrafico.mostrarGrilla && <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />}
                                         <XAxis dataKey="nombre" axisLine={false} tickLine={false} interval={0} height={xAxisHeight} tick={renderTickAsignatura} />
                                         <YAxis domain={[1, 7]} axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
-                                        <ReferenceLine y={4.0} stroke="#EF4444" strokeDasharray="4 4" label={{ value: 'Mín. 4.0', position: 'right', fill: '#DC2626', fontSize: 11, fontWeight: 700 }} />
+                                        <ReferenceLine y={4.0} stroke="#EF4444" strokeDasharray="4 4" label={{ value: 'Mín. 4.0', position: 'right', fill: '#DC2626', fontSize: 11, fontWeight: 700, className: 'sape-chart-ref-min' }} />
                                         {configGrafico.mostrarPromedioCurso && !isNaN(promCursoNum) && (
-                                            <ReferenceLine y={promCursoNum} stroke="#2563EB" strokeDasharray="3 3" label={{ value: `Prom. ${promCursoNum.toFixed(1)}`, position: 'left', fill: '#2563EB', fontSize: 11, fontWeight: 700 }} />
+                                            <ReferenceLine y={promCursoNum} stroke="#2563EB" strokeDasharray="3 3" label={{ value: `Prom. ${promCursoNum.toFixed(1)}`, position: 'left', fill: '#2563EB', fontSize: 11, fontWeight: 700, className: 'sape-chart-ref-prom' }} />
                                         )}
                                         <Tooltip cursor={false} contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)', fontWeight: 600 }} />
                                         <Bar dataKey="promedio" fill={`url(#${idBarGrad})`} radius={[8, 8, 0, 0]} barSize={asignaturasPorPagina === 15 ? 34 : 44} name="Promedio Asignatura" animationDuration={500}>
@@ -796,7 +808,7 @@ export default function PanelJefe({ auth, curso }) {
                                                 datosPaginadosGrafico.map((entry, idx) => (
                                                     <Cell key={`cell-bar-${idx}`} fill={obtenerColorPorPromedio(entry.promedio)} />
                                                 ))}
-                                            {configGrafico.mostrarValores && <LabelList dataKey="promedio" position="top" offset={8} formatter={(v) => Number(v).toFixed(1)} style={{ fill: '#334155', fontSize: 12, fontWeight: 800 }} />}
+                                            {configGrafico.mostrarValores && <LabelList dataKey="promedio" position="top" offset={8} formatter={(v) => Number(v).toFixed(1)} className="sape-chart-value" style={{ fontSize: 12, fontWeight: 800 }} />}
                                         </Bar>
                                     </BarChart>
                                 )}
@@ -852,40 +864,40 @@ export default function PanelJefe({ auth, curso }) {
             <Head title={`Jefatura ${curso.nivel}° ${curso.letra}`} />
 
             <div className="w-full flex flex-col md:flex-row min-h-[calc(100vh-4rem)]">
-                <aside className="w-full md:w-72 bg-white border-b md:border-b-0 md:border-r border-slate-200/80 shadow-sm flex-shrink-0 relative z-10">
-                    <div className="p-3 md:p-6 flex md:block items-center gap-3 overflow-x-auto md:overflow-visible">
-                        <div className="hidden md:block mb-6 pb-4 border-b border-slate-100">
-                            <h2 className="text-lg font-extrabold text-sape-burdeo">
+                <aside className="w-full md:w-60 bg-white border-b md:border-b-0 md:border-r border-slate-200/80 shadow-sm flex-shrink-0 relative z-10">
+                    <div className="p-3 md:p-4 flex md:block items-center gap-2.5 overflow-x-auto md:overflow-visible">
+                        <div className="hidden md:block mb-4 pb-3 px-2 border-b border-slate-100">
+                            <h2 className="text-base font-extrabold text-sape-burdeo leading-tight">
                                 {curso.nivel}° Medio {curso.letra}
                             </h2>
-                            <p className="text-xs font-semibold text-slate-500 mt-0.5">
+                            <p className="text-[11px] font-semibold text-slate-500 mt-0.5">
                                 Jefatura Asignada
                             </p>
                         </div>
 
-                        <nav aria-label="Vistas de Jefatura" className="flex md:flex-col gap-1.5 md:space-y-1.5 md:mb-6 shrink-0">
+                        <nav aria-label="Vistas de Jefatura" className="flex md:flex-col gap-1 md:space-y-1 md:mb-5 shrink-0">
                             <button
                                 type="button"
                                 onClick={() => {
                                     setVistaActiva('resumen');
                                     setEstudianteActivo(null);
                                 }}
-                                className={`whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3.5 md:px-4 py-2.5 md:py-3 rounded-xl transition-all duration-200 flex items-center justify-between gap-2.5 group ${
+                                className={`whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 group ${
                                     vistaActiva === 'resumen'
                                         ? 'bg-sape-burdeo text-sape-amarillo shadow-md font-bold'
                                         : 'text-slate-600 hover:bg-slate-50 hover:text-sape-burdeo font-semibold'
                                 }`}
                             >
-                                <div className="flex items-center gap-2.5 md:gap-3">
+                                <div className="flex items-center gap-2.5">
                                     <svg
-                                        className={`w-5 h-5 ${vistaActiva === 'resumen' ? 'text-sape-amarillo' : 'text-slate-400'}`}
+                                        className={`w-4 h-4 shrink-0 ${vistaActiva === 'resumen' ? 'text-sape-amarillo' : 'text-slate-400'}`}
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
                                     >
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                                     </svg>
-                                    <span className="text-xs sm:text-sm">Resumen General</span>
+                                    <span className="text-xs sm:text-[13px]">Resumen General</span>
                                 </div>
                             </button>
 
@@ -895,25 +907,25 @@ export default function PanelJefe({ auth, curso }) {
                                     setVistaActiva('tabla');
                                     setEstudianteActivo(null);
                                 }}
-                                className={`whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3.5 md:px-4 py-2.5 md:py-3 rounded-xl transition-all duration-200 flex items-center justify-between gap-2.5 group ${
+                                className={`whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 group ${
                                     vistaActiva === 'tabla'
                                         ? 'bg-sape-burdeo text-sape-amarillo shadow-md font-bold'
                                         : 'text-slate-600 hover:bg-slate-50 hover:text-sape-burdeo font-semibold'
                                 }`}
                             >
-                                <div className="flex items-center gap-2.5 md:gap-3">
+                                <div className="flex items-center gap-2.5">
                                     <svg
-                                        className={`w-5 h-5 ${vistaActiva === 'tabla' ? 'text-sape-amarillo' : 'text-slate-400'}`}
+                                        className={`w-4 h-4 shrink-0 ${vistaActiva === 'tabla' ? 'text-sape-amarillo' : 'text-slate-400'}`}
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
                                     >
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                                     </svg>
-                                    <span className="text-xs sm:text-sm">Libro de Clases</span>
+                                    <span className="text-xs sm:text-[13px]">Libro de Clases</span>
                                 </div>
                                 <span
-                                    className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full tabular-nums ${
+                                    className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full tabular-nums ${
                                         vistaActiva === 'tabla'
                                             ? 'bg-sape-amarillo text-sape-burdeo'
                                             : 'bg-slate-100 text-slate-600'
@@ -927,7 +939,7 @@ export default function PanelJefe({ auth, curso }) {
                                 type="button"
                                 aria-current={vistaActiva === 'mapa' ? 'true' : undefined}
                                 onClick={() => setVistaActiva('mapa')}
-                                className={`whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3.5 md:px-4 py-2.5 md:py-3 rounded-xl transition-all duration-200 flex items-center gap-2.5 md:gap-3 ${
+                                className={`whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2.5 ${
                                     vistaActiva === 'mapa'
                                         ? 'bg-sape-burdeo text-sape-amarillo shadow-md font-bold'
                                         : 'text-slate-600 hover:bg-slate-50 hover:text-sape-burdeo font-semibold'
@@ -935,50 +947,59 @@ export default function PanelJefe({ auth, curso }) {
                             >
                                 <svg
                                     aria-hidden="true"
-                                    className={`h-5 w-5 ${vistaActiva === 'mapa' ? 'text-sape-amarillo' : 'text-slate-400'}`}
+                                    className={`h-4 w-4 shrink-0 ${vistaActiva === 'mapa' ? 'text-sape-amarillo' : 'text-slate-400'}`}
                                     fill="none"
                                     stroke="currentColor"
                                     viewBox="0 0 24 24"
                                 >
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 3v18m6-18v18M3 9h18M3 15h18M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
                                 </svg>
-                                <span className="text-xs sm:text-sm">Mapa térmico</span>
+                                <span className="text-xs sm:text-[13px]">Mapa térmico</span>
                             </button>
                         </nav>
 
-                        <h2 className="hidden md:block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-3 mt-6 px-3">
+                        <h2 className="hidden md:block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2 mt-5 px-2.5">
                             Herramientas IA
                         </h2>
-                        <nav aria-label="Herramientas IA" className="flex md:flex-col gap-1.5 shrink-0">
+                        <nav aria-label="Herramientas IA" className="flex md:flex-col gap-1 shrink-0">
                             <button
                                 type="button"
                                 onClick={() => {
                                     setVistaActiva('chatbot');
                                     setEstudianteActivo(null);
                                 }}
-                                className={`whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3.5 md:px-4 py-2.5 md:py-3 rounded-xl transition-all duration-200 flex items-center justify-between gap-2.5 group ${
+                                className={`whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 group ${
                                     vistaActiva === 'chatbot'
                                         ? 'bg-sape-burdeo text-sape-amarillo shadow-md font-bold'
                                         : 'text-slate-600 hover:bg-slate-50 hover:text-sape-burdeo font-semibold'
                                 }`}
                             >
-                                <div className="flex items-center gap-2.5 md:gap-3">
+                                <div className="flex items-center gap-2.5">
                                     <svg
-                                        className={`w-5 h-5 ${vistaActiva === 'chatbot' ? 'text-sape-amarillo' : 'text-slate-400'}`}
+                                        className={`w-4 h-4 shrink-0 ${vistaActiva === 'chatbot' ? 'text-sape-amarillo' : 'text-slate-400'}`}
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
                                     >
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
                                     </svg>
-                                    <span className="text-xs sm:text-sm">Asistente Inteligente</span>
+                                    <span className="text-xs sm:text-[13px]">Asistente Inteligente</span>
                                 </div>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => abrirModalCorreo(null, { tipo: 'equipo_docente' })}
+                                className="whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2.5 text-slate-600 hover:bg-slate-50 hover:text-sape-burdeo font-semibold"
+                            >
+                                <IconoGmail className="w-4 h-4 shrink-0" />
+                                <span className="text-xs sm:text-[13px]">Correo Gmail</span>
                             </button>
                         </nav>
                     </div>
                 </aside>
 
-                <section aria-label="Área de trabajo de Jefatura" className="min-w-0 flex-1 p-4 sm:p-6 md:p-8 bg-slate-50 overflow-y-auto">
+                <section aria-label="Área de trabajo de Jefatura" className="min-w-0 flex-1 p-4 sm:p-5 md:p-6 bg-slate-50 overflow-y-auto">
                     <AnimatePresence mode="wait">
                         {vistaActiva === 'resumen' && (
                             <motion.div
@@ -1187,7 +1208,7 @@ export default function PanelJefe({ auth, curso }) {
                                             {
                                                 curso.estudiantes.filter(
                                                     (est) =>
-                                                        (est.total_whatsapps || 0) +
+                                                        (est.total_correos || 0) +
                                                             (seguimientoLocal[est.id]?.total || 0) >
                                                         0
                                                 ).length
@@ -1215,11 +1236,11 @@ export default function PanelJefe({ auth, curso }) {
                                                     const promEst = calcularPromedio(estudiante.calificaciones);
                                                     const promNum = parseFloat(promEst);
                                                     const totalContactos =
-                                                        (estudiante.total_whatsapps || 0) +
+                                                        (estudiante.total_correos || 0) +
                                                         (seguimientoLocal[estudiante.id]?.total || 0);
-                                                    const telefonoApoderado =
-                                                        seguimientoLocal[estudiante.id]?.telefono ||
-                                                        estudiante.apoderado_telefono;
+                                                    const correoApoderado =
+                                                        seguimientoLocal[estudiante.id]?.correo ||
+                                                        estudiante.apoderado_correo;
 
                                                     return (
                                                         <tr key={estudiante.id} className="hover:bg-slate-50/80 transition-colors">
@@ -1261,8 +1282,8 @@ export default function PanelJefe({ auth, curso }) {
                                                             </td>
                                                             <td className="px-4 py-4 text-center">
                                                                 <div className="flex flex-col items-center gap-1">
-                                                                    <span className="text-xs font-mono text-slate-600">
-                                                                        {telefonoApoderado || 'Sin teléfono'}
+                                                                    <span className="text-xs text-slate-600 truncate max-w-[180px]" title={correoApoderado || ''}>
+                                                                        {correoApoderado || 'Sin correo'}
                                                                     </span>
                                                                     {totalContactos > 0 ? (
                                                                         <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -1270,7 +1291,7 @@ export default function PanelJefe({ auth, curso }) {
                                                                         </span>
                                                                     ) : (
                                                                         <span className="text-[11px] text-slate-400">
-                                                                            Sin mensajes previos
+                                                                            Sin correos previos
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -1279,14 +1300,12 @@ export default function PanelJefe({ auth, curso }) {
                                                                 <div className="flex flex-wrap justify-end gap-2">
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => abrirModalWhatsApp(estudiante)}
-                                                                        className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
-                                                                        title="Preparar mensaje de WhatsApp para el apoderado"
+                                                                        onClick={() => abrirModalCorreo(estudiante)}
+                                                                        className="inline-flex items-center gap-1.5 bg-white border border-slate-300 text-slate-800 px-3 py-2 rounded-xl text-xs font-bold hover:border-sape-burdeo hover:bg-slate-100 transition-colors shadow-sm"
+                                                                        title="Enviar correo por Gmail al apoderado o equipo docente"
                                                                     >
-                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                                                        </svg>
-                                                                        WhatsApp
+                                                                        <IconoGmail className="w-4 h-4" />
+                                                                        Gmail
                                                                     </button>
                                                                     <button
                                                                         type="button"
@@ -1379,13 +1398,11 @@ export default function PanelJefe({ auth, curso }) {
                                     <div className="flex flex-wrap gap-2">
                                         <button
                                             type="button"
-                                            onClick={() => abrirModalWhatsApp(estudianteActivo)}
-                                            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
+                                            onClick={() => abrirModalCorreo(estudianteActivo)}
+                                            className="inline-flex items-center gap-2 bg-white border border-slate-300 text-slate-800 px-4 py-2.5 rounded-xl text-xs font-bold hover:border-sape-burdeo hover:bg-slate-100 transition-colors shadow-sm"
                                         >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                            </svg>
-                                            Contactar Apoderado (WhatsApp)
+                                            <IconoGmail className="w-4 h-4" />
+                                            Enviar correo (Gmail)
                                         </button>
                                         <button
                                             type="button"
@@ -1528,7 +1545,7 @@ export default function PanelJefe({ auth, curso }) {
                                 <ChatbotPedagogico
                                     cursoContexto={curso}
                                     onAbrirInforme={(est) => abrirModalInforme(est)}
-                                    onAbrirWhatsApp={(est) => abrirModalWhatsApp(est)}
+                                    onAbrirGmail={(est) => abrirModalCorreo(est)}
                                     onVerFicha={(est) => {
                                         setEstudianteActivo(est);
                                         setVistaActiva('tabla');
@@ -1546,15 +1563,18 @@ export default function PanelJefe({ auth, curso }) {
                 estudiante={estudianteParaInforme}
                 cursoId={curso.id}
                 cursoNombre={`${curso.nivel}° Medio ${curso.letra}`}
+                profesorNombre={auth?.user?.name}
+                onCorreoEnviado={registrarCorreoGenerado}
             />
 
-            <ModalWhatsAppApoderado
-                isOpen={modalWhatsAppOpen}
-                onClose={() => setModalWhatsAppOpen(false)}
-                estudiante={estudianteParaWhatsApp}
+            <ModalCorreoGmail
+                isOpen={modalCorreoOpen}
+                onClose={() => setModalCorreoOpen(false)}
+                estudiante={estudianteParaCorreo}
                 curso={curso}
                 profesorNombre={auth?.user?.name}
-                onEnlaceGenerado={registrarEnlaceGenerado}
+                destinatarioInicial={destinatarioInicialCorreo}
+                onCorreoGenerado={registrarCorreoGenerado}
             />
         </AuthenticatedLayout>
     );

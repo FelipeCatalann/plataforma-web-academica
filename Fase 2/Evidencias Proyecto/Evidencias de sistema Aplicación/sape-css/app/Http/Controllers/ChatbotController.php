@@ -383,6 +383,7 @@ class ChatbotController extends Controller
                         $usoRespaldoGroq = true;
                         $credenciales['model'] = $respaldo['model'];
                         $credenciales['modelo_nombre'] = $respaldo['nombre'];
+                        $credenciales['modelo_etiqueta'] = $respaldo['nombre'];
                         $peticion['model'] = $respaldo['model'];
                     }
                 }
@@ -430,7 +431,7 @@ class ChatbotController extends Controller
                         'sesion_id' => $sesion->id,
                         'autor' => 'ASISTENTE_IA',
                         'contenido' => $textoIA,
-                        'modelo_nombre' => $credenciales['modelo_nombre'],
+                        'modelo_nombre' => $credenciales['modelo_etiqueta'] ?? $credenciales['modelo_nombre'],
                     ]);
 
                     return $sesion;
@@ -442,7 +443,7 @@ class ChatbotController extends Controller
                     'titulo_sesion' => $tituloSesion,
                     'modelo' => $credenciales['model'],
                     'modelo_id' => $credenciales['modelo_id'],
-                    'modelo_nombre' => $credenciales['modelo_nombre'],
+                    'modelo_nombre' => $credenciales['modelo_etiqueta'] ?? $credenciales['modelo_nombre'],
                     'proveedor' => $credenciales['proveedor_nombre'],
                     'herramientas_usadas' => array_values(array_unique($herramientasUsadas)),
                 ])->header('Cache-Control', 'no-store');
@@ -505,6 +506,7 @@ class ChatbotController extends Controller
                 $usoRespaldoGroq = true;
                 $credenciales['model'] = $respaldo['model'];
                 $credenciales['modelo_nombre'] = $respaldo['nombre'];
+                $credenciales['modelo_etiqueta'] = $respaldo['nombre'];
                 $peticion['model'] = $respaldo['model'];
 
                 if (in_array($respaldo['model'], ['openai/gpt-oss-20b', 'openai/gpt-oss-120b'], true)) {

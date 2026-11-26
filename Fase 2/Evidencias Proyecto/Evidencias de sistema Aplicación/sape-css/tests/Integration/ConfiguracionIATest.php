@@ -3,6 +3,7 @@
 namespace Tests\Integration;
 
 use App\Imports\ImportadorSyscol;
+use App\Models\Curso;
 use App\Models\User;
 use App\Services\ConexionIA;
 use App\Services\ConfiguracionIAService;
@@ -73,6 +74,8 @@ class ConfiguracionIATest extends TestCase
         $publica = $servicio->obtenerConfiguracionPublica($user);
 
         $this->assertSame(['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b'], array_column($publica['modelos_sistema'], 'id'));
+        $this->assertSame(['Análisis - Bajo gasto', 'Informes - Gasto medio', 'Rápido - Mínimo gasto'], array_column($publica['modelos_sistema'], 'nombre'));
+        $this->assertSame(['GPT-OSS 120B', 'Qwen 3.8 27B', 'GPT-OSS 20B'], array_column($publica['modelos_sistema'], 'nombre_tecnico'));
         $this->assertSame('openai/gpt-oss-120b', $publica['modelo_activo_id']);
         $this->assertSame('openai/gpt-oss-120b', $publica['modelo_chat_id']);
         $this->assertSame('qwen/qwen3.8-27b', $publica['modelo_informes_id']);
@@ -221,9 +224,8 @@ class ConfiguracionIATest extends TestCase
         ])->assertSuccessful();
         Excel::import(new ImportadorSyscol, $archivo);
 
-        $curso = DB::table('cursos')->first();
-        $primerAlumno = DB::table('estudiantes')->join('matriculas', 'matriculas.estudiante_id', '=', 'estudiantes.id')
-            ->where('matriculas.vigente', true)->orderBy('estudiantes.identificadorInterno')->first();
+        $curso = Curso::with(['estudiantes' => fn ($query) => $query->where('matriculas.vigente', true)])->firstOrFail();
+        $primerAlumno = $curso->estudiantes->first();
         $nombreRealPrimero = trim($primerAlumno->nombres.' '.$primerAlumno->apellidos);
         $rutRealPrimero = $primerAlumno->identificadorInterno;
         $this->actingAs($this->crearProfesorJefe($curso->id));
@@ -239,7 +241,7 @@ class ConfiguracionIATest extends TestCase
         ]);
 
         $respuesta = $this->postJson(route('chat.pedagogico'), [
-            'mensaje' => 'Resumen de alumnos bajo 4.0',
+            'mensaje' => "Resumen de alumnos bajo 4.0 y situación de {$nombreRealPrimero} ({$rutRealPrimero})",
             'curso_id' => $curso->id,
             'tipo_profesor' => 'Profesor Jefe',
         ]);
@@ -247,7 +249,9 @@ class ConfiguracionIATest extends TestCase
         $respuesta->assertOk();
         $texto = $respuesta->json('respuesta');
         $this->assertStringNotContainsString('|----------|', $texto);
-        $this->assertStringContainsString('- **Promedio general < 4,0:**', $texto);
+        $this->assertStringContainsString('### Promedio general < 4,0', $texto);
+        $this->assertStringContainsString('- **Cómo se determina:** Promedio anual del estudiante', $texto);
+        $this->assertStringContainsString('- **Resultado:** 2 estudiantes', $texto);
         $this->assertStringNotContainsString('Estudiante 1', $texto);
         $this->assertStringContainsString($nombreRealPrimero, $texto);
         $this->assertStringContainsString($rutRealPrimero, $texto);
@@ -469,7 +473,7 @@ class ConfiguracionIATest extends TestCase
         ])->assertOk()
             ->assertJsonPath('respuesta', 'Plan pedagógico desde respaldo automático.')
             ->assertJsonPath('modelo', 'openai/gpt-oss-20b')
-            ->assertJsonPath('modelo_nombre', 'GPT-OSS 20B (respaldo)');
+            ->assertJsonPath('modelo_nombre', 'Rápido - Mínimo gasto (GPT-OSS 20B, respaldo)');
 
         Http::assertSentCount(2);
         $primera = Http::recorded()[0][0];

@@ -217,6 +217,32 @@ class InformeIAAutorizacionTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_cp_015_evaluacion_conceptual_y_eximido_no_distorsionan_promedio_del_informe(): void
+    {
+        $matriculaId = DB::table('matriculas')
+            ->where('estudiante_id', $this->estudianteId)
+            ->where('curso_id', $this->cursoId)
+            ->value('id');
+        DB::table('calificaciones')->where('matricula_id', $matriculaId)->delete();
+
+        $this->crearNota($this->cursoId, $matriculaId, 'MAT2', 6.5, $this->docenteAsignatura->id);
+        $this->crearNota($this->cursoId, $matriculaId, 'REL', 0.0, null, 'MB');
+        $this->crearNota($this->cursoId, $matriculaId, 'EFI', 0.0, null, 'EXIMIDO');
+
+        $this->actingAs($this->jefe)
+            ->postJson('/generar-informe-ia', $this->solicitud())
+            ->assertOk();
+
+        Http::assertSent(function ($request) {
+            $prompt = $request['messages'][1]['content'];
+
+            return str_contains($prompt, 'promedio de 6.5')
+                && ! str_contains($prompt, 'promedio de 3.3')
+                && ! str_contains($prompt, 'promedio de 2.2')
+                && ! str_contains($prompt, '0.0');
+        });
+    }
+
     private function solicitud(): array
     {
         return [
@@ -247,7 +273,7 @@ class InformeIAAutorizacionTest extends TestCase
         return $id;
     }
 
-    private function crearNota(string $cursoId, string $matriculaId, string $codigo, float $valor, ?int $profesorId = null): void
+    private function crearNota(string $cursoId, string $matriculaId, string $codigo, float $valor, ?int $profesorId = null, string $evaluacion = 'Prueba sintética'): void
     {
         $asignaturaId = (string) Str::uuid();
         $asignaturaCursoId = (string) Str::uuid();
@@ -259,7 +285,7 @@ class InformeIAAutorizacionTest extends TestCase
         DB::table('calificaciones')->insert([
             'id' => (string) Str::uuid(), 'matricula_id' => $matriculaId,
             'asignatura_curso_id' => $asignaturaCursoId, 'valor' => $valor,
-            'ponderacion' => 1, 'evaluacion' => 'Prueba sintética', 'fecha' => '2026-06-01',
+            'ponderacion' => 1, 'evaluacion' => $evaluacion, 'fecha' => '2026-06-01',
         ]);
     }
 }

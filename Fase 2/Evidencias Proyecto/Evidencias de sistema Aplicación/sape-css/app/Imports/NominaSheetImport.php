@@ -14,11 +14,21 @@ class NominaSheetImport implements ToCollection, WithHeadingRow
 {
     private array $matriculasPlanilla = [];
 
+    private array $cursosProcesados = [];
+
     public function __construct(private bool $soloCompletarAsistencia = false) {}
 
     public function incluyeMatricula(array $identidad): bool
     {
         return isset($this->matriculasPlanilla[$this->clave($identidad)]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function cursosProcesados(): array
+    {
+        return array_values(array_keys($this->cursosProcesados));
     }
 
     private function clave(array $identidad): string
@@ -29,6 +39,7 @@ class NominaSheetImport implements ToCollection, WithHeadingRow
     public function collection(Collection $rows): void
     {
         $this->matriculasPlanilla = [];
+        $this->cursosProcesados = [];
         foreach ($rows as $indice => $row) {
             if ($row->filter(fn ($valor) => $valor !== null && $valor !== '')->isEmpty()) {
                 continue;
@@ -46,6 +57,13 @@ class NominaSheetImport implements ToCollection, WithHeadingRow
 
             // Limpieza básica de texto
             $telefonoApoderado = ! empty($row['telefono_apoderado']) ? trim((string) $row['telefono_apoderado']) : null;
+            $correoApoderadoRaw = $row['correo_apoderado'] ?? $row['email_apoderado'] ?? null;
+            $correoApoderado = ! empty($correoApoderadoRaw)
+                ? strtolower(trim((string) $correoApoderadoRaw))
+                : null;
+            if ($correoApoderado !== null && ! filter_var($correoApoderado, FILTER_VALIDATE_EMAIL)) {
+                $correoApoderado = null;
+            }
 
             // 1. Buscar o crear el Curso
             $curso = IdentidadSyscol::curso($identidad['curso'], 'NOMINA', $numero);
@@ -72,20 +90,32 @@ class NominaSheetImport implements ToCollection, WithHeadingRow
                 ]);
             }
 
+            $this->cursosProcesados[$cursoId] = true;
+
             // 2. Buscar o crear el Apoderado
             $apoderadoId = null;
-            if ($telefonoApoderado) {
-                $apoderado = DB::table('apoderados')->where('telefono', $telefonoApoderado)->first();
+            if ($correoApoderado || $telefonoApoderado) {
+                $apoderado = $correoApoderado
+                    ? DB::table('apoderados')->where('correo', $correoApoderado)->first()
+                    : null;
+                if (! $apoderado && $telefonoApoderado) {
+                    $apoderado = DB::table('apoderados')->where('telefono', $telefonoApoderado)->first();
+                }
                 $apoderadoId = $apoderado ? $apoderado->id : (string) Str::uuid();
 
                 if (! $apoderado) {
                     DB::table('apoderados')->insert([
                         'id' => $apoderadoId,
                         'nombre' => 'Apoderado no registrado',
+                        'correo' => $correoApoderado,
                         'telefono' => $telefonoApoderado,
                         'created_at' => $now,
                         'updated_at' => $now,
                     ]);
+                } elseif ($correoApoderado && empty($apoderado->correo)) {
+                    DB::table('apoderados')
+                        ->where('id', $apoderado->id)
+                        ->update(['correo' => $correoApoderado, 'updated_at' => $now]);
                 }
             }
 

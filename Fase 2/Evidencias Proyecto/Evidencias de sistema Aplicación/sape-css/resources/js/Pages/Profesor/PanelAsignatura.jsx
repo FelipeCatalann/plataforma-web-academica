@@ -14,6 +14,8 @@ import {
 } from 'recharts';
 import ChatbotPedagogico from '@/Components/ChatbotPedagogico';
 import ModalInformeIA from '@/Components/ModalInformeIA';
+import ModalCorreoGmail from '@/Components/ModalCorreoGmail';
+import IconoGmail from '@/Components/IconoGmail';
 
 export default function PanelAsignatura({ auth, cursos }) {
     const [vistaActiva, setVistaActiva] = useState('grafico');
@@ -23,6 +25,9 @@ export default function PanelAsignatura({ auth, cursos }) {
 
     const [modalInformeOpen, setModalInformeOpen] = useState(false);
     const [estudianteParaInforme, setEstudianteParaInforme] = useState(null);
+    const [modalCorreoOpen, setModalCorreoOpen] = useState(false);
+    const [estudianteParaCorreo, setEstudianteParaCorreo] = useState(null);
+    const [destinatarioInicialCorreo, setDestinatarioInicialCorreo] = useState(null);
 
     const cursoActivo = useMemo(() => {
         return cursos?.find((c) => c.id === vistaActiva) || null;
@@ -71,6 +76,25 @@ export default function PanelAsignatura({ auth, cursos }) {
     const abrirModalInforme = (estudiante) => {
         setEstudianteParaInforme(estudiante);
         setModalInformeOpen(true);
+    };
+
+    const abrirModalCorreo = (estudiante = null, cursoObjetivo = null) => {
+        const cRef = cursoObjetivo || cursoActivo;
+        setEstudianteParaCorreo(estudiante);
+        if (estudiante) {
+            setDestinatarioInicialCorreo(
+                cRef?.profesor_jefe_email
+                    ? {
+                          tipo: 'equipo_docente',
+                          nombre: cRef.profesor_jefe_nombre || 'Profesor Jefe',
+                          correo: cRef.profesor_jefe_email,
+                      }
+                    : null
+            );
+        } else {
+            setDestinatarioInicialCorreo({ tipo: 'equipo_docente' });
+        }
+        setModalCorreoOpen(true);
     };
 
     const estudiantesCursoFiltrados = useMemo(() => {
@@ -159,6 +183,15 @@ export default function PanelAsignatura({ auth, cursos }) {
                                     </svg>
                                     <span className="text-xs sm:text-sm">Asistente Inteligente</span>
                                 </div>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => abrirModalCorreo(null)}
+                                className="whitespace-nowrap md:whitespace-normal w-auto md:w-full text-left px-3.5 md:px-4 py-2.5 md:py-3 rounded-xl transition-all duration-200 flex items-center gap-2.5 md:gap-3 text-slate-600 hover:bg-slate-50 hover:text-sape-burdeo font-semibold"
+                            >
+                                <IconoGmail className="w-5 h-5 shrink-0" />
+                                <span className="text-xs sm:text-sm">Correo Gmail</span>
                             </button>
                         </nav>
 
@@ -344,6 +377,12 @@ export default function PanelAsignatura({ auth, cursos }) {
                                         cursoContexto={cursos.find((c) => String(c.id) === String(cursoChatbotId))}
                                         alturaClase="h-[calc(100dvh-15rem)] sm:h-[calc(100dvh-14rem)] md:h-[calc(100dvh-13.5rem)] min-h-[340px]"
                                         onAbrirInforme={(est) => abrirModalInforme(est)}
+                                        onAbrirGmail={(est) =>
+                                            abrirModalCorreo(
+                                                est,
+                                                cursos.find((c) => String(c.id) === String(cursoChatbotId))
+                                            )
+                                        }
                                         onVerFicha={(est) => {
                                             setEstudianteActivo(est);
                                             setVistaActiva(cursoChatbotId);
@@ -471,6 +510,15 @@ export default function PanelAsignatura({ auth, cursos }) {
                                                                 <div className="flex justify-end gap-2">
                                                                     <button
                                                                         type="button"
+                                                                        onClick={() => abrirModalCorreo(estudiante, cursoActivo)}
+                                                                        className="inline-flex items-center gap-1.5 bg-white border border-slate-300 text-slate-800 px-3 py-2 rounded-xl text-xs font-bold hover:border-sape-burdeo hover:bg-slate-100 transition-colors"
+                                                                        title="Enviar correo por Gmail al Profesor Jefe, Dirección o Apoderado"
+                                                                    >
+                                                                        <IconoGmail className="w-4 h-4" />
+                                                                        Gmail
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
                                                                         onClick={() => abrirModalInforme(estudiante)}
                                                                         className="inline-flex items-center gap-1.5 bg-sape-burdeo text-sape-amarillo px-3 py-2 rounded-xl text-xs font-bold hover:bg-sape-burdeo-hover transition-colors"
                                                                     >
@@ -544,16 +592,26 @@ export default function PanelAsignatura({ auth, cursos }) {
                                             </p>
                                         </div>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => abrirModalInforme(estudianteActivo)}
-                                        className="inline-flex items-center gap-2 bg-sape-burdeo text-sape-amarillo px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-sape-burdeo-hover transition-colors self-start sm:self-auto"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        Generar Informe IA
-                                    </button>
+                                    <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+                                        <button
+                                            type="button"
+                                            onClick={() => abrirModalCorreo(estudianteActivo, cursoActivo)}
+                                            className="inline-flex items-center gap-2 bg-white border border-slate-300 text-slate-800 px-4 py-2.5 rounded-xl text-xs font-bold hover:border-sape-burdeo hover:bg-slate-100 transition-colors"
+                                        >
+                                            <IconoGmail className="w-4 h-4" />
+                                            Enviar correo (Gmail)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => abrirModalInforme(estudianteActivo)}
+                                            className="inline-flex items-center gap-2 bg-sape-burdeo text-sape-amarillo px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-sape-burdeo-hover transition-colors"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            Generar Informe IA
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
@@ -682,8 +740,26 @@ export default function PanelAsignatura({ auth, cursos }) {
                 isOpen={modalInformeOpen}
                 onClose={() => setModalInformeOpen(false)}
                 estudiante={estudianteParaInforme}
-                cursoId={cursoActivo?.id}
+                cursoId={cursoActivo?.id || cursoChatbotId}
                 cursoNombre={cursoActivo ? `${cursoActivo.nivel}° Medio ${cursoActivo.letra}` : ''}
+                profesorNombre={auth?.user?.name}
+                profesorJefeCurso={
+                    cursoActivo?.profesor_jefe_email
+                        ? {
+                              nombre: cursoActivo.profesor_jefe_nombre,
+                              email: cursoActivo.profesor_jefe_email,
+                          }
+                        : null
+                }
+            />
+
+            <ModalCorreoGmail
+                isOpen={modalCorreoOpen}
+                onClose={() => setModalCorreoOpen(false)}
+                estudiante={estudianteParaCorreo}
+                curso={cursoActivo}
+                profesorNombre={auth?.user?.name}
+                destinatarioInicial={destinatarioInicialCorreo}
             />
         </AuthenticatedLayout>
     );

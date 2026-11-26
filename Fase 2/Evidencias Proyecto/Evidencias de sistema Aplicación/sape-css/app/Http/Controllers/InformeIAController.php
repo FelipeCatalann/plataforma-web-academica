@@ -59,17 +59,19 @@ class InformeIAController extends Controller
             $notas = $estudiante->calificaciones()
                 ->where('matriculas.curso_id', $curso->id)
                 ->where('matriculas.vigente', true)
+                ->where('calificaciones.valor', '>', 0)
                 ->whereIn('calificaciones.asignatura_curso_id', $asignaturasPermitidas->select('id'))
                 ->pluck('calificaciones.valor')
-                ->toArray();
+                ->map(fn ($valor) => (float) $valor)
+                ->all();
 
             // 2. ENMASCARAMIENTO (Ley 19.628)
             $nombreReal = trim($estudiante->nombres.' '.$estudiante->apellidos);
             $runReal = $estudiante->identificadorInterno ?? $estudiante->run ?? 'Sin Registro';
 
-            $promedio = count($notas) > 0 ? array_sum($notas) / count($notas) : 0;
-            $promedioFmt = number_format($promedio, 1);
-            $listaNotas = count($notas) > 0 ? implode(', ', $notas) : 'Sin notas registradas';
+            $promedio = count($notas) > 0 ? array_sum($notas) / count($notas) : null;
+            $promedioFmt = $promedio !== null ? number_format($promedio, 1) : 'sin promedio numérico';
+            $listaNotas = count($notas) > 0 ? implode(', ', $notas) : 'Sin notas numéricas registradas';
 
             // 3. Resolver credenciales y preferencias de IA del usuario (o fallback a Groq del sistema)
             $credenciales = $iaService->resolverCredencialesAgente(
