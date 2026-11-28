@@ -40,7 +40,11 @@ class ImportacionExcelFormatoTest extends TestCase
         $ruta = $this->libroSintetico($formato);
         $archivo = fn () => ['archivo_excel' => new UploadedFile($ruta, "nomina.$formato", null, null, true)];
 
-        $this->postJson(route('admin.importar.revisar'), $archivo())->assertOk();
+        $this->postJson(route('admin.importar.revisar'), $archivo())
+            ->assertOk()
+            ->assertJsonPath('resumen.cursos.0', '1° Medio A (2026)')
+            ->assertJsonPath('resumen.estudiantes', 4)
+            ->assertJsonPath('resumen.ya_procesada', false);
         $this->assertDatabaseCount('cursos', 0);
         $this->assertDatabaseCount('calificaciones', 0);
         $this->post(route('admin.importar.store'), $archivo())->assertRedirect()->assertSessionHasNoErrors();
@@ -49,7 +53,9 @@ class ImportacionExcelFormatoTest extends TestCase
         $totalNotas = DB::table('calificaciones')->count();
         $this->assertGreaterThan(0, $totalNotas);
 
-        $this->postJson(route('admin.importar.revisar'), $archivo())->assertOk();
+        $this->postJson(route('admin.importar.revisar'), $archivo())
+            ->assertOk()
+            ->assertJsonPath('resumen.ya_procesada', true);
         $this->post(route('admin.importar.store'), $archivo())->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertDatabaseCount('cursos', 1);

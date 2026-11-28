@@ -2,9 +2,9 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import SearchableSelect from '@/Components/SearchableSelect';
 import AsistenteAsignacionIA from '@/Components/Director/AsistenteAsignacionIA';
+import SubidaExcelDirector from '@/Components/Director/SubidaExcelDirector';
 import ModalCorreoGmail from '@/Components/ModalCorreoGmail';
 import IconoGmail from '@/Components/IconoGmail';
-import { mensajeRevision, revisarImportacion } from '@/utils/revisarImportacion';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -109,8 +109,6 @@ export default function PanelDirector({
     const { flash, errors: pageErrors } = usePage().props;
     const [alertaGlobal, setAlertaGlobal] = useState('');
     const [errorGlobal, setErrorGlobal] = useState('');
-    const [errorArchivoLocal, setErrorArchivoLocal] = useState('');
-    const [arrastrandoArchivo, setArrastrandoArchivo] = useState(false);
     const [cursoPorBorrar, setCursoPorBorrar] = useState(null);
     const [borrandoCursoId, setBorrandoCursoId] = useState(null);
     const [cursoSugeridoImportacion, setCursoSugeridoImportacion] = useState(null);
@@ -229,86 +227,7 @@ export default function PanelDirector({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [cursoPorBorrar, borrandoCursoId]);
 
-    const { data: dataImp, setData: setDataImp, post: postImp, processing: procImp, reset: resetImp } = useForm({
-        archivo_excel: null,
-    });
     const fileInputRef = useRef(null);
-    const [archivoRevisado, setArchivoRevisado] = useState(null);
-    const [revisandoArchivo, setRevisandoArchivo] = useState(false);
-
-    const validarYGuardarArchivo = (file) => {
-        if (!file) return;
-        const nombre = (file.name || '').toLowerCase();
-        const extensionValida =
-            nombre.endsWith('.xlsx') || nombre.endsWith('.xls');
-
-        if (!extensionValida) {
-            setErrorArchivoLocal(
-                'Selecciona una planilla .xlsx o .xls exportada de Syscol.'
-            );
-            resetImp('archivo_excel');
-            if (fileInputRef.current) fileInputRef.current.value = '';
-            return;
-        }
-
-        if (file.size > 10 * 1024 * 1024) {
-            setErrorArchivoLocal('El archivo supera el tamaño máximo permitido de 10 MB.');
-            resetImp('archivo_excel');
-            if (fileInputRef.current) fileInputRef.current.value = '';
-            return;
-        }
-
-        setErrorArchivoLocal('');
-        setDataImp('archivo_excel', file);
-    };
-
-    const manejarSeleccionArchivo = (e) => {
-        const file = e.target.files?.[0];
-        if (file) validarYGuardarArchivo(file);
-    };
-
-    const manejarDropArchivo = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setArrastrandoArchivo(false);
-        if (procImp || revisandoArchivo) return;
-        const file = e.dataTransfer?.files?.[0];
-        if (file) validarYGuardarArchivo(file);
-    };
-
-    const limpiarArchivoSeleccionado = (e) => {
-        e.stopPropagation();
-        setErrorArchivoLocal('');
-        resetImp('archivo_excel');
-        if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-
-    const manejarImportacion = async () => {
-        if (!dataImp.archivo_excel || procImp || revisandoArchivo) return;
-        setErrorArchivoLocal('');
-        if (archivoRevisado !== dataImp.archivo_excel) {
-            setRevisandoArchivo(true);
-            try {
-                await revisarImportacion(dataImp.archivo_excel);
-                setArchivoRevisado(dataImp.archivo_excel);
-            } catch (error) {
-                setErrorArchivoLocal(mensajeRevision(error));
-            } finally {
-                setRevisandoArchivo(false);
-            }
-            return;
-        }
-
-        postImp(route('admin.importar.store'), {
-            preserveScroll: true,
-            onFinish: () => setArchivoRevisado(null),
-            onSuccess: () => {
-                resetImp('archivo_excel');
-                setCursoSugeridoImportacion(null);
-                if (fileInputRef.current) fileInputRef.current.value = '';
-            },
-        });
-    };
 
     const [modoAsignacion, setModoAsignacion] = useState('ia');
     const [filtroAsigMulti, setFiltroAsigMulti] = useState('');
@@ -3106,168 +3025,43 @@ export default function PanelDirector({
                                 exit={{ opacity: 0, y: -18 }}
                                 className="space-y-6 max-w-3xl mx-auto"
                             >
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                     <div>
                                         <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
                                             Importación de Planillas Syscol
                                         </h1>
                                         <p className="text-slate-600 text-sm mt-1">
-                                            Carga planillas oficiales de Nómina y Calificaciones (.xlsx o .xls).
+                                            Sube las planillas de Nómina y Calificaciones una por una y sigue su estado en vivo.
                                         </p>
                                     </div>
                                     <button
                                         type="button"
                                         onClick={() => setVistaActiva('cursos')}
-                                        className="text-sm font-bold text-sape-burdeo hover:underline shrink-0"
+                                        className="text-sm font-bold text-sape-burdeo hover:underline shrink-0 tabular-nums"
                                     >
                                         Ver Cursos Cargados ({cursosSubidos.length})
                                     </button>
                                 </div>
 
-                                {cursoSugeridoImportacion && (
-                                    <div className="bg-sape-burdeo/5 border border-sape-burdeo/20 rounded-2xl p-4 flex items-center justify-between gap-4">
-                                        <div className="text-xs sm:text-sm text-slate-800">
-                                            <span className="font-extrabold text-sape-burdeo">
-                                                Importando para {cursoSugeridoImportacion.codigo}:
-                                            </span>{' '}
-                                            Selecciona la planilla cuyo nombre finalice en{' '}
-                                            <code className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-slate-200">
-                                                _{cursoSugeridoImportacion.nivel}M{cursoSugeridoImportacion.letra}.xlsx
-                                            </code>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setCursoSugeridoImportacion(null)}
-                                            className="text-xs font-bold text-slate-500 hover:text-slate-800 shrink-0"
-                                        >
-                                            Quitar filtro
-                                        </button>
-                                    </div>
-                                )}
-
-                                {(errorArchivoLocal || pageErrors?.archivo_excel || pageErrors?.curso) && (
-                                    <div
-                                        role="alert"
-                                        className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-2xl flex items-start gap-3 text-sm"
-                                    >
-                                        <svg className="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="font-bold text-red-900">No se pudo procesar el archivo</p>
-                                            <p className="text-red-700 mt-0.5 break-words">
-                                                {errorArchivoLocal || pageErrors?.archivo_excel || pageErrors?.curso}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-sm space-y-6">
-                                    <input
-                                        type="file"
-                                        ref={fileInputRef}
-                                        onChange={manejarSeleccionArchivo}
-                                        className="hidden"
-                                        accept=".xls, .xlsx"
-                                    />
-                                    <motion.div
-                                        whileHover={{ scale: 1.005 }}
-                                        onClick={() => !procImp && fileInputRef.current?.click()}
-                                        onDragOver={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            if (!procImp) setArrastrandoArchivo(true);
-                                        }}
-                                        onDragLeave={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            setArrastrandoArchivo(false);
-                                        }}
-                                        onDrop={manejarDropArchivo}
-                                        className={`flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-12 transition-all cursor-pointer text-center ${
-                                            arrastrandoArchivo
-                                                ? 'border-sape-burdeo bg-sape-burdeo/10'
-                                                : dataImp.archivo_excel
-                                                  ? 'border-sape-burdeo bg-sape-burdeo/5'
-                                                  : 'border-slate-300 hover:border-sape-burdeo/60 hover:bg-slate-50/70'
-                                        }`}
-                                    >
-                                        <div
-                                            className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-colors ${
-                                                dataImp.archivo_excel || arrastrandoArchivo
-                                                    ? 'bg-sape-burdeo text-sape-amarillo shadow-md'
-                                                    : 'bg-slate-100 text-slate-500'
-                                            }`}
-                                        >
-                                            <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth="2"
-                                                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                                                />
-                                            </svg>
-                                        </div>
-
-                                        {dataImp.archivo_excel ? (
-                                            <div className="space-y-3 max-w-full">
-                                                <p className="text-slate-900 font-extrabold text-lg break-all">
-                                                    {dataImp.archivo_excel.name}
-                                                </p>
-                                                <div className="inline-flex items-center gap-3 bg-white border border-slate-200 px-4 py-1.5 rounded-full shadow-sm">
-                                                    <span className="text-xs font-semibold text-slate-600 tabular-nums">
-                                                        {(dataImp.archivo_excel.size / 1024).toFixed(1)} KB
-                                                    </span>
-                                                    {!procImp && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={limpiarArchivoSeleccionado}
-                                                            className="text-xs font-bold text-red-600 hover:text-red-800"
-                                                        >
-                                                            Quitar archivo
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-1">
-                                                <p className="text-slate-800 font-bold text-lg">
-                                                    {arrastrandoArchivo
-                                                        ? 'Suelta aquí tu archivo Excel para cargarlo'
-                                                        : 'Arrastra tu archivo Excel aquí o haz clic para seleccionarlo'}
-                                                </p>
-                                                <p className="text-xs text-slate-500">
-                                                    Excel de hasta 10 MB con hojas NOMINA y CALIFICACIONES
-                                                </p>
-                                            </div>
-                                        )}
-                                    </motion.div>
-
-                                    <div className="flex justify-end">
-                                        <button
-                                            type="button"
-                                            onClick={manejarImportacion}
-                                            disabled={!dataImp.archivo_excel || procImp || revisandoArchivo}
-                                            className="bg-sape-burdeo text-sape-amarillo px-8 py-3 rounded-xl font-bold shadow-md hover:bg-sape-burdeo-hover transition-all hover:-translate-y-0.5 disabled:opacity-50"
-                                        >
-                                            {procImp ? 'Importando…' : revisandoArchivo ? 'Revisando…' :
-                                                archivoRevisado === dataImp.archivo_excel && archivoRevisado ? 'Confirmar importación' : 'Revisar planilla'}
-                                        </button>
-                                    </div>
-                                </div>
+                                <SubidaExcelDirector
+                                    fileInputRef={fileInputRef}
+                                    cursoSugerido={cursoSugeridoImportacion}
+                                    onQuitarCursoSugerido={() => setCursoSugeridoImportacion(null)}
+                                    onVerCursos={() => setVistaActiva('cursos')}
+                                />
 
                                 {/* ESTADO DE SINCRONIZACIÓN ANUAL EN TIEMPO REAL */}
                                 <div className="rounded-2xl p-6 shadow-sm flex flex-col justify-between gap-4 bg-gradient-to-br from-sape-burdeo to-[#581023] text-white">
                                     <div className="flex items-start justify-between gap-4">
                                         <div>
-                                            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-sape-amarillo bg-white/10 px-2.5 py-1 rounded-lg">
+                                            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-sape-amarillo bg-sape-burdeo-hover px-2.5 py-1 rounded-lg border border-white/15">
                                                 Estado de Sincronización Anual
                                             </span>
                                             <div className="flex items-baseline gap-3 mt-2">
                                                 <span className="text-3xl sm:text-4xl font-extrabold tabular-nums tracking-tight">
                                                     {cursosSubidos.length} / {cursosSubidos.length + cursosDisponibles.length}
                                                 </span>
-                                                <span className="text-sm text-white/80 font-medium">
+                                                <span className="text-sm text-white/85 font-medium">
                                                     cursos con Excel cargado
                                                 </span>
                                             </div>
@@ -3283,55 +3077,63 @@ export default function PanelDirector({
 
                                     <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-2.5 border-t border-white/15">
                                         {[
-                                            ...cursosSubidos.map((c) => ({ codigo: `${c.nivel}°${c.letra} · ${c.anioEscolar}`, ok: true })),
-                                            ...cursosDisponibles.map((c) => ({ codigo: `${c.nivel}°${c.letra}`, ok: false })),
-                                        ].map((item) => (
-                                            <div
-                                                key={item.codigo}
-                                                className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold tabular-nums flex items-center justify-center gap-1.5 shadow-sm transition-transform ${
-                                                    item.ok
-                                                        ? 'bg-emerald-600 text-white border border-emerald-400/70'
-                                                        : 'bg-white/10 text-white/70 border border-white/15'
-                                                }`}
-                                            >
-                                                {item.ok ? (
-                                                    <svg className="w-3.5 h-3.5 text-emerald-100 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            ...cursosSubidos.map((c) => ({ codigo: `${c.nivel}°${c.letra} · ${c.anioEscolar}`, ok: true, raw: c })),
+                                            ...cursosDisponibles.map((c) => ({ codigo: `${c.nivel}°${c.letra}`, ok: false, raw: c })),
+                                        ].map((item) =>
+                                            item.ok ? (
+                                                <div
+                                                    key={item.codigo}
+                                                    className="px-2.5 py-1.5 rounded-xl text-xs font-extrabold tabular-nums flex items-center justify-center gap-1.5 bg-emerald-600 text-white border border-emerald-400/70"
+                                                >
+                                                    <svg className="w-3.5 h-3.5 text-emerald-100 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
                                                     </svg>
-                                                ) : (
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300/70 shrink-0" />
-                                                )}
-                                                <span>{item.codigo}</span>
-                                            </div>
-                                        ))}
+                                                    <span>{item.codigo}</span>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    key={item.codigo}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setCursoSugeridoImportacion(item.raw);
+                                                        fileInputRef.current?.click();
+                                                    }}
+                                                    title={`Seleccionar Excel para ${item.raw.codigo}`}
+                                                    className="px-2.5 py-1.5 rounded-xl text-xs font-extrabold tabular-nums flex items-center justify-center gap-1.5 bg-sape-burdeo-hover text-white/90 border border-white/20 hover:border-sape-amarillo hover:text-sape-amarillo transition-colors"
+                                                >
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300 shrink-0" aria-hidden="true" />
+                                                    <span>{item.codigo}</span>
+                                                </button>
+                                            )
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* DOCUMENTACIÓN CONCISA DE REQUISITOS DE PLANILLA SYSCOL */}
-                                <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                                    <h2 className="text-sm font-extrabold text-slate-900">
-                                        Requisitos de la Planilla Oficial Syscol
+                                {/* REFERENCIA RÁPIDA DE PLANILLA SYSCOL */}
+                                <div className="bg-white px-6 py-4 rounded-2xl border border-slate-200 shadow-sm">
+                                    <h2 className="text-sm font-extrabold text-slate-900 mb-3">
+                                        Requisitos de la planilla Syscol
                                     </h2>
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-600">
-                                        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 space-y-1">
-                                            <p className="font-bold text-slate-800">1. Estructura de Hojas</p>
-                                            <p>
-                                                El libro Excel debe incluir las pestañas <strong>NOMINA</strong> (RUT, nombre, contacto apoderado) y <strong>CALIFICACIONES</strong> (subsectores y notas N1–N10 por semestre).
-                                            </p>
+                                    <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                                        <div>
+                                            <dt className="font-bold text-slate-800">Hojas obligatorias</dt>
+                                            <dd className="text-slate-600 mt-0.5">
+                                                Pestañas <strong>NOMINA</strong> y <strong>CALIFICACIONES</strong> en formato .xlsx o .xls.
+                                            </dd>
                                         </div>
-                                        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 space-y-1">
-                                            <p className="font-bold text-slate-800">2. Identificación del Curso</p>
-                                            <p>
-                                                La revisión usa el año, grado y curso de cada fila de la planilla.
-                                            </p>
+                                        <div>
+                                            <dt className="font-bold text-slate-800">Curso automático</dt>
+                                            <dd className="text-slate-600 mt-0.5">
+                                                Año, nivel y letra se leen directamente desde cada fila de la planilla.
+                                            </dd>
                                         </div>
-                                        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 space-y-1">
-                                            <p className="font-bold text-slate-800">3. Control de Duplicados</p>
-                                            <p>
-                                                El sistema detecta automáticamente archivos idénticos para evitar cargas duplicadas y revierte la operación ante cualquier inconsistencia de formato.
-                                            </p>
+                                        <div>
+                                            <dt className="font-bold text-slate-800">Protección ante errores</dt>
+                                            <dd className="text-slate-600 mt-0.5">
+                                                Si hay un error de formato o archivo repetido, nada se duplica ni sobrescribe.
+                                            </dd>
                                         </div>
-                                    </div>
+                                    </dl>
                                 </div>
                             </motion.div>
                         )}

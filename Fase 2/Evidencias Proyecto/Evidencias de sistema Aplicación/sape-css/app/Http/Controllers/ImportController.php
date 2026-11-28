@@ -28,10 +28,45 @@ class ImportController extends Controller
         $archivo = $request->file('archivo_excel');
         $hash = hash_file('sha256', $archivo->getRealPath());
 
+        $yaProcesada = DB::table('importacion_excels')
+            ->where('checksum', $hash)
+            ->where('estadoImportacion', 'PROCESADA')
+            ->exists() && DB::table('calificaciones')->count() > 0;
+
+        $resumen = [
+            'cursos' => [],
+            'estudiantes' => 0,
+            'calificaciones' => 0,
+            'ya_procesada' => $yaProcesada,
+        ];
+
         // El importador valida contra los datos reales y simula toda la escritura.
         DB::beginTransaction();
         try {
-            Excel::import(new ImportadorSyscol, $archivo);
+            $importador = new ImportadorSyscol;
+            Excel::import($importador, $archivo);
+
+            $cursosIds = $importador->cursosProcesados();
+            if ($cursosIds !== []) {
+                $resumen['cursos'] = DB::table('cursos')
+                    ->whereIn('id', $cursosIds)
+                    ->orderBy('anioEscolar')
+                    ->orderBy('nivel')
+                    ->orderBy('letra')
+                    ->get()
+                    ->map(fn ($curso) => "{$curso->nivel}° Medio {$curso->letra} ({$curso->anioEscolar})")
+                    ->values()
+                    ->all();
+
+                $resumen['estudiantes'] = DB::table('matriculas')
+                    ->whereIn('curso_id', $cursosIds)
+                    ->count();
+
+                $resumen['calificaciones'] = DB::table('calificaciones')
+                    ->join('matriculas', 'calificaciones.matricula_id', '=', 'matriculas.id')
+                    ->whereIn('matriculas.curso_id', $cursosIds)
+                    ->count();
+            }
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Throwable $e) {
@@ -48,7 +83,10 @@ class ImportController extends Controller
             'expira' => now()->addMinutes(15)->timestamp,
         ]);
 
-        return response()->json(['message' => 'Planilla revisada. Puedes confirmar la importación.']);
+        return response()->json([
+            'message' => 'Planilla revisada. Puedes confirmar la importación.',
+            'resumen' => $resumen,
+        ]);
     }
 
     public function importar(Request $request)

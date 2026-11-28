@@ -345,6 +345,9 @@ html[data-theme="dark"] .bg-emerald-50 {
     border-color: rgba(52, 211, 153, 0.4) !important;
     color: #d1fae5 !important;
 }
+html[data-theme="dark"] .border-emerald-200 {
+    border-color: rgba(52, 211, 153, 0.35) !important;
+}
 html[data-theme="dark"] .text-emerald-700,
 html[data-theme="dark"] .text-emerald-800,
 html[data-theme="dark"] .text-emerald-900 {
@@ -556,5 +559,28 @@ html[data-theme="dark"] .sape-toast-exito-cerrar:hover {
     background-color: #d1fae5 !important;
     color: #000000 !important;
 }
+
+/* 13. Barra de progreso en procesamiento del servidor (Importador Excel Director) */
+@keyframes sape-carga-indeterminada {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(260%);
+    }
+}
+
+.sape-barra-procesando {
+    animation: sape-carga-indeterminada 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sape-barra-procesando {
+        animation: none;
+        transform: none;
+        width: 100% !important;
+    }
+}
+
 
 
